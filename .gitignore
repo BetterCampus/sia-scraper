@@ -1,0 +1,15 @@
+.python-version
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.pyrightcode/
+
+dist/
+build/
+*.egg-info/
