@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "requests~=2.32.3",
-    "beautifulsoup4~=4.11.1"
+    "beautifulsoup4~=4.11.1",
+    "lxml~=4.9.2"
 ]
 
 [project.optional-dependencies]
@@ -53,3 +54,8 @@ line-ending = "auto"
 
 [tool.ruff.lint.isort]
 known-first-party = ["sia_scraper"]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: marks unit tests",
+]

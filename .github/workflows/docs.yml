@@ -1,0 +1,56 @@
+name: Deploy GitHub Pages Docs
+
+on:
+  push:
+    branches: [ "main" ]
+
+# Permisos necesarios para publicar en GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy-docs:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+        
+      - name: Configurar Python 3.10 (Para pdoc)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          
+      - name: Instalar generador de documentación
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pdoc
+
+      - name: Construir el sitio web estático
+        env:
+          GENERATING_DOCS: "true"
+        run: |
+          mkdir public
+          pdoc src/ -o public/python-docs
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Subir artefacto web
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './public'
+
+      - name: Desplegar a GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
