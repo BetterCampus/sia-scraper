@@ -13,3 +13,7 @@ venv/
 dist/
 build/
 *.egg-info/
+
+.coverage
+.github/copilot-instructions.md
+AGENTS.md
