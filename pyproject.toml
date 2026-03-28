@@ -58,4 +58,6 @@ known-first-party = ["sia_scraper"]
 [tool.pytest.ini_options]
 markers = [
     "unit: marks unit tests",
+    "integration: marks tests that make real HTTP requests to SIA",
+    "network: marks tests that require network connectivity to SIA",
 ]
