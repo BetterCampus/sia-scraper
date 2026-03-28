@@ -364,10 +364,11 @@ class SiaScraper:
             Dictionary with complete course data including all groups and schedules.
             See get_course_info() docstring for full structure.
 
-        Oracle ADF XML Structure:
+        ## Oracle ADF XML Structure
+            ```html
             <h2>                                    → Course name
-            <span class="detass-creditos">          → Credits (nested <span>)
-            <span class="detass-tipologia">         → Tipology (nested <span>)
+            <span class="detass-creditos">          → Credits (nested span)
+            <span class="detass-tipologia">         → Tipology (nested span)
             <div class="af_showDetailHeader_content0">  → Each group container
                 <h2 class="af_showDetailHeader_title-text0">  → Group name
                 <div class="af_panelGroupLayout">   → Group data container
@@ -377,6 +378,7 @@ class SiaScraper:
                     [3] <span><span>                → Duration
                     [4] <span><span>                → Jornada (schedule type)
                     [5] <span><span>                → Spots (optional)
+            ```
 
         ## Raises
             ValueError: If course name, credits, or tipology elements not found in XML.
@@ -560,14 +562,16 @@ class SiaScraper:
                     ]
                 }
 
-        Oracle ADF XML Structure:
+        ## Oracle ADF XML Structure
+            ```html
             <h2>                                    → Course name (with code in parens)
             <span class="detass-creditos">          → Credits
             <span class="detass-tipologia">         → "Tipología: VALUE"
-            <span.borde.salto.af_panelGroupLayout>  → Condition containers
-                <div.margin-t.af_panelGroupLayout>  → Each condition block
+            <span class="borde salto af_panelGroupLayout">  → Condition containers
+                <div class="margin-t af_panelGroupLayout">  → Each condition block
                     [0] <div> Condition metadata    → Headers + values as siblings
                     [1+] <div> Prerequisite courses → Code + name as siblings
+            ```
 
         Warning:
             TODO: Keys use Spanish strings from SIA (not standardized).
