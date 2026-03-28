@@ -18,3 +18,4 @@ build/
 .coverage
 .github/copilot-instructions.md
 AGENTS.md
+.obsidian/
