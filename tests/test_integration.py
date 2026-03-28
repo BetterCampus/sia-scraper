@@ -77,11 +77,11 @@ class TestSiaScraperIntegration:
 
             course_info = scraper.get_course_info(course_index=COURSE_INDEX)
 
-            assert "nombreAsignatura" in course_info
-            assert "creditos" in course_info
-            assert "tipologia" in course_info
-            assert "grupos" in course_info
-            assert len(course_info["grupos"]) > 0, "Course has no groups"
+            assert "courseName" in course_info
+            assert "credits" in course_info
+            assert "typology" in course_info
+            assert "groups" in course_info
+            assert len(course_info["groups"]) > 0, "Course has no groups"
         except (ConnectionError, Timeout) as e:
             pytest.fail(f"Network error while scraping course info: {e}")
         except HTTPError as e:
@@ -108,8 +108,8 @@ class TestSiaScraperIntegration:
 
             prereqs = scraper.get_course_prereqs(course_index=COURSE_INDEX)
 
-            assert "codigo" in prereqs
-            assert "condiciones" in prereqs
+            assert "code" in prereqs
+            assert "conditions" in prereqs
         except (ConnectionError, Timeout) as e:
             pytest.fail(f"Network error while scraping prerequisites: {e}")
         except HTTPError as e:
@@ -170,14 +170,14 @@ class TestSiaScraperIntegration:
             assert len(scraper.course_list) > 0, "Cannot scrape course - list is empty"
             course_info = scraper.get_course_info(course_index=COURSE_INDEX)
 
-            assert "nombreAsignatura" in course_info
-            assert "creditos" in course_info
-            assert "tipologia" in course_info
-            assert "grupos" in course_info
+            assert "courseName" in course_info
+            assert "credits" in course_info
+            assert "typology" in course_info
+            assert "groups" in course_info
 
             prereqs = scraper.get_course_prereqs(course_index=COURSE_INDEX)
-            assert "codigo" in prereqs
-            assert "condiciones" in prereqs
+            assert "code" in prereqs
+            assert "conditions" in prereqs
 
         except (ConnectionError, Timeout) as e:
             pytest.fail(f"Network error during E2E workflow: {e}")

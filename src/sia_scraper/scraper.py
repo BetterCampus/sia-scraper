@@ -44,7 +44,7 @@ class SiaScraper:
         1. Create scraper: sc = SiaScraper()
         2. Set career: sc.set_career("0-2-8-3")
         3. Scrape courses: course_info = sc.get_course_info(course_code="2016489")
-        4. Access data: course_info["grupos"][0]["horarios"]
+        4. Access data: course_info["groups"][0]["schedules"]
     """
 
     def __init__(
@@ -211,29 +211,29 @@ class SiaScraper:
         ## Returns
             Dictionary with structure:
                 {
-                    "nombreAsignatura": str,    # Course name
-                    "creditos": int,             # Credit hours
-                    "tipologia": str,            # Course typology
-                    "cuposDisponibles": int,     # Total available spots across all groups
-                    "fechaObtencion": str,       # Scrape timestamp
-                    "grupos": [                  # List of course groups
+                    "courseName": str,            # Course name
+                    "credits": int,                # Credit hours
+                    "typology": str,              # Course typology
+                    "availableSpots": int,         # Total available spots across all groups
+                    "scrapeTimestamp": str,        # Scrape timestamp
+                    "groups": [                   # List of course groups
                         {
-                            "nombreGrupo": str,  # Group number/name
-                            "profesor": str,     # Teacher name
-                            "facultad": str,     # Faculty/school
-                            "nombre": str,       # Course name (duplicate)
-                            "horarios": [        # Schedule entries
+                            "groupName": str,      # Group number/name
+                            "teacher": str,       # Teacher name
+                            "faculty": str,       # Faculty/school
+                            "courseName": str,    # Course name
+                            "schedules": [       # Schedule entries
                                 {
-                                    "dia": str,      # Day of week (e.g., "LUNES")
-                                    "desde": str,    # Start time "HH:MM"
-                                    "hasta": str,    # End time "HH:MM"
-                                    "salon": str     # Classroom (may be empty)
+                                    "day": str,      # Day of week (e.g., "LUNES")
+                                    "startTime": str, # Start time "HH:MM"
+                                    "endTime": str,   # End time "HH:MM"
+                                    "classroom": str  # Classroom (may be empty)
                                 }
                             ],
-                            "duracion": str,     # Duration (e.g., "16 SEMANAS")
-                            "jornada": str,      # Schedule type (e.g., "DIURNA")
-                            "cupos": int|str,    # Available spots or "NaN"
-                            "isFavourite": bool  # Legacy field
+                            "duration": str,      # Duration (e.g., "16 SEMANAS")
+                            "scheduleType": str,   # Schedule type (e.g., "DIURNA")
+                            "spots": int|str,      # Available spots or "NaN"
+                            "isFavorite": bool     # Legacy field
                         }
                     ]
                 }
@@ -308,7 +308,7 @@ class SiaScraper:
 
         ## Returns
             List of course info dictionaries (see get_course_info() for structure).
-            Each includes "codigo" field with the course code.
+            Each includes "code" field with the course code.
 
         ## Note
             Sorts indices before scraping for more efficient sequential access.
@@ -325,7 +325,7 @@ class SiaScraper:
         courses = [self.get_course_info(course_index) for course_index in courses_indexs]
 
         for i in range(len(courses)):
-            courses[i]["codigo"] = courses_codes[i]
+            courses[i]["code"] = courses_codes[i]
 
         return courses
 
@@ -412,12 +412,12 @@ class SiaScraper:
 
         group_list = []
 
-        course_obj["nombreAsignatura"] = course_name
-        course_obj["cuposDisponibles"] = 0  # Accumulated from all groups
-        course_obj["fechaObtencion"] = DateFormatter(datetime.now()).format_date()
-        course_obj["grupos"] = group_list
-        course_obj["creditos"] = credits
-        course_obj["tipologia"] = tipology
+        course_obj["courseName"] = course_name
+        course_obj["availableSpots"] = 0  # Accumulated from all groups
+        course_obj["scrapeTimestamp"] = DateFormatter(datetime.now()).format_date()
+        course_obj["groups"] = group_list
+        course_obj["credits"] = credits
+        course_obj["typology"] = tipology
 
         # Target: Oracle ADF → All <div class="af_showDetailHeader_content0"> → Group containers
         # Each div represents one course group with all its details
@@ -428,7 +428,7 @@ class SiaScraper:
             group_obj = {}
 
             # Target: Oracle ADF → group.parent → <h2 class="af_showDetailHeader_title-text0"> → Group name/number
-            group_obj["nombreGrupo"] = group.parent.find(
+            group_obj["groupName"] = group.parent.find(
                 "h2", class_="af_showDetailHeader_title-text0"
             ).text
 
@@ -437,12 +437,12 @@ class SiaScraper:
             # TODO: These indices are fragile - Oracle ADF updates could break this
             group_data = list(group.find("div", class_="af_panelGroupLayout").children)
             # group_data structure:
-            #   [0]: Profesor (teacher)
-            #   [1]: Facultad (faculty/school)
-            #   [2]: Horarios (schedules)
-            #   [3]: Duración (duration, e.g., "16 SEMANAS")
-            #   [4]: Jornada (schedule type, e.g., "DIURNA")
-            #   [5]: Cupos (available spots) - OPTIONAL, may not exist
+            #   [0]: Teacher
+            #   [1]: Faculty/school
+            #   [2]: Schedules
+            #   [3]: Duration (e.g., "16 SEMANAS")
+            #   [4]: Schedule type (e.g., "DIURNA")
+            #   [5]: Available spots - OPTIONAL, may not exist
 
             # All subsequent selectors use "span > span" to access nested span values
             # Oracle ADF wraps actual values in a nested <span> inside the label <span>
@@ -450,13 +450,13 @@ class SiaScraper:
             # Target: group_data[0] → <span> → <span> → Teacher name
             teacher_name_span = group_data[0].select_one("span > span")
             if teacher_name_span:  # Teacher info may not be available for some groups
-                group_obj["profesor"] = teacher_name_span.text.strip()
+                group_obj["teacher"] = teacher_name_span.text.strip()
             else:
-                group_obj["profesor"] = "No informado"
+                group_obj["teacher"] = "Not reported"
 
             # Target: group_data[1] → <span> → <span> → Faculty name
-            group_obj["facultad"] = group_data[1].select_one("span > span").text.strip()
-            group_obj["nombre"] = course_name
+            group_obj["faculty"] = group_data[1].select_one("span > span").text.strip()
+            group_obj["courseName"] = course_name
 
             # ===== Parse schedule information =====
             # Logic: Each group can have multiple schedule entries (e.g., Mon 8-10, Wed 14-16)
@@ -477,7 +477,7 @@ class SiaScraper:
 
                 for schedule_container in schedule_containers:
                     # Target: schedule_container → <span> → Schedule text
-                    # Format: "LUNES de 08:00 a 10:00" (Spanish day name, "de" = from, "a" = to)
+                    # Format: "LUNES de 08:00 a 10:00" (day name, "de" = from, "a" = to)
                     schedule_span = schedule_container.find("span")
                     if schedule_span is None:
                         continue
@@ -489,43 +489,43 @@ class SiaScraper:
                     if match is None:
                         continue
                     day, start_time, end_time = match.groups()
-                    schedule["dia"] = day
-                    schedule["desde"] = start_time
-                    schedule["hasta"] = end_time
+                    schedule["day"] = day
+                    schedule["startTime"] = start_time
+                    schedule["endTime"] = end_time
 
                     # Target: schedule_container → nested <span class="lista-elemento"> → Classroom
                     # Classroom info is nested inside schedule container (if available)
                     classroom_container = schedule_container.find("span", class_="lista-elemento")
-                    schedule["salon"] = classroom_container.text if classroom_container else ""
+                    schedule["classroom"] = classroom_container.text if classroom_container else ""
 
                     schedules.append(schedule)
                     schedule = {}
 
-            group_obj["horarios"] = schedules
+            group_obj["schedules"] = schedules
 
             # Target: group_data[3] → <span> → <span> → Duration
-            group_obj["duracion"] = group_data[3].select_one("span > span").text.strip()
+            group_obj["duration"] = group_data[3].select_one("span > span").text.strip()
 
-            # Target: group_data[4] → <span> → <span> → Jornada (schedule type)
-            group_obj["jornada"] = group_data[4].select_one("span > span").text.strip()
+            # Target: group_data[4] → <span> → <span> → Schedule type
+            group_obj["scheduleType"] = group_data[4].select_one("span > span").text.strip()
 
             # ===== Parse available spots (optional field) =====
             # Logic: Spots info only exists if group_data has 6+ elements
             # TODO: Magic number 6 - depends on Oracle ADF template structure
             if len(group_data) < 6:
                 # No spots information available for this group
-                group_obj["cupos"] = "NaN"
+                group_obj["spots"] = "NaN"
             else:
                 # Target: group_data[5] → <span> → <span> → Spots count
                 spots = int(group_data[5].select_one("span > span").text.strip())
-                group_obj["cupos"] = spots
-                course_obj["cuposDisponibles"] += spots  # Accumulate total spots
+                group_obj["spots"] = spots
+                course_obj["availableSpots"] += spots  # Accumulate total spots
 
             # TODO: Remove this legacy field - not part of SIA data model
-            group_obj["isFavourite"] = False
+            group_obj["isFavorite"] = False
 
             # Add completed group to course object
-            course_obj["grupos"].append(group_obj)
+            course_obj["groups"].append(group_obj)
             group_obj = {}
 
         return course_obj
@@ -544,17 +544,17 @@ class SiaScraper:
         ## Returns
             Dictionary with structure:
                 {
-                    "nombreAsignatura": str,  # Course name with code
-                    "codigo": str,             # Course code extracted from name
-                    "creditos": int,           # Credit hours
-                    "tipologia": str,          # Course typology
-                    "condiciones": [           # List of prerequisite conditions
+                    "courseName": str,  # Course name with code
+                    "code": str,             # Course code extracted from name
+                    "credits": int,           # Credit hours
+                    "typology": str,          # Course typology
+                    "conditions": [           # List of prerequisite conditions
                         {
-                            "Condición": str,         # Condition type (Spanish key)
-                            "Tipo": str,              # Type (Spanish key)
-                            "¿Todas?": str,           # "All required?" (Spanish key)
-                            "Número asignaturas": str,# Number of courses (Spanish key)
-                            "prerrequisitos": {       # Prerequisite courses
+                            "Condition": str,         # Condition type (from SIA)
+                            "Type": str,              # Type (from SIA)
+                            "AllRequired": str,       # "All required?" (from SIA)
+                            "NumberOfCourses": str,  # Number of courses (from SIA)
+                            "prerequisites": {        # Prerequisite courses
                                 "COURSE_CODE": "Course Name",
                                 ...
                             }
@@ -598,21 +598,21 @@ class SiaScraper:
             raise ValueError("Credits span not found in prerequisites XML")
         credits = int(credits_span.text.strip())
 
-        course_obj["nombreAsignatura"] = course_name
+        course_obj["courseName"] = course_name
 
         # Logic: Extract course code from name - format: "COURSE_NAME (CODE)"
         # TODO: Use regex for more robust parsing
-        course_obj["codigo"] = course_name[course_name.index("(") + 1 : course_name.index(")")]
-        course_obj["creditos"] = credits
+        course_obj["code"] = course_name[course_name.index("(") + 1 : course_name.index(")")]
+        course_obj["credits"] = credits
 
         # Target: Oracle ADF → <span class="detass-tipologia"> → text → "Tipología: VALUE"
         # Split on ": " to extract just the VALUE part
         # TODO: Magic index [1] after split - assumes format never changes
-        course_obj["tipologia"] = soup.find_all("span", class_="detass-tipologia")[0].text.split(
+        course_obj["typology"] = soup.find_all("span", class_="detass-tipologia")[0].text.split(
             ": "
         )[1]
 
-        course_obj["condiciones"] = []
+        course_obj["conditions"] = []
 
         # Target: Oracle ADF → CSS selector chain:
         #   <span class="borde salto af_panelGroupLayout">  → Container
@@ -671,7 +671,7 @@ class SiaScraper:
             # Target: condition_headers_spans[3] → "Número asignaturas:" → value → Number of courses
             prereq_info[condition_headers_spans[3].text] = condition_values_spans[3].text
 
-            prereq_info["prerrequisitos"] = {}
+            prereq_info["prerequisites"] = {}
 
             # ===== Extract prerequisite course codes and names =====
             # Target: Remaining child divs (index 1+) → Each prerequisite course
@@ -687,9 +687,9 @@ class SiaScraper:
                 # Why does Oracle ADF do this? Unclear, but consistent across all prereq entries
                 prereq_name = prereq_code_span.nextSibling.text
 
-                prereq_info["prerrequisitos"][prereq_code] = prereq_name
+                prereq_info["prerequisites"][prereq_code] = prereq_name
 
-            course_obj["condiciones"].append(prereq_info)
+            course_obj["conditions"].append(prereq_info)
 
         return course_obj
 

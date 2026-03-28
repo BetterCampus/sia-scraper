@@ -380,11 +380,11 @@ class TestCourseInfoScraping:
         scraper = SiaScraper()
         course_info = scraper.get_course_info(course_index=0)
 
-        assert "nombreAsignatura" in course_info
-        assert course_info["nombreAsignatura"] == "CALCULO DIFERENCIAL"
-        assert course_info["creditos"] == 4
-        assert "grupos" in course_info
-        assert len(course_info["grupos"]) == 2
+        assert "courseName" in course_info
+        assert course_info["courseName"] == "CALCULO DIFERENCIAL"
+        assert course_info["credits"] == 4
+        assert "groups" in course_info
+        assert len(course_info["groups"]) == 2
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_get_course_info_by_code(self, mock_session_class, sample_course_xml):
@@ -402,7 +402,7 @@ class TestCourseInfoScraping:
 
         # Should call get_course_xml with index 1 (2016489 is at index 1)
         mock_session.get_course_xml.assert_called_once()
-        assert "nombreAsignatura" in course_info
+        assert "courseName" in course_info
 
 
 @pytest.mark.unit
@@ -476,67 +476,67 @@ class TestScrapeInfo:
         """Test scraping complete course information."""
         course_info = SiaScraper.scrape_info(sample_course_xml)
 
-        assert course_info["nombreAsignatura"] == "CALCULO DIFERENCIAL"
-        assert course_info["creditos"] == 4
-        assert course_info["tipologia"] == "DISCIPLINAR OBLIGATORIA"
-        assert len(course_info["grupos"]) == 2
+        assert course_info["courseName"] == "CALCULO DIFERENCIAL"
+        assert course_info["credits"] == 4
+        assert course_info["typology"] == "DISCIPLINAR OBLIGATORIA"
+        assert len(course_info["groups"]) == 2
 
     def test_scrape_info_first_group(self, sample_course_xml):
         """Test scraping first group details."""
         course_info = SiaScraper.scrape_info(sample_course_xml)
 
-        grupo_1 = course_info["grupos"][0]
-        assert grupo_1["nombreGrupo"] == "1"
-        assert grupo_1["profesor"] == "JUAN PEREZ GARCIA"
-        assert grupo_1["facultad"] == "FACULTAD DE CIENCIAS"
-        assert grupo_1["duracion"] == "16 SEMANAS"
-        assert grupo_1["jornada"] == "DIURNA"
-        assert grupo_1["cupos"] == 5
+        grupo_1 = course_info["groups"][0]
+        assert grupo_1["groupName"] == "1"
+        assert grupo_1["teacher"] == "JUAN PEREZ GARCIA"
+        assert grupo_1["faculty"] == "FACULTAD DE CIENCIAS"
+        assert grupo_1["duration"] == "16 SEMANAS"
+        assert grupo_1["scheduleType"] == "DIURNA"
+        assert grupo_1["spots"] == 5
 
     def test_scrape_info_schedules(self, sample_course_xml):
         """Test scraping schedule information."""
         course_info = SiaScraper.scrape_info(sample_course_xml)
 
-        horarios = course_info["grupos"][0]["horarios"]
-        assert len(horarios) == 2
+        schedules = course_info["groups"][0]["schedules"]
+        assert len(schedules) == 2
 
-        assert horarios[0]["dia"] == "LUNES"
-        assert horarios[0]["desde"] == "07:00"
-        assert horarios[0]["hasta"] == "09:00"
-        assert horarios[0]["salon"] == "401-101"
+        assert schedules[0]["day"] == "LUNES"
+        assert schedules[0]["startTime"] == "07:00"
+        assert schedules[0]["endTime"] == "09:00"
+        assert schedules[0]["classroom"] == "401-101"
 
-        assert horarios[1]["dia"] == "MIÉRCOLES"
+        assert schedules[1]["day"] == "MIÉRCOLES"
 
-    def test_scrape_info_nan_cupos(self, sample_course_xml):
-        """Test scraping handles NaN cupos correctly."""
+    def test_scrape_info_nan_spots(self, sample_course_xml):
+        """Test scraping handles NaN spots correctly."""
         course_info = SiaScraper.scrape_info(sample_course_xml)
 
-        grupo_2 = course_info["grupos"][1]
-        assert grupo_2["cupos"] == "NaN"
+        grupo_2 = course_info["groups"][1]
+        assert grupo_2["spots"] == "NaN"
 
-    def test_scrape_info_total_cupos(self, sample_course_xml):
+    def test_scrape_info_total_spots(self, sample_course_xml):
         """Test calculation of total available spots."""
         course_info = SiaScraper.scrape_info(sample_course_xml)
 
-        # First group has 5 cupos, second has NaN
+        # First group has 5 spots, second has NaN
         # Total should be 5 (NaN is skipped)
-        assert course_info["cuposDisponibles"] == 5
+        assert course_info["availableSpots"] == 5
 
     def test_scrape_info_timestamp(self, sample_course_xml):
         """Test scraping includes timestamp."""
         course_info = SiaScraper.scrape_info(sample_course_xml)
 
-        assert "fechaObtencion" in course_info
-        assert course_info["fechaObtencion"] != ""
+        assert "scrapeTimestamp" in course_info
+        assert course_info["scrapeTimestamp"] != ""
 
     def test_scrape_info_empty_course(self, sample_empty_course_xml):
         """Test scraping course with no groups."""
         course_info = SiaScraper.scrape_info(sample_empty_course_xml)
 
-        assert course_info["nombreAsignatura"] == "CALCULO AVANZADO"
-        assert course_info["creditos"] == 3
-        assert course_info["grupos"] == []
-        assert course_info["cuposDisponibles"] == 0
+        assert course_info["courseName"] == "CALCULO AVANZADO"
+        assert course_info["credits"] == 3
+        assert course_info["groups"] == []
+        assert course_info["availableSpots"] == 0
 
     def test_scrape_info_malformed_xml_returns_error(self):
         """Test scraping malformed XML handles gracefully."""
@@ -588,7 +588,7 @@ class TestScrapeInfo:
             patch("sia_scraper.scraper.DateFormatter", return_value=formatter),
         ):
             result = SiaScraper.scrape_info("<xml/>")
-        assert result["grupos"][0]["profesor"] == "No informado"
+        assert result["groups"][0]["teacher"] == "Not reported"
 
     def test_scrape_info_missing_credits_element_raises(self):
         xml = """
@@ -666,7 +666,7 @@ class TestScrapeInfo:
             patch("sia_scraper.scraper.DateFormatter", return_value=formatter),
         ):
             result = SiaScraper.scrape_info("<xml/>")
-        assert result["grupos"][0]["horarios"] == []
+        assert result["groups"][0]["schedules"] == []
 
 
 @pytest.mark.unit
@@ -678,10 +678,10 @@ class TestScrapePrereqs:
         prereqs = SiaScraper.scrape_prereqs(sample_prereqs_xml)
 
         assert isinstance(prereqs, dict)
-        assert prereqs["codigo"] == "1000007"
-        assert prereqs["creditos"] == 4
-        assert prereqs["tipologia"] == "DISCIPLINAR OBLIGATORIA"
-        assert "condiciones" in prereqs
+        assert prereqs["code"] == "1000007"
+        assert prereqs["credits"] == 4
+        assert prereqs["typology"] == "DISCIPLINAR OBLIGATORIA"
+        assert "conditions" in prereqs
 
     def test_scrape_prereqs_empty_xml(self):
         """Test scraping prerequisites from empty XML."""
@@ -733,7 +733,7 @@ class TestScrapePrereqs:
         </span>
         """
         result = SiaScraper.scrape_prereqs(xml)
-        assert result["condiciones"] == []
+        assert result["conditions"] == []
 
     def test_scrape_prereqs_skips_when_less_than_four_headers(self):
         soup = MagicMock()
@@ -756,7 +756,7 @@ class TestScrapePrereqs:
         condition_div.children = [condition_info_div, MagicMock()]
         soup.select.return_value = [condition_div]
         with patch("sia_scraper.scraper.BeautifulSoup", return_value=soup):
-            assert SiaScraper.scrape_prereqs("<xml/>")["condiciones"] == []
+            assert SiaScraper.scrape_prereqs("<xml/>")["conditions"] == []
 
     def test_scrape_prereqs_parses_multiple_prereqs(self):
         soup = MagicMock()
@@ -796,7 +796,7 @@ class TestScrapePrereqs:
 
         with patch("sia_scraper.scraper.BeautifulSoup", return_value=soup):
             out = SiaScraper.scrape_prereqs("<xml/>")
-        assert out["condiciones"][0]["prerrequisitos"] == {
+        assert out["conditions"][0]["prerequisites"] == {
             "1000001": "CALCULO",
             "1000002": "ALGEBRA",
         }
@@ -832,7 +832,7 @@ class TestScrapePrereqs:
 
         with patch("sia_scraper.scraper.BeautifulSoup", return_value=soup):
             out = SiaScraper.scrape_prereqs("<xml/>")
-        assert out["condiciones"] == []
+        assert out["conditions"] == []
 
 
 @pytest.mark.unit
@@ -866,7 +866,7 @@ class TestScrapeCourses:
         result = scraper.scrape_courses(courses_codes=["1000001", "1000007"])
 
         assert len(result) == 2
-        assert all("nombreAsignatura" in course for course in result)
+        assert all("courseName" in course for course in result)
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_scrape_courses_with_invalid_code(self, mock_session_class, sample_course_xml):
@@ -971,7 +971,7 @@ class TestComplexScenarios:
         course_info = scraper.get_course_info(course_code="1000001")
         scraper.close_session()
 
-        assert course_info["nombreAsignatura"] == "CALCULO DIFERENCIAL"
+        assert course_info["courseName"] == "CALCULO DIFERENCIAL"
         mock_session.init_session.assert_called_once()
         mock_session.close_session.assert_called_once()
 
