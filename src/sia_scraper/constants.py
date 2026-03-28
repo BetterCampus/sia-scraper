@@ -65,6 +65,8 @@ ADF_ADS_PAGE_ID: str = "1"
 
 # HTTP headers required for SIA Oracle ADF AJAX requests
 # Oracle ADF validates these headers for security and proper request routing
+# Note: user-agent is intentionally pinned to a specific browser version to avoid
+# fingerprinting detection. SIA may reject requests with unusual browser signatures.
 SIA_HEADERS: dict[str, str] = {
     "authority": "sia.unal.edu.co",
     "accept": "*/*",
@@ -144,9 +146,11 @@ DROPDOWNS: list[str] = [
 # Action-to-Component Mapping
 # ============================================================================
 
-# Maps logical actions to (component_id, event_xml) tuples for request body generation
-# Used by SiaSession to construct Oracle ADF AJAX requests dynamically
+# Maps logical actions to (component_id, event_xml) tuples for request body generation.
+# Used by SiaSession to construct Oracle ADF AJAX requests dynamically.
+# Warning: These are brittle dependencies on Oracle ADF's component ID generation.
 DATA_MAP: dict[str, tuple[str, str]] = {
+    # Main course search form interactions
     # Main course search form interactions
     STUDY_LEVEL_DD: (STUDY_LEVEL_DD_ID, DROPDOWN_EVENT_VALUE),  # Select study level dropdown
     CAMPUS_DD: (CAMPUS_DD_ID, DROPDOWN_EVENT_VALUE),  # Select campus dropdown
@@ -184,13 +188,15 @@ ELECTIVES_CAMPUS_INCREMENT: int = 40
 class SiaSessionStatus(Enum):
     """Represents the current state of a SIA scraping session.
 
-    The SIA system requires sequential navigation through different pages:
-    1. NO_SESSION: No active HTTP session with SIA
-    2. CAREER_NOT_SET: Session active but no academic program selected
-    3. ON_CAREER_PAGE: Viewing course list for a specific career/program
-    4. ON_COURSE_PAGE: Viewing details for a specific course
-
+    The SIA system requires sequential navigation through different pages.
     State transitions are enforced by SiaSession to maintain valid navigation.
+
+    ## Valid Transitions
+        NO_SESSION → CAREER_NOT_SET: After calling create_session()
+        CAREER_NOT_SET → ON_CAREER_PAGE: After calling set_career()
+        ON_CAREER_PAGE → ON_COURSE_PAGE: After selecting a course
+        ON_COURSE_PAGE → ON_CAREER_PAGE: After navigating back
+        Any state → NO_SESSION: After calling close_session()
     """
 
     NO_SESSION = "NO_SESSION"  # No active session with SIA Oracle ADF backend

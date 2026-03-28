@@ -40,17 +40,11 @@ class SiaScraper:
     The scraper maintains career context (code, name, course list) and provides methods
     to extract course details, schedules, groups, and prerequisites from Oracle ADF XML.
 
-    Typical workflow:
+    ## Typical Workflow
         1. Create scraper: sc = SiaScraper()
         2. Set career: sc.set_career("0-2-8-3")
         3. Scrape courses: course_info = sc.get_course_info(course_code="2016489")
         4. Access data: course_info["grupos"][0]["horarios"]
-
-    ## Attributes
-        __career_name (str): Human-readable name of the current academic program.
-        __career_code (str): Search code identifier for the career (e.g., "0-2-8-3").
-        __course_list (list[str]): List of course codes available in current career.
-        __sia_session (SiaSession): Underlying session manager for HTTP operations.
     """
 
     def __init__(
@@ -244,7 +238,8 @@ class SiaScraper:
                     ]
                 }
 
-        ### Raises
+        ## Raises
+            ValueError: If course name, credits, or tipology elements not found in XML.
             AssertionError: If session not on career/course page.
         """
         course_index = self.get_course_index(course_code) if course_code != "" else course_index
@@ -382,6 +377,9 @@ class SiaScraper:
                     [3] <span><span>                → Duration
                     [4] <span><span>                → Jornada (schedule type)
                     [5] <span><span>                → Spots (optional)
+
+        ## Raises
+            ValueError: If course name, credits, or tipology elements not found in XML.
         """
         course_obj = {}
         soup = BeautifulSoup(xml, "lxml")
@@ -574,6 +572,9 @@ class SiaScraper:
         Warning:
             TODO: Keys use Spanish strings from SIA (not standardized).
             Future work should normalize to English keys for consistency.
+
+        ## Raises
+            ValueError: If course name or credits elements not found in XML.
         """
         course_obj = {}
         soup = BeautifulSoup(xml, "lxml")
@@ -688,9 +689,6 @@ class SiaScraper:
 
         return course_obj
 
-    ##################### PRIVATE METHODS #####################
-    # (No private methods defined)
-
 
 ##################### MODULE-LEVEL HELPER FUNCTIONS #####################
 # These factory functions provide convenient session initialization patterns.
@@ -723,7 +721,7 @@ def init_sia_scraper(
         navigates to the new career while preserving the session.
 
     Warning:
-        Session validation may have false negatives (see inline comment).
+        Session validation may have false negatives.
         If session appears invalid, falls back to creating new session.
     """
     if session_data is None:
@@ -732,19 +730,12 @@ def init_sia_scraper(
     if session_data == {}:
         return create_career_session(search_code, is_electives, timeout=timeout)
 
-    print("Loading session...")
     sc = SiaScraper(timeout=timeout, session_data=session_data)
-    print("Session loaded")
 
-    # TODO: Session validation reliability issue - sometimes returns false negatives
-    # Consider implementing more robust session validation (e.g., test request)
     if not sc.valid_session():
-        print("Invalid session, creating new one...")
-        return create_career_session(search_code, is_electives)
+        return create_career_session(search_code, is_electives, timeout=timeout)
 
-    # Check if career or electives mode changed
     if sc.career_code != search_code or sc.sia_session.is_electives != is_electives:
-        print("Different career, setting new career...")
         sc.set_career(search_code, electives=is_electives)
 
     return sc
@@ -762,14 +753,8 @@ def create_career_session(
 
     ## Returns
         SiaScraper instance with new session, positioned at career page.
-
-    ## Note
-        Session initialization happens automatically in SiaScraper.__init__().
-        This function just creates the scraper and navigates to the career.
     """
-    print("Creating new session...")
     sc = SiaScraper(timeout=timeout)
-    print("Setting career...")
     sc.set_career(search_code, electives=is_electives)
     return sc
 
