@@ -122,7 +122,7 @@ class TestSiaSessionExceptions:
         with pytest.raises(SiaSessionException.TimeoutError) as exc_info:
             raise SiaSessionException.TimeoutError()
 
-        assert "take to long" in str(exc_info.value).lower()
+        assert "took too long" in str(exc_info.value).lower()
 
     def test_invalid_status_exception(self):
         """Test InvalidStatus exception."""

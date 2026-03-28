@@ -79,7 +79,7 @@ class SiaSessionException(Exception):
 
         def __init__(self) -> None:
             """Initialize with instruction to set career."""
-            super().__init__("Must set career by set_career(__career_code)")
+            super().__init__("Must set career by set_career(search_code)")
 
     class TimeoutError(Exception):
         """Raised when SIA HTTP requests exceed the configured timeout.
@@ -89,13 +89,13 @@ class SiaSessionException(Exception):
 
         def __init__(self) -> None:
             """Initialize with timeout message."""
-            super().__init__("Request to SIA take to long")
+            super().__init__("Request to SIA took too long")
 
     class InvalidStatus(Exception):
         """Raised when attempting an action incompatible with current session state.
 
-        ### Example
-        Trying to exit_course_page() when STATUS != ON_COURSE_PAGE.
+        ## Example
+            Trying to exit_course_page() when STATUS != ON_COURSE_PAGE.
         """
 
         def __init__(self) -> None:
@@ -330,13 +330,13 @@ class SiaSession:
         5. Sets STATUS to CAREER_NOT_SET
 
         ## Raises
-            Various network exceptions from requests library
+            SiaSessionException.SessionNotSet: If Oracle ADF tokens not found in response.
+            SiaSessionException.TimeoutError: If request times out or connection fails.
 
         ## Note
-            ### Logic
-            - Oracle ADF requires javax.faces.ViewState (JSF state token)
-            - Adf-Window-Id uniquely identifies browser window/tab
-            - Adf-Page-Id is set to '0' (seems to accept [0,1,2] without impact)
+            Oracle ADF requires javax.faces.ViewState (JSF state token).
+            Adf-Window-Id uniquely identifies browser window/tab.
+            Adf-Page-Id is set to '0' (seems to accept [0,1,2] without impact).
         """
         self.__session = EnhancedSession(timeout=self.timeout)
 
@@ -409,7 +409,6 @@ class SiaSession:
             self (for method chaining)
 
         ## Note
-            ### Logic
             1. Create new EnhancedSession with restored headers/cookies
             2. Restore Oracle ADF tokens (ViewState, Window-Id, Page-Id)
             3. Restore career context (code, name, course list)
@@ -535,7 +534,7 @@ class SiaSession:
         Specific requests augment this with additional fields via _generate_request_body.
 
         ## Note
-            # TODO: Refactor - Document the purpose of unknown fields:
+            Some fields have unknown purposes (TODO):
             - pt1:r1:0:soc10, pt1:r1:0:it10, pt1:r1:0:it11 (unknown Oracle ADF components)
             - org.apache.myfaces.trinidad.faces.FORM = "f1" (Trinidad form identifier)
         """
@@ -564,13 +563,13 @@ class SiaSession:
         This method fetches the latest ViewState and updates the request_dict.
 
         ## Raises
-            SiaSessionException.SessionNotSet: If no session exists
+            SiaSessionException.SessionNotSet: If ViewState not found in response.
+            SiaSessionException.TimeoutError: If request times out.
 
         ## Note
-            ### Logic
-            - Makes GET request to current SIA page
-            - Uses regex to extract ViewState from HTML (faster than BeautifulSoup for single value)
-            - Updates both __javax_faces_ViewState and request_dict
+            Makes GET request to current SIA page.
+            Uses regex to extract ViewState from HTML (faster than BeautifulSoup for single value).
+            Updates both __javax_faces_ViewState and request_dict.
         """
         r = self.get_request(self.__url, params=self.__params)
 
@@ -594,19 +593,19 @@ class SiaSession:
         through SIA's dropdown-based search form and load the course catalog.
 
         ## Args
-            search_code: Hyphen-delimited code (format: "level-campus-faculty-career")
-                        ### Example
-                        "1-3-5-2345" where indices correspond to dropdown positions
-            electives: If True, load elective courses instead of regular courses (default: False)
+            search_code: Hyphen-delimited code (format: "level-campus-faculty-career").
+                Example: "1-3-5-2345" where indices correspond to dropdown positions.
+            electives: If True, load elective courses instead of regular courses (default: False).
 
         ## Returns
             self (for method chaining)
 
         ## Raises
-            SiaSessionException.SessionNotSet: If no session exists
+            SiaSessionException.CareerNotSet: If career dropdown not found or no response.
+            SiaSessionException.TimeoutError: If request times out.
 
         ## Note
-            # Logic (Regular courses - 6 requests):
+            Regular courses (6 requests):
             1. Select study level dropdown → Triggers faculty dropdown population
             2. Select campus dropdown → Filter faculties by campus
             3. Select faculty dropdown → Triggers career dropdown population
@@ -614,14 +613,14 @@ class SiaSession:
             5. Select typology dropdown → Filter course types (optional)
             6. Click "Mostrar" button → Load course list
 
-            # Logic (Electives - 8 requests):
+            Electives (8 requests):
             Steps 1-5 same as regular, then:
             6. Select faculty/plan dropdown → Enable electives campus selector
             7. Select electives campus → Apply campus offset (+40)
             8. Click "Mostrar" button → Load elective course list
 
-            # TODO: Refactor - Investigate why get_course_xml(0) is needed at end
-            Without that call, subsequent set_career() calls fail (Oracle ADF state issue?)
+            Warning: get_course_xml(0) is called at end. Without it, subsequent
+            set_career() calls fail (Oracle ADF state issue - TODO: investigate).
         """
 
         if electives:
@@ -720,10 +719,11 @@ class SiaSession:
         """Select (highlight) a course row in the Oracle ADF table.
 
         ## Args
-            course_index: Index of course in course_list (0-based)
+            course_index: Index of course in course_list (0-based).
 
         ## Raises
-            SiaSessionException.InvalidStatus: If not on career page
+            SiaSessionException.InvalidStatus: If not on career page.
+            SiaSessionException.TimeoutError: If request times out.
 
         ## Note
             This ONLY highlights the row, does not navigate to course details.
@@ -737,16 +737,16 @@ class SiaSession:
         """Navigate to course detail page for a specific course.
 
         ## Args
-            course_index: Index of course in course_list (0-based)
+            course_index: Index of course in course_list (0-based).
 
         ## Returns
-            Response object containing course detail XML
+            Response object containing course detail XML.
 
         ## Raises
-            SiaSessionException.InvalidStatus: If not on career page
+            SiaSessionException.InvalidStatus: If not on career page.
+            SiaSessionException.TimeoutError: If request times out.
 
         ## Note
-            ### Logic
             1. Refresh ViewState (ensures fresh Oracle ADF state)
             2. Select course row (required by Oracle ADF before navigation)
             3. Reset request_dict
@@ -767,11 +767,12 @@ class SiaSession:
         Clicks the "Volver" (Back) button in Oracle ADF interface.
 
         ## Raises
-            SiaSessionException.InvalidStatus: If not on course page
+            SiaSessionException.InvalidStatus: If not on course page.
+            SiaSessionException.TimeoutError: If request times out.
 
         ## Note
-            # TODO: Refactor - Use _generate_request_body instead of manual dict
-            After exiting, selects row index 1 (workaround for Oracle ADF navigation quirk)
+            After exiting, selects row index 1 (workaround for Oracle ADF navigation quirk).
+            TODO: Refactor - Use _generate_request_body instead of manual dict.
         """
         # TODO: Refactor - Replace manual dict with _generate_request_body(BACK_BTTN)
         data = {
@@ -799,22 +800,22 @@ class SiaSession:
         3. Exits back to course list
 
         ## Args
-            course_index: Index of course in course_list (0-based)
+            course_index: Index of course in course_list (0-based).
 
         ## Returns
-            Oracle ADF XML containing course details (groups, schedules, prerequisites, etc.)
+            Oracle ADF XML containing course details (groups, schedules, prerequisites, etc.).
 
         ## Raises
-            SiaSessionException.InvalidStatus: If not on career page
+            SiaSessionException.InvalidStatus: If not on career page.
+            SiaSessionException.TimeoutError: If request times out.
 
-        ## Note
-            # BUG: Known issue - If you request index 1 immediately after index 0, request fails
-            # Workaround: Always request index 0 first, or add delay between requests
-            # TODO: Investigate Oracle ADF state machine to fix root cause
+        ## Warning
+            BUG: If you request index 1 immediately after index 0, request fails.
+            Workaround: Always request index 0 first, or add delay between requests.
+            TODO: Investigate Oracle ADF state machine to fix root cause.
         """
         xml = self.enter_course_page(course_index).text
         self.exit_course_page()
-        # BUG: Oracle ADF navigation quirk - consecutive requests to index 1 after 0 fail
 
         return xml
 
@@ -839,19 +840,12 @@ class SiaSession:
         """Generate a request dictionary for a specific Oracle ADF interaction.
 
         ## Args
-            id: Oracle ADF component ID (e.g., STUDY_LEVEL_DD_ID)
-            event_type: Oracle RichClient XML event payload (e.g., DROPDOWN_EVENT_VALUE)
-            idx: Optional table row index for row-based events (default: -1 = not a row event)
+            id: Oracle ADF component ID (e.g., STUDY_LEVEL_DD_ID).
+            event_type: Oracle RichClient XML event payload (e.g., DROPDOWN_EVENT_VALUE).
+            idx: Optional table row index for row-based events (default: -1 = not a row event).
 
         ## Returns
-            Complete request dictionary (request_dict + event_dict)
-
-        ## Note
-            ### Logic
-            1. Get event dict for the specific interaction
-            2. Copy request_dict boilerplate
-            3. Merge event fields into copy
-            4. Return augmented dictionary
+            Complete request dictionary (request_dict + event_dict).
         """
         event_dict = self.__get_event_dict(id, event_type, idx)
         request_dict_copy = self.request_dict.copy()
@@ -865,20 +859,18 @@ class SiaSession:
         """Generate Oracle ADF event fields for a specific component interaction.
 
         ## Args
-            id: Oracle ADF component ID
-            event_type: Oracle RichClient XML event payload
-            idx: Optional table row index (if >= 0, modifies id with row suffix)
+            id: Oracle ADF component ID.
+            event_type: Oracle RichClient XML event payload.
+            idx: Optional table row index (if >= 0, modifies id with row suffix).
 
         ## Returns
-            Dictionary with Oracle ADF event fields (event, event.{id}, oracle.adf.view.rich.PROCESS)
+            Dictionary with Oracle ADF event fields (event, event.{id}, oracle.adf.view.rich.PROCESS).
 
         ## Note
-            ### Logic
-            - For table rows (idx >= 0): Append ":{idx}:cl2" to component ID
-            - For dropdowns/row selections: PROCESS = component ID
-            - For buttons: PROCESS = "pt1:r1,{id}" (different Oracle ADF format)
-
-            # TODO: Refactor - Extract "pt1:r1" prefix and ":cl2" suffix as constants
+            For table rows (idx >= 0): Append ":{idx}:cl2" to component ID.
+            For dropdowns/row selections: PROCESS = component ID.
+            For buttons: PROCESS = "pt1:r1,{id}" (different Oracle ADF format).
+            TODO: Refactor - Extract "pt1:r1" prefix and ":cl2" suffix as constants.
         """
         if idx >= 0:
             # Oracle ADF table row ID format: {table_id}:{row_index}:cl2
@@ -901,24 +893,23 @@ class SiaSession:
         """Generate complete Oracle ADF request body for a named action.
 
         ## Args
-            data_name: Logical action name from DATA_MAP (e.g., STUDY_LEVEL_DD, SHOW_COURSES_BTTN)
-            idx: Optional table row index for row-based actions (default: -1)
+            data_name: Logical action name from DATA_MAP (e.g., STUDY_LEVEL_DD, SHOW_COURSES_BTTN).
+            idx: Optional table row index for row-based actions (default: -1).
 
         ## Returns
-            Complete request body dictionary ready for POST to SIA
+            Complete request body dictionary ready for POST to SIA.
 
         ## Raises
-            KeyError: If data_name not found in DATA_MAP
+            KeyError: If data_name not found in DATA_MAP.
 
         ## Note
-            ### Logic
             1. Look up (component_id, event_xml) from DATA_MAP
             2. Add action-specific fields to request_dict (e.g., electives campus offset)
             3. Generate specific request dict with event fields
             4. Add final action-specific fields (e.g., table viewport size for SELECT_ROW)
             5. Return complete request body
 
-            # Special handling:
+            Special handling:
             - FACULTY_CAREER_DD: Sets dropdown value to "0" (first option)
             - CAMPUS_ELECTIVES_DD: Adds +40 offset to campus index (SIA electives convention)
             - SELECT_ROW: Includes table viewport metadata (viewportSize, rows, selectedRowKeys)
@@ -964,22 +955,21 @@ def get_course_list(html: bytes | str, parser: str) -> list[dict[str, str]]:
     """Extract course list from Oracle ADF table HTML.
 
     ## Args
-        html: Oracle ADF page HTML (bytes or string)
-        parser: BeautifulSoup parser to use ('html.parser' or 'lxml')
+        html: Oracle ADF page HTML (bytes or string).
+        parser: BeautifulSoup parser to use ('html.parser' or 'lxml').
 
     ## Returns
-        List of course dictionaries: [{course_code: course_name}, ...]
+        List of course dictionaries: [{course_code: course_name}, ...].
 
     ## Note
-        ### Logic
-        - Target: Oracle ADF table → <tr class="af_table_data-row"> elements
-        - Each row contains <span class="af_column_data-container"> for code and name
-        - First span = course code, second span = course name
+        Target: Oracle ADF table → <tr class="af_table_data-row"> elements.
+        Each row contains <span class="af_column_data-container"> for code and name.
+        First span = course code, second span = course name.
 
-        # Outside SiaSession class to avoid circular import issues with SiaScraper
+        This function is outside SiaSession class to avoid circular import issues with SiaScraper.
 
-        # TODO: Refactor - Magic indices [0] and [1] for code/name columns
-        # Should verify column count or use more robust selector
+        TODO: Refactor - Magic indices [0] and [1] for code/name columns.
+        Should verify column count or use more robust selector.
     """
     html_content = html.decode("utf-8", errors="ignore") if isinstance(html, bytes) else html
     soup = BeautifulSoup(html_content, parser)
