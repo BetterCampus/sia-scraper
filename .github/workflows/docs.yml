@@ -40,7 +40,7 @@ jobs:
           GENERATING_DOCS: "true"
         run: |
           mkdir public
-          pdoc src/ -o public/python-docs
+          pdoc src/sia_scraper/ -o public/index.html
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v4
