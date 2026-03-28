@@ -194,7 +194,7 @@ class TestDateFormatterEdgeCases:
 
 
 class TestDateFormatterPrivateMethod:
-    """Test the private __pad_to_two_digits static method."""
+    """Test the private _pad_to_two_digits static method."""
 
     def test_pad_to_two_digits_single_digit(self) -> None:
         """Test padding a single-digit number.
@@ -202,8 +202,7 @@ class TestDateFormatterPrivateMethod:
         Verifies that single-digit numbers (0-9) are
         zero-padded to two digits.
         """
-        # Access the name-mangled private method
-        result = DateFormatter._DateFormatter__pad_to_two_digits(5)  # type: ignore[attr-defined]
+        result = DateFormatter._pad_to_two_digits(5)
         assert result == "05"
 
     def test_pad_to_two_digits_double_digit(self) -> None:
@@ -211,7 +210,7 @@ class TestDateFormatterPrivateMethod:
 
         Verifies that double-digit numbers remain unchanged.
         """
-        result = DateFormatter._DateFormatter__pad_to_two_digits(15)  # type: ignore[attr-defined]
+        result = DateFormatter._pad_to_two_digits(15)
         assert result == "15"
 
     def test_pad_to_two_digits_zero(self) -> None:
@@ -219,7 +218,7 @@ class TestDateFormatterPrivateMethod:
 
         Verifies that 0 is padded to '00'.
         """
-        result = DateFormatter._DateFormatter__pad_to_two_digits(0)  # type: ignore[attr-defined]
+        result = DateFormatter._pad_to_two_digits(0)
         assert result == "00"
 
     def test_pad_to_two_digits_edge_single_digit(self) -> None:
@@ -228,7 +227,7 @@ class TestDateFormatterPrivateMethod:
         Verifies that the highest single-digit number is
         properly padded.
         """
-        result = DateFormatter._DateFormatter__pad_to_two_digits(9)  # type: ignore[attr-defined]
+        result = DateFormatter._pad_to_two_digits(9)
         assert result == "09"
 
     def test_pad_to_two_digits_edge_double_digit(self) -> None:
@@ -236,8 +235,8 @@ class TestDateFormatterPrivateMethod:
 
         Verifies padding for 59 (max minutes/seconds) and 23 (max hours).
         """
-        assert DateFormatter._DateFormatter__pad_to_two_digits(59) == "59"  # type: ignore[attr-defined]
-        assert DateFormatter._DateFormatter__pad_to_two_digits(23) == "23"  # type: ignore[attr-defined]
+        assert DateFormatter._pad_to_two_digits(59) == "59"
+        assert DateFormatter._pad_to_two_digits(23) == "23"
 
     def test_pad_to_two_digits_three_digit(self) -> None:
         """Test padding a three-digit number.
@@ -245,7 +244,7 @@ class TestDateFormatterPrivateMethod:
         Verifies that numbers with more than two digits
         are returned as-is (no truncation).
         """
-        result = DateFormatter._DateFormatter__pad_to_two_digits(123)  # type: ignore[attr-defined]
+        result = DateFormatter._pad_to_two_digits(123)
         assert result == "123"
 
 

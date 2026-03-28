@@ -3,13 +3,12 @@
 This module provides utilities for converting Python datetime objects into
 standardized string formats required by the SIA API and data pipeline.
 
-Example:
-    Format a datetime object to ISO-like format::
-
-        from datetime import datetime
-        dt = datetime(2024, 3, 25, 20, 15, 30)
-        formatter = DateFormatter(dt)
-        formatted = formatter.formatDate()  # "2024-03-25 20:15"
+## Example
+    >>> from datetime import datetime
+    >>> dt = datetime(2024, 3, 25, 20, 15, 30)
+    >>> formatter = DateFormatter(dt)
+    >>> formatter.format_date()
+    '2024-03-25 20:15'
 """
 
 import datetime
@@ -23,29 +22,28 @@ class DateFormatter:
     database operations. The formatter is stateless after initialization and
     can be used for a single formatting operation.
 
-    Attributes:
+    ## Attributes
         date (datetime.datetime): The datetime object to be formatted.
 
-    Example:
+    ## Example
         >>> from datetime import datetime
         >>> dt = datetime(2024, 12, 25, 15, 30, 45)
         >>> formatter = DateFormatter(dt)
-        >>> formatter.formatDate()
+        >>> formatter.format_date()
         '2024-12-25 15:30'
     """
 
     def __init__(self, date: datetime.datetime) -> None:
         """Initialize formatter with a datetime object.
 
-        Args:
-            date (datetime.datetime): The datetime object to format. Must be
-                a valid datetime instance with year, month, day, hour, and
-                minute attributes.
+        ## Args
+            date: The datetime object to format. Must be a valid datetime
+                instance with year, month, day, hour, and minute attributes.
 
-        Raises:
+        ## Raises
             TypeError: If date is not a datetime.datetime instance.
 
-        Example:
+        ## Example
             >>> from datetime import datetime
             >>> dt = datetime.now()
             >>> formatter = DateFormatter(dt)
@@ -53,24 +51,24 @@ class DateFormatter:
         self.date = date
 
     @staticmethod
-    def __pad_to_two_digits(num: int) -> str:
+    def _pad_to_two_digits(num: int) -> str:
         """Pad an integer to exactly 2 digits with leading zeros.
 
         This is a private helper method used internally to ensure consistent
         formatting of date/time components (month, day, hours, minutes).
 
-        Args:
-            num (int): The integer value to pad. Typically a date/time
-                component (1-31 for day, 0-59 for minutes, etc.).
+        ## Args
+            num: The integer value to pad. Typically a date/time component
+                (1-31 for day, 0-59 for minutes, etc.).
 
-        Returns:
-            str: Zero-padded string representation of exactly 2 characters.
-                Single-digit numbers are prefixed with '0'.
+        ## Returns
+            Zero-padded string representation of exactly 2 characters.
+            Single-digit numbers are prefixed with '0'.
 
-        Example:
-            >>> DateFormatter._DateFormatter__pad_to_two_digits(5)
+        ## Example
+            >>> DateFormatter._pad_to_two_digits(5)
             '05'
-            >>> DateFormatter._DateFormatter__pad_to_two_digits(15)
+            >>> DateFormatter._pad_to_two_digits(15)
             '15'
         """
         return str(num).zfill(2)
@@ -83,27 +81,27 @@ class DateFormatter:
         database operations. Seconds and microseconds are intentionally
         omitted to match SIA requirements.
 
-        Returns:
-            str: Formatted datetime string in 'YYYY-MM-DD HH:MM' format.
-                Components are zero-padded as needed. The year is always
-                4 digits; all other components are 2 digits.
+        ## Returns
+            Formatted datetime string in 'YYYY-MM-DD HH:MM' format.
+            Components are zero-padded as needed. The year is always
+            4 digits; all other components are 2 digits.
 
-        Example:
+        ## Example
             >>> from datetime import datetime
             >>> dt = datetime(2024, 3, 5, 9, 7, 30)
             >>> formatter = DateFormatter(dt)
-            >>> formatter.formatDate()
+            >>> formatter.format_date()
             '2024-03-05 09:07'
 
-        Note:
+        ## Note
             The formatter always returns a string in the expected format,
             regardless of the input datetime's precision. Fractional seconds
             and microseconds are truncated without rounding.
         """
         year = str(self.date.year)
-        month = DateFormatter.__pad_to_two_digits(self.date.month)
-        day = DateFormatter.__pad_to_two_digits(self.date.day)
-        hours = DateFormatter.__pad_to_two_digits(self.date.hour)
-        minutes = DateFormatter.__pad_to_two_digits(self.date.minute)
+        month = self._pad_to_two_digits(self.date.month)
+        day = self._pad_to_two_digits(self.date.day)
+        hours = self._pad_to_two_digits(self.date.hour)
+        minutes = self._pad_to_two_digits(self.date.minute)
 
         return f"{year}-{month}-{day} {hours}:{minutes}"
