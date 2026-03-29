@@ -33,6 +33,29 @@ If logging is not configured, debug messages may not be visible even with
 4. Course list size before row selection
 5. DELTAS payload for selected row
 
+## Dependency issues
+
+### `ImportError: cssselect does not seem to be installed`
+
+Cause: `lxml.cssselect` requires the separate `cssselect` package.
+
+Checks:
+
+- Confirm `cssselect` is installed in the active environment.
+- Reinstall project dependencies after pulling latest changes.
+
+Fix:
+
+```bash
+pip install -e ".[dev]"
+```
+
+If you only need the runtime dependency:
+
+```bash
+pip install cssselect~=1.2.0
+```
+
 ## Common issues and checks
 
 ## 1) `InvalidStatus` exceptions
