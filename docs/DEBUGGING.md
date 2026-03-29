@@ -152,7 +152,29 @@ pytest tests/test_integration.py -v
 ## Useful files for troubleshooting
 
 - `src/sia_scraper/session.py`
-- `src/sia_scraper/oracle_adf_request.py`
-- `src/sia_scraper/adf_state.py`
+- `src/sia_scraper/core/oracle_adf_request.py`
+- `src/sia_scraper/core/adf_state.py`
 - `src/sia_scraper/parsers/course_parser.py`
 - `tests/test_integration.py`
+
+## Project structure (v0.2.1+)
+
+Since version `0.2.1`, infrastructure and utility modules were grouped into
+dedicated packages:
+
+```text
+src/sia_scraper/
+├── scraper.py
+├── session.py
+├── core/
+│   ├── adf_state.py
+│   ├── enhanced_session.py
+│   ├── exceptions.py
+│   └── oracle_adf_request.py
+├── utils/
+│   ├── date_formatter.py
+│   ├── decorators.py
+│   └── debug.py
+├── constants/
+└── parsers/
+```
