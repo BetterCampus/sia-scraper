@@ -178,7 +178,12 @@ Useful variants:
 pytest --cov=src/sia_scraper
 pytest tests/utils/test_date_formatter.py
 pytest -m "not integration"
+pytest tests/test_fixtures_validity.py
+pytest tests/test_contracts.py tests/test_regression.py
 ```
+
+Captured fixture snapshots used by these tests live in `tests/fixtures/` and are refreshed
+with `python scripts/capture_sia_fixtures.py`.
 
 ## Contributing
 

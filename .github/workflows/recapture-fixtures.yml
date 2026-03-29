@@ -1,0 +1,56 @@
+name: Recapture SIA Fixtures
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  recapture:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Capture refreshed fixtures
+        env:
+          SIA_USERNAME: ${{ secrets.SIA_USERNAME }}
+          SIA_PASSWORD: ${{ secrets.SIA_PASSWORD }}
+        run: python scripts/capture_sia_fixtures.py
+
+      - name: Validate fixture integrity
+        run: pytest tests/test_fixtures_validity.py tests/test_contracts.py tests/test_regression.py
+
+      - name: Create pull request with fixture updates
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "test: refresh captured SIA fixtures"
+          title: "test: monthly refresh of captured SIA fixtures"
+          body: |
+            ## Summary
+            - refreshes captured SIA fixture snapshots from the monthly scheduled workflow
+            - re-runs fixture validity and contract/regression tests against refreshed files
+            - updates fixture metadata and baselines when capture output changes
+          branch: automation/monthly-fixture-refresh
+          base: main
+          delete-branch: true
+          labels: |
+            testing
+            fixtures
