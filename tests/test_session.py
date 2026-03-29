@@ -154,10 +154,11 @@ class TestSiaSessionInitialization:
         assert session.timeout == 30
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_init_with_session_creation(self, mock_bs, mock_session_class, mock_sia_initial_html):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_init_with_session_creation(
+        self, mock_HtmlParser, mock_session_class, mock_sia_initial_html
+    ):
         """Test initialization with automatic session creation."""
-        # Setup mock response
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
 
@@ -165,13 +166,13 @@ class TestSiaSessionInitialization:
         mock_session_instance.get.return_value = mock_response
         mock_session_class.return_value = mock_session_instance
 
-        # Setup BeautifulSoup mock
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "test_view_state"},
-            {"value": "test_window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "test_view_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "test_window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
 
@@ -237,8 +238,8 @@ class TestSessionLifecycle:
     """Test session lifecycle methods."""
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_init_session(self, mock_bs, mock_session_class, mock_sia_initial_html):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_init_session(self, mock_HtmlParser, mock_session_class, mock_sia_initial_html):
         """Test creating a new session."""
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
@@ -247,12 +248,13 @@ class TestSessionLifecycle:
         mock_session_instance.get.return_value = mock_response
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state_123"},
-            {"value": "window_id_456"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state_123"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id_456"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=False)
         session.init_session()
@@ -262,9 +264,9 @@ class TestSessionLifecycle:
         mock_session_instance.get.assert_called_once()
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
+    @patch("sia_scraper.session.HtmlParser")
     def test_init_session_missing_view_state_raises(
-        self, mock_bs, mock_session_class, mock_sia_initial_html
+        self, mock_HtmlParser, mock_session_class, mock_sia_initial_html
     ):
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
@@ -272,18 +274,21 @@ class TestSessionLifecycle:
         mock_session_instance.get.return_value = mock_response
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [None, {"value": "window_id_456"}]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = None
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id_456"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=False)
         with pytest.raises(SiaSessionException.SessionNotSet):
             session.init_session()
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
+    @patch("sia_scraper.session.HtmlParser")
     def test_init_session_missing_window_id_raises(
-        self, mock_bs, mock_session_class, mock_sia_initial_html
+        self, mock_HtmlParser, mock_session_class, mock_sia_initial_html
     ):
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
@@ -291,9 +296,12 @@ class TestSessionLifecycle:
         mock_session_instance.get.return_value = mock_response
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [{"value": "view_state_123"}, None]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state_123"
+        window_id_el = None
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=False)
         with pytest.raises(SiaSessionException.SessionNotSet):
@@ -319,8 +327,8 @@ class TestSessionLifecycle:
         assert session.STATUS == SiaSessionStatus.ON_CAREER_PAGE
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_get_session_data(self, mock_bs, mock_session_class, mock_sia_initial_html):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_get_session_data(self, mock_HtmlParser, mock_session_class, mock_sia_initial_html):
         """Test serializing session data."""
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
@@ -331,12 +339,13 @@ class TestSessionLifecycle:
         mock_session_instance.cookies.get_dict.return_value = {"JSESSIONID": "test"}
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state"},
-            {"value": "window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         session_data = session.get_session_data()
@@ -357,8 +366,8 @@ class TestSessionLifecycle:
             SiaSession.get_session_data.__wrapped__(session)  # type: ignore[attr-defined]
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_close_session(self, mock_bs, mock_session_class, mock_sia_initial_html):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_close_session(self, mock_HtmlParser, mock_session_class, mock_sia_initial_html):
         """Test closing an active session."""
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
@@ -367,12 +376,13 @@ class TestSessionLifecycle:
         mock_session_instance.get.return_value = mock_response
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state"},
-            {"value": "window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         session.close_session()
@@ -402,8 +412,10 @@ class TestSessionValidation:
     """Test session validation methods."""
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_valid_session_returns_true(self, mock_bs, mock_session_class, mock_sia_initial_html):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_valid_session_returns_true(
+        self, mock_HtmlParser, mock_session_class, mock_sia_initial_html
+    ):
         """Test valid_session returns True for active session."""
         mock_response_init = MagicMock()
         mock_response_init.content = mock_sia_initial_html
@@ -416,12 +428,13 @@ class TestSessionValidation:
         mock_session_instance.post.return_value = mock_response_valid
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state"},
-            {"value": "window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         is_valid = session.valid_session()
@@ -429,9 +442,9 @@ class TestSessionValidation:
         assert is_valid is True
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
+    @patch("sia_scraper.session.HtmlParser")
     def test_valid_session_detects_timeout(
-        self, mock_bs, mock_session_class, mock_sia_initial_html
+        self, mock_HtmlParser, mock_session_class, mock_sia_initial_html
     ):
         """Test valid_session returns False when session timed out."""
         mock_response_init = MagicMock()
@@ -445,12 +458,13 @@ class TestSessionValidation:
         mock_session_instance.post.return_value = mock_response_timeout
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state"},
-            {"value": "window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         is_valid = session.valid_session()
@@ -463,8 +477,8 @@ class TestHttpRequests:
     """Test HTTP request methods."""
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_post_request(self, mock_bs, mock_session_class, mock_sia_initial_html):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_post_request(self, mock_HtmlParser, mock_session_class, mock_sia_initial_html):
         """Test making POST requests."""
         mock_response_init = MagicMock()
         mock_response_init.content = mock_sia_initial_html
@@ -477,12 +491,13 @@ class TestHttpRequests:
         mock_session_instance.post.return_value = mock_response_post
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state"},
-            {"value": "window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         response = session.post_request({"key": "value"})
@@ -609,18 +624,18 @@ class TestCareerNavigation:
         session.update_view_state = MagicMock()
         session.get_course_xml = MagicMock(return_value="<xml/>")
 
-        with patch("sia_scraper.session.BeautifulSoup") as mock_bs:
-            soup = MagicMock()
+        with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
+            mock_parser = MagicMock()
             dd = MagicMock()
             dd.find_all.return_value = [
-                MagicMock(text="--"),
-                MagicMock(text="A"),
-                MagicMock(text="B"),
-                MagicMock(text="C"),
-                MagicMock(text="Ingenieria de Sistemas"),
+                MagicMock(text_content=MagicMock(return_value="--")),
+                MagicMock(text_content=MagicMock(return_value="A")),
+                MagicMock(text_content=MagicMock(return_value="B")),
+                MagicMock(text_content=MagicMock(return_value="C")),
+                MagicMock(text_content=MagicMock(return_value="Ingenieria de Sistemas")),
             ]
-            soup.find.return_value = dd
-            mock_bs.return_value = soup
+            mock_parser.find.return_value = dd
+            mock_HtmlParser.return_value = mock_parser
             result = session.set_career("0-2-8-3")
 
         assert result == session  # Returns self for chaining
@@ -658,18 +673,18 @@ class TestCoursePageNavigation:
         session.update_view_state = MagicMock()
         session.get_course_xml = MagicMock(return_value="<xml/>")
 
-        with patch("sia_scraper.session.BeautifulSoup") as mock_bs:
-            soup = MagicMock()
+        with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
+            mock_parser = MagicMock()
             dd = MagicMock()
             dd.find_all.return_value = [
-                MagicMock(text="--"),
-                MagicMock(text="A"),
-                MagicMock(text="B"),
-                MagicMock(text="C"),
-                MagicMock(text="Ingenieria de Sistemas"),
+                MagicMock(text_content=MagicMock(return_value="--")),
+                MagicMock(text_content=MagicMock(return_value="A")),
+                MagicMock(text_content=MagicMock(return_value="B")),
+                MagicMock(text_content=MagicMock(return_value="C")),
+                MagicMock(text_content=MagicMock(return_value="Ingenieria de Sistemas")),
             ]
-            soup.find.return_value = dd
-            mock_bs.return_value = soup
+            mock_parser.find.return_value = dd
+            mock_HtmlParser.return_value = mock_parser
             session.set_career("0-2-8-3")
         session.enter_course_page(0)
 
@@ -693,18 +708,18 @@ class TestCoursePageNavigation:
         session.update_view_state = MagicMock()
         session.get_course_xml = MagicMock(return_value="<xml/>")
 
-        with patch("sia_scraper.session.BeautifulSoup") as mock_bs:
-            soup = MagicMock()
+        with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
+            mock_parser = MagicMock()
             dd = MagicMock()
             dd.find_all.return_value = [
-                MagicMock(text="--"),
-                MagicMock(text="A"),
-                MagicMock(text="B"),
-                MagicMock(text="C"),
-                MagicMock(text="Ingenieria de Sistemas"),
+                MagicMock(text_content=MagicMock(return_value="--")),
+                MagicMock(text_content=MagicMock(return_value="A")),
+                MagicMock(text_content=MagicMock(return_value="B")),
+                MagicMock(text_content=MagicMock(return_value="C")),
+                MagicMock(text_content=MagicMock(return_value="Ingenieria de Sistemas")),
             ]
-            soup.find.return_value = dd
-            mock_bs.return_value = soup
+            mock_parser.find.return_value = dd
+            mock_HtmlParser.return_value = mock_parser
             session.set_career("0-2-8-3")
         session.enter_course_page(0)
         session.exit_course_page()
@@ -724,8 +739,10 @@ class TestRequestBodyGeneration:
     """Test request body generation for Oracle ADF."""
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_generate_request_body(self, mock_bs, mock_session_class, mock_sia_initial_html):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_generate_request_body(
+        self, mock_HtmlParser, mock_session_class, mock_sia_initial_html
+    ):
         """Test generating Oracle ADF request body."""
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
@@ -734,12 +751,13 @@ class TestRequestBodyGeneration:
         mock_session_instance.get.return_value = mock_response
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state"},
-            {"value": "window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         request_body = session._generate_request_body(STUDY_LEVEL_DD, idx=0)
@@ -749,8 +767,8 @@ class TestRequestBodyGeneration:
         assert "Adf-Window-Id" in request_body
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_update_view_state(self, mock_bs, mock_session_class):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_update_view_state(self, mock_HtmlParser, mock_session_class):
         """Test updating ViewState token."""
         mock_response_init = MagicMock()
         mock_response_init.content = (
@@ -766,12 +784,13 @@ class TestRequestBodyGeneration:
         mock_session_instance.get.side_effect = [mock_response_init, mock_response_update]
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "initial_state"},
-            {"value": "window_id"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "initial_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         session.update_view_state()
@@ -779,8 +798,8 @@ class TestRequestBodyGeneration:
         mock_session_instance.get.assert_called()
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
-    def test_update_view_state_raises_when_regex_misses(self, mock_bs, mock_session_class):
+    @patch("sia_scraper.session.HtmlParser")
+    def test_update_view_state_raises_when_regex_misses(self, mock_HtmlParser, mock_session_class):
         mock_response_init = MagicMock()
         mock_response_init.content = (
             b'<input type="hidden" name="javax.faces.ViewState" value="initial_state">'
@@ -791,9 +810,13 @@ class TestRequestBodyGeneration:
         mock_session_instance.get.side_effect = [mock_response_init, mock_response_update]
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [{"value": "initial_state"}, {"value": "window_id"}]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "initial_state"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         session = SiaSession(init_session=True)
         with pytest.raises(SiaSessionException.SessionNotSet):
@@ -863,18 +886,18 @@ class TestElectivesHandling:
         session.update_view_state = MagicMock()
         session.get_course_xml = MagicMock(return_value="<xml/>")
 
-        with patch("sia_scraper.session.BeautifulSoup") as mock_bs:
-            soup = MagicMock()
+        with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
+            mock_parser = MagicMock()
             dd = MagicMock()
             dd.find_all.return_value = [
-                MagicMock(text="--"),
-                MagicMock(text="A"),
-                MagicMock(text="B"),
-                MagicMock(text="C"),
-                MagicMock(text="Ingenieria de Sistemas"),
+                MagicMock(text_content=MagicMock(return_value="--")),
+                MagicMock(text_content=MagicMock(return_value="A")),
+                MagicMock(text_content=MagicMock(return_value="B")),
+                MagicMock(text_content=MagicMock(return_value="C")),
+                MagicMock(text_content=MagicMock(return_value="Ingenieria de Sistemas")),
             ]
-            soup.find.return_value = dd
-            mock_bs.return_value = soup
+            mock_parser.find.return_value = dd
+            mock_HtmlParser.return_value = mock_parser
             session.set_career("0-2-8-3", electives=True)
 
         assert session.is_electives is True
@@ -886,13 +909,12 @@ class TestSessionPersistence:
     """Test session data persistence and restoration."""
 
     @patch("sia_scraper.session.EnhancedSession")
-    @patch("sia_scraper.session.BeautifulSoup")
+    @patch("sia_scraper.session.HtmlParser")
     @patch("sia_scraper.session.get_course_list")
     def test_session_round_trip(
-        self, mock_get_courses, mock_bs, mock_session_class, mock_sia_initial_html
+        self, mock_get_courses, mock_HtmlParser, mock_session_class, mock_sia_initial_html
     ):
         """Test saving and restoring session data maintains state."""
-        # Create initial session
         mock_response = MagicMock()
         mock_response.content = mock_sia_initial_html
 
@@ -902,12 +924,13 @@ class TestSessionPersistence:
         mock_session_instance.cookies.get_dict.return_value = {"JSESSIONID": "123"}
         mock_session_class.return_value = mock_session_instance
 
-        mock_soup = MagicMock()
-        mock_soup.find.side_effect = [
-            {"value": "view_state_original"},
-            {"value": "window_id_original"},
-        ]
-        mock_bs.return_value = mock_soup
+        mock_parser = MagicMock()
+        view_state_el = MagicMock()
+        view_state_el.get.return_value = "view_state_original"
+        window_id_el = MagicMock()
+        window_id_el.get.return_value = "window_id_original"
+        mock_parser.find.side_effect = [view_state_el, window_id_el]
+        mock_HtmlParser.return_value = mock_parser
 
         mock_get_courses.return_value = ["1000001"]
 
@@ -964,7 +987,7 @@ class TestSessionPersistence:
 
     def test_get_course_list_parser_with_empty_rows(self):
         html = "<table></table>"
-        assert get_course_list(html, "html.parser") == []
+        assert get_course_list(html) == []
 
     def test_get_course_list_parser_extracts_course(self):
         html = """
@@ -975,7 +998,7 @@ class TestSessionPersistence:
           </tr>
         </table>
         """
-        assert get_course_list(html, "html.parser") == [{"1000001": "CALCULO"}]
+        assert get_course_list(html) == [{"1000001": "CALCULO"}]
 
     @patch("sia_scraper.session.get_course_list")
     def test_set_career_raises_when_dropdown_not_found(self, mock_get_courses):
@@ -991,16 +1014,17 @@ class TestSessionPersistence:
         session.update_view_state = MagicMock()
         session.get_course_xml = MagicMock(return_value="<xml/>")
 
-        resp1, resp2, resp3 = MagicMock(), MagicMock(), MagicMock()
-        resp1.text = "<xml/>"
-        resp2.text = "<xml/>"
-        resp3.text = "<xml/>"
-        session.post_request = MagicMock(side_effect=[resp1, resp2, resp3])
+        resp1, resp2, resp3, resp4, resp5, resp6 = (MagicMock() for _ in range(6))
+        for resp in [resp1, resp2, resp3, resp4, resp5, resp6]:
+            resp.text = "<xml/>"
+        session.post_request = MagicMock(side_effect=[resp1, resp2, resp3, resp4, resp5, resp6])
 
-        with patch("sia_scraper.session.BeautifulSoup") as mock_bs:
-            soup = MagicMock()
-            soup.find.return_value = None
-            mock_bs.return_value = soup
+        with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
+            mock_parser = MagicMock()
+            mock_parser.find.return_value = None
+            mock_parser.find_all.return_value = []
+            mock_parser.find_by_xpath.return_value = []
+            mock_HtmlParser.return_value = mock_parser
             with pytest.raises(SiaSessionException.CareerNotSet):
                 session.set_career("0-2-8-3")
 
