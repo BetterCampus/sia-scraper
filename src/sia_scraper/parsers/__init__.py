@@ -1,0 +1,41 @@
+"""SIA HTML/XML Parsing Package.
+
+This package provides functions for parsing course data from Oracle ADF XML/HTML
+responses returned by SIA's web interface.
+
+## Modules
+
+| Module | Purpose |
+|--------|---------|
+| `html_parser` | Low-level HTML/XML parsing with lxml |
+| `course_parser` | Course info and prerequisites extraction |
+| `models` | Dataclasses for type-safe data structures |
+"""
+
+from .course_parser import get_plain_text, scrape_info, scrape_prereqs
+from .html_parser import HtmlParser, get_course_list
+from .models import (
+    CourseInfo,
+    CoursePrereqs,
+    Group,
+    PrereqCondition,
+    Prerequisite,
+    Schedule,
+)
+
+__all__ = [
+    # HtmlParser
+    "HtmlParser",
+    "get_course_list",
+    # Course Parser
+    "get_plain_text",
+    "scrape_info",
+    "scrape_prereqs",
+    # Models
+    "CourseInfo",
+    "CoursePrereqs",
+    "Group",
+    "PrereqCondition",
+    "Prerequisite",
+    "Schedule",
+]
