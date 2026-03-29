@@ -6,7 +6,8 @@ This module provides functions for extracting ViewState tokens from Oracle ADF r
 from typing import Any
 
 from sia_scraper.constants import VIEW_STATE_REGEX
-from sia_scraper.exceptions import SiaSessionException
+
+from .exceptions import SiaSessionException
 
 
 def extract_view_state(html: bytes | str) -> str:

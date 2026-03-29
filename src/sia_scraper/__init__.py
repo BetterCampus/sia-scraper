@@ -20,10 +20,10 @@ The library is organized into several modules:
 | Module | Purpose |
 |--------|---------|
 | `session.py` | Core HTTP session management and Oracle ADF state handling |
-| `enhanced_session.py` | HTTP session wrapper with automatic timeout handling |
+| `core/` | Session infrastructure (exceptions, ADF utilities, HTTP handling) |
 | `scraper.py` | High-level facade for course data extraction |
 | `constants/` | Package with Oracle ADF component IDs, request templates, and status enums |
-| `date_formatter.py` | Datetime formatting utilities |
+| `utils/` | Utilities (date formatting, decorators, debugging) |
 
 ## Quick Start
 
@@ -77,12 +77,10 @@ without notice. Component IDs and request formats are brittle dependencies.
 """
 
 from .constants import SiaSessionStatus
-from .date_formatter import format_date
-from .decorators import check_session, check_status, handle_timeout_error
-from .enhanced_session import EnhancedSession
-from .exceptions import SiaSessionException
+from .core import EnhancedSession, SiaSessionException
 from .scraper import SiaScraper, create_career_session, init_sia_scraper
 from .session import SiaSession
+from .utils import check_session, check_status, format_date, handle_timeout_error
 
 __all__ = [
     "SiaScraper",

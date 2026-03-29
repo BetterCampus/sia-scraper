@@ -9,7 +9,8 @@ from functools import wraps
 from typing import ParamSpec, TypeVar
 
 from sia_scraper.constants import SiaSessionStatus
-from sia_scraper.exceptions import SiaSessionException
+
+from ..core import SiaSessionException
 
 P = ParamSpec("P")
 R = TypeVar("R")

@@ -2,7 +2,7 @@
 
 import datetime
 
-from sia_scraper.date_formatter import format_date
+from sia_scraper.utils import format_date
 
 
 class TestDateFormatterBasicFunctionality:

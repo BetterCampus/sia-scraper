@@ -16,7 +16,7 @@ from ..constants.business import (
     GROUP_TEACHER_INDEX,
     MIN_GROUP_DATA_LENGTH_WITH_SPOTS,
 )
-from ..date_formatter import format_date
+from ..utils import format_date
 from .html_parser import HtmlElement, HtmlParser
 from .models import (
     CourseInfo,

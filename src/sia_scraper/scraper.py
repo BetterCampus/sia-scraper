@@ -23,7 +23,7 @@ Architecture:
 from typing import Any
 
 from .constants import http, status
-from .exceptions import SiaSessionException
+from .core import SiaSessionException
 from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
 from .session import SiaSession
 

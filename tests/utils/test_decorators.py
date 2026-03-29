@@ -4,9 +4,9 @@ import pytest
 from requests import ConnectionError, ReadTimeout, Timeout
 
 from sia_scraper.constants import SiaSessionStatus
-from sia_scraper.decorators import check_session, check_status, handle_timeout_error
-from sia_scraper.exceptions import SiaSessionException
+from sia_scraper.core import SiaSessionException
 from sia_scraper.session import SiaSession
+from sia_scraper.utils import check_session, check_status, handle_timeout_error
 
 
 class TestCheckSessionDecorator:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from sia_scraper.exceptions import SiaSessionException
+from sia_scraper.core import SiaSessionException
 
 
 class TestSiaSessionException:

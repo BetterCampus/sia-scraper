@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import requests
 
-from sia_scraper.enhanced_session import EnhancedSession
+from sia_scraper.core import EnhancedSession
 
 
 class TestEnhancedSessionInitialization:
