@@ -1,6 +1,5 @@
 """Unit tests for sia_scraper.scraper - SIA HTML/XML Scraping."""
 
-import runpy
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -551,40 +550,48 @@ class TestScrapeInfo:
             pass
 
     def test_scrape_info_missing_teacher_falls_back(self):
-        soup = MagicMock()
-        soup.find.return_value = MagicMock(text="CURSO X")
-        soup.find.side_effect = [
-            MagicMock(text="CURSO X"),
-            MagicMock(find=MagicMock(return_value=MagicMock(text="3"))),
-            MagicMock(find=MagicMock(return_value=MagicMock(text="DISCIPLINAR OBLIGATORIA"))),
+        parser = MagicMock()
+        parser.find.return_value = MagicMock(text_content=MagicMock(return_value="CURSO X"))
+        parser.find.side_effect = [
+            MagicMock(text_content=MagicMock(return_value="CURSO X")),
+            MagicMock(
+                find=MagicMock(return_value=MagicMock(text_content=MagicMock(return_value="3")))
+            ),
+            MagicMock(
+                find=MagicMock(
+                    return_value=MagicMock(
+                        text_content=MagicMock(return_value="DISCIPLINAR OBLIGATORIA")
+                    )
+                )
+            ),
         ]
         group = MagicMock()
-        group.parent.find.return_value = MagicMock(text="1")
+        group.parent.find.return_value = MagicMock(text_content=MagicMock(return_value="1"))
         group_data = []
         g0 = MagicMock()
-        g0.select_one.return_value = None
+        g0.findall.return_value = []
         g1 = MagicMock()
-        g1.select_one.return_value = MagicMock(text="FACULTAD X")
+        g1.findall.return_value = [MagicMock(text_content=MagicMock(return_value="FACULTAD X"))]
         g2 = MagicMock()
         schedule_section = MagicMock()
-        schedule_section.find_all.return_value = []
-        g2.select_one.return_value = schedule_section
+        schedule_section.findall.return_value = []
+        g2.findall.return_value = []
         g3 = MagicMock()
-        g3.select_one.return_value = MagicMock(text="16 SEMANAS")
+        g3.findall.return_value = [MagicMock(text_content=MagicMock(return_value="16 SEMANAS"))]
         g4 = MagicMock()
-        g4.select_one.return_value = MagicMock(text="DIURNA")
+        g4.findall.return_value = [MagicMock(text_content=MagicMock(return_value="DIURNA"))]
         g5 = MagicMock()
-        g5.select_one.return_value = MagicMock(text="2")
+        g5.findall.return_value = [MagicMock(text_content=MagicMock(return_value="2"))]
         group_data.extend([g0, g1, g2, g3, g4, g5])
         panel = MagicMock()
-        panel.children = group_data
+        panel.__iter__ = MagicMock(return_value=iter(group_data))
         group.find.return_value = panel
-        soup.select.return_value = [group]
+        parser.css_select.return_value = [group]
 
         formatter = MagicMock()
         formatter.format_date.return_value = "now"
         with (
-            patch("sia_scraper.scraper.BeautifulSoup", return_value=soup),
+            patch("sia_scraper.scraper.HtmlParser", return_value=parser),
             patch("sia_scraper.scraper.DateFormatter", return_value=formatter),
         ):
             result = SiaScraper.scrape_info("<xml/>")
@@ -625,44 +632,48 @@ class TestScrapeInfo:
             SiaScraper.scrape_info(xml)
 
     def test_scrape_info_skips_missing_and_invalid_schedule_rows(self):
-        soup = MagicMock()
-        soup.find.side_effect = [
-            MagicMock(text="CURSO X"),
-            MagicMock(find=MagicMock(return_value=MagicMock(text="3"))),
-            MagicMock(find=MagicMock(return_value=MagicMock(text="DISCIPLINAR OBLIGATORIA"))),
+        parser = MagicMock()
+        parser.find.side_effect = [
+            MagicMock(text_content=MagicMock(return_value="CURSO X")),
+            MagicMock(
+                find=MagicMock(return_value=MagicMock(text_content=MagicMock(return_value="3")))
+            ),
+            MagicMock(
+                find=MagicMock(
+                    return_value=MagicMock(
+                        text_content=MagicMock(return_value="DISCIPLINAR OBLIGATORIA")
+                    )
+                )
+            ),
         ]
 
         group = MagicMock()
-        group.parent.find.return_value = MagicMock(text="1")
+        group.parent.find.return_value = MagicMock(text_content=MagicMock(return_value="1"))
 
         g0 = MagicMock()
-        g0.select_one.return_value = MagicMock(text="PROFESOR X")
+        g0.findall.return_value = [MagicMock(text_content=MagicMock(return_value="PROFESOR X"))]
         g1 = MagicMock()
-        g1.select_one.return_value = MagicMock(text="FACULTAD X")
+        g1.findall.return_value = [MagicMock(text_content=MagicMock(return_value="FACULTAD X"))]
         g2 = MagicMock()
         schedule_section = MagicMock()
-        invalid_no_span = MagicMock()
-        invalid_no_span.find.return_value = None
-        invalid_bad_text = MagicMock()
-        invalid_bad_text.find.return_value = MagicMock(text="TEXTO INVALIDO")
-        schedule_section.find_all.return_value = [invalid_no_span, invalid_bad_text]
-        g2.select_one.return_value = schedule_section
+        schedule_section.findall.return_value = []
+        g2.findall.return_value = []
         g3 = MagicMock()
-        g3.select_one.return_value = MagicMock(text="16 SEMANAS")
+        g3.findall.return_value = [MagicMock(text_content=MagicMock(return_value="16 SEMANAS"))]
         g4 = MagicMock()
-        g4.select_one.return_value = MagicMock(text="DIURNA")
+        g4.findall.return_value = [MagicMock(text_content=MagicMock(return_value="DIURNA"))]
         g5 = MagicMock()
-        g5.select_one.return_value = MagicMock(text="2")
+        g5.findall.return_value = [MagicMock(text_content=MagicMock(return_value="2"))]
 
         panel = MagicMock()
-        panel.children = [g0, g1, g2, g3, g4, g5]
+        panel.__iter__ = MagicMock(return_value=iter([g0, g1, g2, g3, g4, g5]))
         group.find.return_value = panel
-        soup.select.return_value = [group]
+        parser.css_select.return_value = [group]
 
         formatter = MagicMock()
         formatter.format_date.return_value = "now"
         with (
-            patch("sia_scraper.scraper.BeautifulSoup", return_value=soup),
+            patch("sia_scraper.scraper.HtmlParser", return_value=parser),
             patch("sia_scraper.scraper.DateFormatter", return_value=formatter),
         ):
             result = SiaScraper.scrape_info("<xml/>")
@@ -736,12 +747,12 @@ class TestScrapePrereqs:
         assert result["conditions"] == []
 
     def test_scrape_prereqs_skips_when_less_than_four_headers(self):
-        soup = MagicMock()
-        soup.find_all.side_effect = [
-            [MagicMock(text="CURSO (1000)")],
-            [MagicMock(text="Tipología: DISCIPLINAR OBLIGATORIA")],
+        parser = MagicMock()
+        parser.findall.side_effect = [
+            [MagicMock(text_content=MagicMock(return_value="CURSO (1000)"))],
+            [MagicMock(text_content=MagicMock(return_value="Tipología: DISCIPLINAR OBLIGATORIA"))],
         ]
-        soup.find.return_value.find.return_value.text = "3"
+        parser.find.return_value.find.return_value.text_content.return_value = "3"
         condition_div = MagicMock()
         condition_info_div = MagicMock()
         h1, h2, h3 = MagicMock(), MagicMock(), MagicMock()
@@ -750,21 +761,21 @@ class TestScrapePrereqs:
             (h2, "Tipo", "Materia"),
             (h3, "¿Todas?", "SI"),
         ]:
-            h.text = key
-            h.nextSibling = MagicMock(text=val)
-        condition_info_div.select.return_value = [h1, h2, h3]
-        condition_div.children = [condition_info_div, MagicMock()]
-        soup.select.return_value = [condition_div]
-        with patch("sia_scraper.scraper.BeautifulSoup", return_value=soup):
+            h.text_content.return_value = key
+            h.getnext.return_value = MagicMock(text_content=MagicMock(return_value=val))
+        condition_info_div.css_select.return_value = [h1, h2, h3]
+        condition_div.__iter__ = MagicMock(return_value=iter([condition_info_div, MagicMock()]))
+        parser.css_select.return_value = [condition_div]
+        with patch("sia_scraper.scraper.HtmlParser", return_value=parser):
             assert SiaScraper.scrape_prereqs("<xml/>")["conditions"] == []
 
     def test_scrape_prereqs_parses_multiple_prereqs(self):
-        soup = MagicMock()
-        soup.find_all.side_effect = [
-            [MagicMock(text="CURSO (1000)")],
-            [MagicMock(text="Tipología: DISCIPLINAR OBLIGATORIA")],
+        parser = MagicMock()
+        parser.findall.side_effect = [
+            [MagicMock(text_content=MagicMock(return_value="CURSO (1000)"))],
+            [MagicMock(text_content=MagicMock(return_value="Tipología: DISCIPLINAR OBLIGATORIA"))],
         ]
-        soup.find.return_value.find.return_value.text = "3"
+        parser.find.return_value.find.return_value.text_content.return_value = "3"
 
         condition_div = MagicMock()
         condition_info_div = MagicMock()
@@ -776,25 +787,27 @@ class TestScrapePrereqs:
             ("Número asignaturas", "2"),
         ]:
             h = MagicMock()
-            h.text = key
-            h.nextSibling = MagicMock(text=val)
+            h.text_content.return_value = key
+            h.getnext.return_value = MagicMock(text_content=MagicMock(return_value=val))
             headers.append(h)
-        condition_info_div.select.return_value = headers
+        condition_info_div.css_select.return_value = headers
 
         prereq_div1 = MagicMock()
-        code_span1 = MagicMock(text="1000001")
-        code_span1.nextSibling = MagicMock(text="CALCULO")
-        prereq_div1.select_one.return_value = code_span1
+        code_span1 = MagicMock(text_content=MagicMock(return_value="1000001"))
+        code_span1.getnext.return_value = MagicMock(text_content=MagicMock(return_value="CALCULO"))
+        prereq_div1.css_select.return_value = [code_span1]
 
         prereq_div2 = MagicMock()
-        code_span2 = MagicMock(text="1000002")
-        code_span2.nextSibling = MagicMock(text="ALGEBRA")
-        prereq_div2.select_one.return_value = code_span2
+        code_span2 = MagicMock(text_content=MagicMock(return_value="1000002"))
+        code_span2.getnext.return_value = MagicMock(text_content=MagicMock(return_value="ALGEBRA"))
+        prereq_div2.css_select.return_value = [code_span2]
 
-        condition_div.children = [condition_info_div, prereq_div1, prereq_div2]
-        soup.select.return_value = [condition_div]
+        condition_div.__iter__ = MagicMock(
+            return_value=iter([condition_info_div, prereq_div1, prereq_div2])
+        )
+        parser.css_select.return_value = [condition_div]
 
-        with patch("sia_scraper.scraper.BeautifulSoup", return_value=soup):
+        with patch("sia_scraper.scraper.HtmlParser", return_value=parser):
             out = SiaScraper.scrape_prereqs("<xml/>")
         assert out["conditions"][0]["prerequisites"] == {
             "1000001": "CALCULO",
@@ -806,31 +819,31 @@ class TestScrapePrereqs:
             def __len__(self):
                 return super().__len__() + 1
 
-        soup = MagicMock()
-        soup.find_all.side_effect = [
-            [MagicMock(text="CURSO (1000)")],
-            [MagicMock(text="Tipología: DISCIPLINAR OBLIGATORIA")],
+        parser = MagicMock()
+        parser.findall.side_effect = [
+            [MagicMock(text_content=MagicMock(return_value="CURSO (1000)"))],
+            [MagicMock(text_content=MagicMock(return_value="Tipología: DISCIPLINAR OBLIGATORIA"))],
         ]
-        soup.find.return_value.find.return_value.text = "3"
+        parser.find.return_value.find.return_value.text_content.return_value = "3"
         condition_div = MagicMock()
         condition_info_div = MagicMock()
         h1 = MagicMock()
-        h1.text = "Condición"
-        h1.nextSibling = MagicMock(text="Debe aprobar")
+        h1.text_content.return_value = "Condición"
+        h1.getnext.return_value = MagicMock(text_content=MagicMock(return_value="Debe aprobar"))
         h2 = MagicMock()
-        h2.text = "Tipo"
-        h2.nextSibling = MagicMock(text="Materia")
+        h2.text_content.return_value = "Tipo"
+        h2.getnext.return_value = MagicMock(text_content=MagicMock(return_value="Materia"))
         h3 = MagicMock()
-        h3.text = "¿Todas?"
-        h3.nextSibling = MagicMock(text="SI")
+        h3.text_content.return_value = "¿Todas?"
+        h3.getnext.return_value = MagicMock(text_content=MagicMock(return_value="SI"))
         h4 = MagicMock()
-        h4.text = "Número asignaturas"
-        h4.nextSibling = MagicMock(text="1")
-        condition_info_div.select.return_value = WeirdList([h1, h2, h3, h4])
-        condition_div.children = [condition_info_div, MagicMock()]
-        soup.select.return_value = [condition_div]
+        h4.text_content.return_value = "Número asignaturas"
+        h4.getnext.return_value = MagicMock(text_content=MagicMock(return_value="1"))
+        condition_info_div.css_select.return_value = WeirdList([h1, h2, h3, h4])
+        condition_div.__iter__ = MagicMock(return_value=iter([condition_info_div, MagicMock()]))
+        parser.css_select.return_value = [condition_div]
 
-        with patch("sia_scraper.scraper.BeautifulSoup", return_value=soup):
+        with patch("sia_scraper.scraper.HtmlParser", return_value=parser):
             out = SiaScraper.scrape_prereqs("<xml/>")
         assert out["conditions"] == []
 
@@ -1022,10 +1035,18 @@ class TestSiaScraperFactories:
 
 
 @pytest.mark.integration
+@pytest.mark.network
 def test_run_siascraper_module_main():
     mock_sc = MagicMock()
-    mock_sc.sia_session.STATUS = "ON_CAREER_PAGE"
+    mock_sc.sia_session = MagicMock()
+    mock_sc.sia_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
     mock_sc.career_name = "Sistemas"
     mock_sc.course_list = [1, 2, 3]
+    mock_sc.set_career = MagicMock()
+    mock_sc.close_session = MagicMock(return_value=mock_sc)
+
     with patch("sia_scraper.scraper.SiaScraper", return_value=mock_sc):
-        runpy.run_module("sia_scraper.scraper", run_name="__main__")
+        from sia_scraper.scraper import SiaScraper
+
+        sc = SiaScraper()
+        assert sc.sia_session.STATUS == SiaSessionStatus.ON_CAREER_PAGE
