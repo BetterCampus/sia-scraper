@@ -25,25 +25,8 @@ def check_session(func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         self = args[0]
-        if self._SiaSession__session is None:  # type: ignore[attr-defined]
-            raise SiaSessionException.SessionNotSet from SiaSessionException
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def check_career(func: Callable[P, R]) -> Callable[P, R]:
-    """Decorator: Ensures a career has been selected before executing method.
-
-    ## Raises
-        SiaSessionException.CareerNotSet: If career_code is empty
-    """
-
-    @wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        self = args[0]
-        if self._SiaSession__career_code == "":  # type: ignore[attr-defined]
-            raise SiaSessionException.CareerNotSet from SiaSessionException
+        if not self._has_session:  # type: ignore[attr-defined]
+            raise SiaSessionException.SessionNotSet from None
         return func(*args, **kwargs)
 
     return wrapper
@@ -68,8 +51,8 @@ def check_status(status: SiaSessionStatus) -> Callable[[Callable[P, R]], Callabl
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             self = args[0]
-            if self._SiaSession__STATUS != status:  # type: ignore[attr-defined]
-                raise SiaSessionException.InvalidStatus from SiaSessionException
+            if self.STATUS != status:  # type: ignore[attr-defined]
+                raise SiaSessionException.InvalidStatus from None
             return func(*args, **kwargs)
 
         return wrapper

@@ -28,7 +28,7 @@ from sia_scraper.constants import (
     ORACLE_ADF_UNKNOWN_COMPONENT_4,
     SELECT_ROW,
     SELECT_ROW_EVENT_VALUE,
-    SHOW_CURSES_BTTN_ID,
+    SHOW_COURSES_BTTN_ID,
     STUDY_LEVEL_DD_ID,
     TIPOLOGY_DD_ID,
 )
@@ -59,22 +59,22 @@ class OracleAdfRequestBuilder:
         Returns
             Complete request dictionary with Oracle ADF form fields and state tokens.
         """
-        tipology_index = self.session._SiaSession__tipology_index  # type: ignore[attr-defined]
+        tipology_index = self.session._tipology_index  # type: ignore[attr-defined]
         self.request_dict = {
             STUDY_LEVEL_DD_ID: "",
             CAMPUS_DD_ID: "",
             FACULTY_DD_ID: "",
             CAREER_DD_ID: "",
             TIPOLOGY_DD_ID: tipology_index,
-            SHOW_CURSES_BTTN_ID: "",
+            SHOW_COURSES_BTTN_ID: "",
             ORACLE_ADF_UNKNOWN_COMPONENT_1: "",
             ORACLE_ADF_UNKNOWN_COMPONENT_2: "",
             ORACLE_ADF_UNKNOWN_COMPONENT_3: "",
             ORACLE_ADF_UNKNOWN_COMPONENT_4: "",
             "org.apache.myfaces.trinidad.faces.FORM": "f1",
-            "Adf-Window-Id": self.session._SiaSession__Adf_Window_Id,  # type: ignore[attr-defined]
-            "Adf-Page-Id": self.session._SiaSession__Adf_Page_Id,  # type: ignore[attr-defined]
-            "javax.faces.ViewState": self.session._SiaSession__javax_faces_ViewState,  # type: ignore[attr-defined]
+            "Adf-Window-Id": self.session._window_id or "",  # type: ignore[attr-defined]
+            "Adf-Page-Id": self.session._page_id or "",  # type: ignore[attr-defined]
+            "javax.faces.ViewState": self.session._view_state or "",  # type: ignore[attr-defined]
         }
         return self.request_dict
 
@@ -99,15 +99,15 @@ class OracleAdfRequestBuilder:
         if data_name == FACULTY_CAREER_DD:
             self.request_dict[FACULTY_CAREER_DD_ID] = FACULTY_CAREER_DEFAULT_INDEX
         elif data_name == "CAMPUS_ELECTIVES_DD":
-            career_indexs = self.session.career_indexs  # type: ignore[attr-defined]
+            career_indices = self.session.career_indices  # type: ignore[attr-defined]
             self.request_dict[CAMPUS_ELECTIVES_DD_ID] = str(
-                int(career_indexs[1]) + ELECTIVES_CAMPUS_INCREMENT
+                int(career_indices[1]) + ELECTIVES_CAMPUS_INCREMENT
             )
 
         specific_request_dict = self._generate_specific_request_dict(id, event_value, idx)
 
         if data_name == SELECT_ROW:
-            course_list = self.session._SiaSession__course_list  # type: ignore[attr-defined]
+            course_list = self.session.course_list
             specific_request_dict["oracle.adf.view.rich.DELTAS"] = (
                 f"{{pt1:r1:0:t4={{viewportSize={len(course_list) + 1},rows={len(course_list)},selectedRowKeys={idx}}}}}"
             )
