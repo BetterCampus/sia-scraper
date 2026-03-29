@@ -22,7 +22,7 @@ The library is organized into several modules:
 | `session.py` | Core HTTP session management and Oracle ADF state handling |
 | `enhanced_session.py` | HTTP session wrapper with automatic timeout handling |
 | `scraper.py` | High-level facade for course data extraction |
-| `constants.py` | Oracle ADF component IDs, request templates, and status enums |
+| `constants/` | Package with Oracle ADF component IDs, request templates, and status enums |
 | `date_formatter.py` | Datetime formatting utilities |
 
 ## Quick Start
