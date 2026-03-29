@@ -15,18 +15,22 @@ class TestSiaSessionException:
     def test_session_not_set_is_exception_subclass(self):
         """Verify SessionNotSet inherits from Exception."""
         assert issubclass(SiaSessionException.SessionNotSet, Exception)
+        assert issubclass(SiaSessionException.SessionNotSet, SiaSessionException)
 
     def test_career_not_set_is_exception_subclass(self):
         """Verify CareerNotSet inherits from Exception."""
         assert issubclass(SiaSessionException.CareerNotSet, Exception)
+        assert issubclass(SiaSessionException.CareerNotSet, SiaSessionException)
 
     def test_invalid_status_is_exception_subclass(self):
         """Verify InvalidStatus inherits from Exception."""
         assert issubclass(SiaSessionException.InvalidStatus, Exception)
+        assert issubclass(SiaSessionException.InvalidStatus, SiaSessionException)
 
     def test_timeout_error_is_exception_subclass(self):
         """Verify TimeoutError inherits from Exception."""
         assert issubclass(SiaSessionException.TimeoutError, Exception)
+        assert issubclass(SiaSessionException.TimeoutError, SiaSessionException)
 
 
 class TestExceptionInstances:
