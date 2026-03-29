@@ -48,7 +48,6 @@ from .constants import (
     CAREER_DD_ID,
     COURSE_PAGE_LINK,
     DEFAULT_TIMEOUT,
-    DROPDOWN_EVENT_VALUE,
     DROPDOWN_FIRST_OPTION_OFFSET,
     DROPDOWNS,
     ELECTIVES_TYPOLOGY_INDEX,
@@ -57,7 +56,6 @@ from .constants import (
     FACULTY_DD_ID,
     ORACLE_ADF_REGION_ID,
     SELECT_ROW,
-    SELECT_ROW_EVENT_VALUE,
     SESSION_TIMEOUT_ALERT,
     SHOW_COURSES_BTTN,
     SIA_BASE_URL,
@@ -823,60 +821,6 @@ class SiaSession:
             Useful for debugging Oracle ADF responses or extracting data from current view.
         """
         return self.get_request(self.__url, params=self.__params).text
-
-    def __generate_specific_request_dict(
-        self, id: str, event_type: str, idx: int = -1
-    ) -> dict[str, str]:
-        """Generate a request dictionary for a specific Oracle ADF interaction.
-
-        ## Args
-            id: Oracle ADF component ID (e.g., STUDY_LEVEL_DD_ID).
-            event_type: Oracle RichClient XML event payload (e.g., DROPDOWN_EVENT_VALUE).
-            idx: Optional table row index for row-based events (default: -1 = not a row event).
-
-        ## Returns
-            Complete request dictionary (request_dict + event_dict).
-        """
-        event_dict = self.__get_event_dict(id, event_type, idx)
-        request_dict_copy = self.request_dict.copy()
-
-        for key, value in event_dict.items():
-            request_dict_copy[key] = value
-
-        return request_dict_copy
-
-    def __get_event_dict(self, id: str, event_type: str, idx: int = -1) -> dict[str, str]:
-        """Generate Oracle ADF event fields for a specific component interaction.
-
-        ## Args
-            id: Oracle ADF component ID.
-            event_type: Oracle RichClient XML event payload.
-            idx: Optional table row index (if >= 0, modifies id with row suffix).
-
-        ## Returns
-            Dictionary with Oracle ADF event fields (event, event.{id}, oracle.adf.view.rich.PROCESS).
-
-        ## Note
-            For table rows (idx >= 0): Append ":{idx}:cl2" to component ID.
-            For dropdowns/row selections: PROCESS = component ID.
-            For buttons: PROCESS = "pt1:r1,{id}" (different Oracle ADF format).
-        """
-        if idx >= 0:
-            # Oracle ADF table row ID format: {table_id}:{row_index}:cl2
-            id = f"{id}:{idx}:cl2"
-
-        process_value = id
-        if event_type == DROPDOWN_EVENT_VALUE or event_type == SELECT_ROW_EVENT_VALUE:
-            process_value = id
-        elif event_type == BTTN_EVENT_VALUE:
-            # Oracle ADF button process format differs from dropdown/selection
-            process_value = f"{ORACLE_ADF_REGION_ID},{id}"
-
-        return {
-            "event": id,
-            f"event.{id}": event_type,
-            "oracle.adf.view.rich.PROCESS": process_value,
-        }
 
     def _generate_request_body(self, data_name: str, idx: int = -1) -> dict[str, str]:
         """Generate complete Oracle ADF request body for a named action.
