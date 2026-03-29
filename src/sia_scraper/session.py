@@ -42,8 +42,8 @@ from .constants import actions, adf_events, adf_ids, business, data_map, http, s
 from .decorators import check_session, check_status, handle_timeout_error
 from .enhanced_session import EnhancedSession
 from .exceptions import SiaSessionException
+from .html_parser import HtmlParser, get_course_list
 from .oracle_adf_request import OracleAdfRequestBuilder
-from .parsers import HtmlParser, get_course_list
 from .utils import debug_log
 
 
@@ -338,9 +338,9 @@ class SiaSession:
             SiaSessionException.SessionNotSet: If no session exists
             SiaSessionException.TimeoutError: If request times out
         """
-        return self.__session.post(
+        return self.__session.post(  # type: ignore[OptionalMemberAccess]
             self.__url, params=self.__params, headers=http.SIA_HEADERS, data=data
-        )  # type: ignore[OptionalMemberAccess]
+        )
 
     @handle_timeout_error
     def get_request(self, url: str, params: dict[str, str] | None = None) -> Any:
