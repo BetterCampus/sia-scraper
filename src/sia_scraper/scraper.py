@@ -259,8 +259,9 @@ class SiaScraper:
             AssertionError: If session not on career or course page.
 
         ## Note
-            Applies index swap bugfix for indices 0 and 1 due to SIA quirk.
-            TODO: Document why SIA returns swapped indices for first two courses.
+            SIA's Oracle ADF table returns indices 0 and 1 in swapped order in its internal
+            state (though the course list order is correct). This function applies the
+            necessary correction when looking up indices.
         """
         assert self.__sia_session.STATUS in (
             SiaSessionStatus.ON_CAREER_PAGE,
@@ -269,8 +270,6 @@ class SiaScraper:
 
         for i in range(len(self.__course_list)):
             if course_code in self.__course_list[i]:
-                # BUGFIX: SIA returns indices 0 and 1 in swapped order
-                # TODO: Investigate root cause in Oracle ADF table rendering
                 if i == 0 or i == 1:
                     return (i + 1) % 2  # Swap: 0→1, 1→0
                 return i
