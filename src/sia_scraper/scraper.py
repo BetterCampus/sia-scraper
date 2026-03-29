@@ -11,22 +11,19 @@ and HTTP operations to SiaSession while handling all XML parsing and data extrac
 - Prerequisites and conditions
 
 Architecture:
-    SiaScraper (this module) - XML parsing, business logic, data transformation
-        ↓ delegates session management to
+    SiaScraper (this module) - Orchestration, delegation to SiaSession
+        ↓ delegates to
     SiaSession - HTTP requests, Oracle ADF state management, navigation
-        ↓ uses constants from
-    SiaConstants - Oracle ADF component IDs, request templates, status enums
+        ↓ uses
+    parsers - Course info and prerequisites extraction with dataclasses
+        ↓ uses
+    constants - Oracle ADF component IDs, request templates, status enums
+"""
 
-The scraper parses Oracle ADF-generated XML/HTML which uses specific CSS classes
-and structural patterns. Inline comments document these selectors and parsing logic."""
-
-import re
-from datetime import datetime
 from typing import Any
 
-from .constants import DEFAULT_TIMEOUT, SiaSessionStatus
-from .date_formatter import DateFormatter
-from .parsers import HtmlParser
+from .constants import http, status
+from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
 from .session import SiaSession
 
 
@@ -43,12 +40,12 @@ class SiaScraper:
         1. Create scraper: sc = SiaScraper()
         2. Set career: sc.set_career("0-2-8-3")
         3. Scrape courses: course_info = sc.get_course_info(course_code="2016489")
-        4. Access data: course_info["groups"][0]["schedules"]
+        4. Access data: course_info.groups[0].schedules
     """
 
     def __init__(
         self,
-        timeout: int = DEFAULT_TIMEOUT,
+        timeout: int = http.DEFAULT_TIMEOUT,
         session_data: dict[str, Any] | None = None,
         init_session: bool = True,
     ) -> None:
@@ -67,7 +64,7 @@ class SiaScraper:
         """
         self.__career_name = "N/A"
         self.__career_code = ""
-        self.__course_list = []
+        self.__course_list: list[dict[str, str]] = []
 
         if session_data is None:
             session_data = {}
@@ -103,10 +100,6 @@ class SiaScraper:
         return self.__sia_session
 
     ##################### PUBLIC METHODS #####################
-
-    # ======================== Session Management Methods ========================
-    # These methods delegate to SiaSession for HTTP session lifecycle management.
-    # SiaScraper adds career context synchronization on top of session operations.
 
     def create_session(self) -> "SiaScraper":
         """Initialize a new HTTP session with SIA's Oracle ADF backend.
@@ -171,9 +164,6 @@ class SiaScraper:
         """
         return self.__sia_session.valid_session()
 
-    # ======================== Scraping Methods ========================
-    # These methods extract and parse course data from SIA's Oracle ADF XML/HTML.
-
     def set_career(self, search_code: str, electives: bool = False) -> "SiaScraper":
         """Navigate to a specific academic program and load its course list.
 
@@ -198,7 +188,7 @@ class SiaScraper:
         self.__career_name = self.__sia_session.career_name
         return self
 
-    def get_course_info(self, course_index: int = 0, course_code: str = "") -> dict:
+    def get_course_info(self, course_index: int = 0, course_code: str = "") -> CourseInfo:
         """Retrieve complete course information including all groups and schedules.
 
         ## Args
@@ -208,34 +198,16 @@ class SiaScraper:
                 If provided, overrides course_index.
 
         ## Returns
-            Dictionary with structure:
-                {
-                    "courseName": str,            # Course name
-                    "credits": int,                # Credit hours
-                    "typology": str,              # Course typology
-                    "availableSpots": int,         # Total available spots across all groups
-                    "scrapeTimestamp": str,        # Scrape timestamp
-                    "groups": [                   # List of course groups
-                        {
-                            "groupName": str,      # Group number/name
-                            "teacher": str,       # Teacher name
-                            "faculty": str,       # Faculty/school
-                            "courseName": str,    # Course name
-                            "schedules": [       # Schedule entries
-                                {
-                                    "day": str,      # Day of week (e.g., "LUNES")
-                                    "startTime": str, # Start time "HH:MM"
-                                    "endTime": str,   # End time "HH:MM"
-                                    "classroom": str  # Classroom (may be empty)
-                                }
-                            ],
-                            "duration": str,      # Duration (e.g., "16 SEMANAS")
-                            "scheduleType": str,   # Schedule type (e.g., "DIURNA")
-                            "spots": int|str,      # Available spots or "NaN"
-                            "isFavorite": bool     # Legacy field
-                        }
-                    ]
-                }
+            CourseInfo dataclass with structure:
+                - courseName: str
+                - credits: int
+                - typology: str
+                - availableSpots: int
+                - scrapeTimestamp: str
+                - groups: list[Group]
+                    - groupName, teacher, faculty, courseName
+                    - schedules: list[Schedule] (day, startTime, endTime, classroom)
+                    - duration, scheduleType, spots
 
         ## Raises
             ValueError: If course name, credits, or tipology elements not found in XML.
@@ -243,7 +215,7 @@ class SiaScraper:
         """
         course_index = self.get_course_index(course_code) if course_code != "" else course_index
         xml = self.__sia_session.get_course_xml(course_index)
-        return self.scrape_info(xml)
+        return scrape_info(xml)
 
     def get_course_index(self, course_code: str) -> int:
         """Find the index of a course code in the current career's course list.
@@ -263,18 +235,18 @@ class SiaScraper:
             necessary correction when looking up indices.
         """
         assert self.__sia_session.STATUS in (
-            SiaSessionStatus.ON_CAREER_PAGE,
-            SiaSessionStatus.ON_COURSE_PAGE,
+            status.SiaSessionStatus.ON_CAREER_PAGE,
+            status.SiaSessionStatus.ON_COURSE_PAGE,
         ), "Session not on career page or course page, can't get course index"
 
-        for i in range(len(self.__course_list)):
-            if course_code in self.__course_list[i]:
+        for i, course in enumerate(self.__course_list):
+            if course_code in course:
                 if i == 0 or i == 1:
                     return (i + 1) % 2  # Swap: 0→1, 1→0
                 return i
         return -1
 
-    def get_course_prereqs(self, course_index: int = 0, course_code: str = "") -> dict:
+    def get_course_prereqs(self, course_index: int = 0, course_code: str = "") -> CoursePrereqs:
         """Retrieve course prerequisites and enrollment conditions.
 
         ## Args
@@ -284,18 +256,26 @@ class SiaScraper:
                 If provided, overrides course_index.
 
         ## Returns
-            Dictionary with structure (see scrape_prereqs() for details).
+            CoursePrereqs dataclass with structure:
+                - courseName: str
+                - code: str
+                - credits: int
+                - typology: str
+                - conditions: list[PrereqCondition]
+                    - condition, type, all_required, number_of_courses
+                    - prerequisites: list[Prerequisite]
+                        - course_code, course_name
 
         ## Raises
             AssertionError: If session not on career/course page.
         """
         course_index = self.get_course_index(course_code) if course_code != "" else course_index
         xml = self.__sia_session.get_course_xml(course_index)
-        return self.scrape_prereqs(xml)
+        return scrape_prereqs(xml)
 
     def scrape_courses(
         self, courses_indexs: list[int] | None = None, courses_codes: list[str] | None = None
-    ) -> list[dict]:
+    ) -> list[CourseInfo]:
         """Batch scrape multiple courses by index or code.
 
         ## Args
@@ -305,8 +285,7 @@ class SiaScraper:
                 Used to populate courses_indexs if that is empty.
 
         ## Returns
-            List of course info dictionaries (see get_course_info() for structure).
-            Each includes "code" field with the course code.
+            List of CourseInfo dataclasses with code field populated.
 
         ## Note
             Sorts indices before scraping for more efficient sequential access.
@@ -322,440 +301,17 @@ class SiaScraper:
         courses_indexs.sort()
         courses = [self.get_course_info(course_index) for course_index in courses_indexs]
 
-        for i in range(len(courses)):
-            courses[i]["code"] = courses_codes[i]
+        for i, course in enumerate(courses):
+            object.__setattr__(course, "code", courses_codes[i])
 
         return courses
-
-    ##################### STATIC METHODS #####################
-    # These methods parse Oracle ADF XML/HTML using BeautifulSoup.
-    # Oracle ADF generates specific CSS classes and DOM structures that we target.
-
-    @staticmethod
-    def get_plain_text(xml: str) -> str:
-        """Extract human-readable plain text from Oracle ADF XML response.
-
-        ## Args
-            xml: Raw XML/HTML from SIA Oracle ADF response.
-
-        ## Returns
-            Plain text content before the first triple non-breaking space separator.
-
-        ## Note
-            Oracle ADF uses \xa0\xa0\xa0 as a visual separator in rendered text.
-            This method extracts only the primary content before that separator.
-        """
-        parser = HtmlParser(xml)
-        return parser.text_content().split("\xa0\xa0\xa0")[0]
-
-    @staticmethod
-    def scrape_info(xml: str) -> dict:
-        """Parse comprehensive course information from Oracle ADF course detail page.
-
-        This method extracts course metadata and ALL group details (schedules, teachers,
-        spots, etc.) from the XML/HTML response of a course detail page.
-
-        ## Args
-            xml: Raw XML/HTML from SIA course detail page response.
-
-        ## Returns
-            Dictionary with complete course data including all groups and schedules.
-            See get_course_info() docstring for full structure.
-
-        ## Oracle ADF XML Structure
-            ```html
-            <h2>                                    → Course name
-            <span class="detass-creditos">          → Credits (nested span)
-            <span class="detass-tipologia">         → Tipology (nested span)
-            <div class="af_showDetailHeader_content0">  → Each group container
-                <h2 class="af_showDetailHeader_title-text0">  → Group name
-                <div class="af_panelGroupLayout">   → Group data container
-                    [0] <span><span>                → Teacher name
-                    [1] <span><span>                → Faculty
-                    [2] <span><span>                → Schedules (lista-elemento)
-                    [3] <span><span>                → Duration
-                    [4] <span><span>                → Jornada (schedule type)
-                    [5] <span><span>                → Spots (optional)
-            ```
-
-        ## Raises
-            ValueError: If course name, credits, or tipology elements not found in XML.
-        """
-        course_obj = {}
-        parser = HtmlParser(xml)
-
-        # Target: Oracle ADF → <h2> (first occurrence) → Course name
-        course_name_elem = parser.find("h2")
-        if course_name_elem is None:
-            raise ValueError("Course name element not found in XML")
-        course_name = course_name_elem.text_content()
-
-        # Target: Oracle ADF → <span class="detass-creditos"> → nested <span> → Credits
-        credits_elem = parser.find("span", class_="detass-creditos")
-        if credits_elem is None:
-            raise ValueError("Credits element not found in XML")
-        credits_spans = credits_elem.findall(".//span")
-        if not credits_spans:
-            raise ValueError("Credits span not found in XML")
-        credits = int(credits_spans[-1].text_content().strip())
-
-        # Target: Oracle ADF → <span class="detass-tipologia"> → nested <span> → Tipology
-        tipology_elem = parser.find("span", class_="detass-tipologia")
-        if tipology_elem is None:
-            raise ValueError("Tipology element not found in XML")
-        tipology_spans = tipology_elem.findall(".//span")
-        if not tipology_spans:
-            raise ValueError("Tipology span not found in XML")
-        tipology = tipology_spans[-1].text_content().strip()
-
-        group_list = []
-
-        course_obj["courseName"] = course_name
-        course_obj["availableSpots"] = 0  # Accumulated from all groups
-        course_obj["scrapeTimestamp"] = DateFormatter(datetime.now()).format_date()
-        course_obj["groups"] = group_list
-        course_obj["credits"] = credits
-        course_obj["typology"] = tipology
-
-        # Target: Oracle ADF → All <div class="af_showDetailHeader_content0"> → Group containers
-        # Each div represents one course group with all its details
-        groups = parser.css_select(".af_showDetailHeader_content0")
-
-        # ===== Process each course group =====
-        for group in groups:
-            group_obj = {}
-
-            # Target: Oracle ADF → group.parent → <h2 class="af_showDetailHeader_title-text0"> → Group name/number
-            parent_group = group.parent
-            if parent_group is not None:
-                h2_elem = parent_group.find("h2", class_="af_showDetailHeader_title-text0")
-                group_obj["groupName"] = (
-                    h2_elem.text_content().strip() if h2_elem is not None else "Unknown"
-                )
-            else:
-                group_obj["groupName"] = "Unknown"
-
-            # Target: Oracle ADF → <div class="af_panelGroupLayout"> → children array
-            # Oracle ADF renders group data as ordered child elements (not labeled):
-            # TODO: These indices are fragile - Oracle ADF updates could break this
-            panel_div = group.find("div", class_="af_panelGroupLayout")
-            if panel_div is None:
-                continue
-            group_data = list(panel_div)
-
-            # group_data structure:
-            #   [0]: Teacher
-            #   [1]: Faculty/school
-            #   [2]: Schedules
-            #   [3]: Duration (e.g., "16 SEMANAS")
-            #   [4]: Schedule type (e.g., "DIURNA")
-            #   [5]: Available spots - OPTIONAL, may not exist
-
-            if len(group_data) == 0:
-                continue
-
-            # All subsequent selectors use "span > span" to access nested span values
-            # Oracle ADF wraps actual values in a nested <span> inside the label <span>
-
-            # Target: group_data[0] → <span> → <span> → Teacher name
-            teacher_spans = group_data[0].findall(".//span")
-            if teacher_spans:
-                group_obj["teacher"] = teacher_spans[-1].text_content().strip()
-            else:
-                group_obj["teacher"] = "Not reported"
-
-            # Target: group_data[1] → <span> → <span> → Faculty name
-            faculty_spans = group_data[1].findall(".//span")
-            if faculty_spans:
-                group_obj["faculty"] = faculty_spans[-1].text_content().strip()
-            else:
-                group_obj["faculty"] = "Unknown"
-            group_obj["courseName"] = course_name
-
-            # ===== Parse schedule information =====
-            # Logic: Each group can have multiple schedule entries (e.g., Mon 8-10, Wed 14-16)
-            # Each entry includes day, time range, and optional classroom
-            schedules = []
-
-            # Target: group_data[2] → Schedule container
-            if len(group_data) > 2:
-                schedule_section = group_data[2]
-                all_lista_spans = schedule_section.findall('.//span[@class="lista-elemento"]')
-
-                for lista_span in all_lista_spans:
-                    nested_classroom = lista_span.findall('span[@class="lista-elemento"]')
-                    if not nested_classroom:
-                        continue
-
-                    schedule = {}
-                    schedule_span = lista_span.find("span")
-                    if schedule_span is None:
-                        continue
-                    schedule_txt = schedule_span.text_content()
-
-                    # Logic: Parse schedule string using regex
-                    # Captures: (day_name) de (HH:MM) a (HH:MM)
-                    match = re.match(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})", schedule_txt)
-                    if match is None:
-                        continue
-                    day, start_time, end_time = match.groups()
-                    schedule["day"] = day
-                    schedule["startTime"] = start_time
-                    schedule["endTime"] = end_time
-
-                    # Target: Schedule container → nested <span class="lista-elemento"> → Classroom
-                    classroom_container = lista_span.find("span[@class='lista-elemento']")
-                    schedule["classroom"] = (
-                        classroom_container.text_content().strip()
-                        if classroom_container is not None
-                        else ""
-                    )
-
-                    schedules.append(schedule)
-
-            group_obj["schedules"] = schedules
-
-            # Target: group_data[3] → <span> → <span> → Duration
-            if len(group_data) > 3:
-                duration_spans = group_data[3].findall(".//span")
-                if duration_spans:
-                    group_obj["duration"] = duration_spans[-1].text_content().strip()
-                else:
-                    group_obj["duration"] = "Unknown"
-            else:
-                group_obj["duration"] = "Unknown"
-
-            # Target: group_data[4] → <span> → <span> → Schedule type
-            if len(group_data) > 4:
-                schedule_type_spans = group_data[4].findall(".//span")
-                if schedule_type_spans:
-                    group_obj["scheduleType"] = schedule_type_spans[-1].text_content().strip()
-                else:
-                    group_obj["scheduleType"] = "Unknown"
-            else:
-                group_obj["scheduleType"] = "Unknown"
-
-            # ===== Parse available spots (optional field) =====
-            # Logic: Spots info only exists if group_data has 6+ elements
-            # TODO: Magic number 6 - depends on Oracle ADF template structure
-            if len(group_data) < 6:
-                # No spots information available for this group
-                group_obj["spots"] = "NaN"
-            else:
-                spots_spans = group_data[5].findall(".//span")
-                if spots_spans:
-                    try:
-                        spots = int(spots_spans[-1].text_content().strip())
-                        group_obj["spots"] = spots
-                        course_obj["availableSpots"] += spots  # Accumulate total spots
-                    except ValueError:
-                        group_obj["spots"] = "NaN"
-                else:
-                    group_obj["spots"] = "NaN"
-
-            # TODO: Remove this legacy field - not part of SIA data model
-            group_obj["isFavorite"] = False
-
-            # Add completed group to course object
-            course_obj["groups"].append(group_obj)
-
-        return course_obj
-
-    @staticmethod
-    def scrape_prereqs(xml: str) -> dict:
-        """Parse course prerequisites and enrollment conditions from Oracle ADF XML.
-
-        Extracts prerequisite courses organized by condition types (e.g., "Must pass ALL",
-        "Must pass 2 of the following"). Each condition has metadata and a list of
-        prerequisite course codes.
-
-        ## Args
-            xml: Raw XML/HTML from SIA course detail page response.
-
-        ## Returns
-            Dictionary with structure:
-                {
-                    "courseName": str,  # Course name with code
-                    "code": str,             # Course code extracted from name
-                    "credits": int,           # Credit hours
-                    "typology": str,          # Course typology
-                    "conditions": [           # List of prerequisite conditions
-                        {
-                            "Condition": str,         # Condition type (from SIA)
-                            "Type": str,              # Type (from SIA)
-                            "AllRequired": str,       # "All required?" (from SIA)
-                            "NumberOfCourses": str,  # Number of courses (from SIA)
-                            "prerequisites": {        # Prerequisite courses
-                                "COURSE_CODE": "Course Name",
-                                ...
-                            }
-                        }
-                    ]
-                }
-
-        ## Oracle ADF XML Structure
-            ```html
-            <h2>                                    → Course name (with code in parens)
-            <span class="detass-creditos">          → Credits
-            <span class="detass-tipologia">         → "Tipología: VALUE"
-            <span class="borde salto af_panelGroupLayout">  → Condition containers
-                <div class="margin-t af_panelGroupLayout">  → Each condition block
-                    [0] <div> Condition metadata    → Headers + values as siblings
-                    [1+] <div> Prerequisite courses → Code + name as siblings
-            ```
-
-        Warning:
-            TODO: Keys use Spanish strings from SIA (not standardized).
-            Future work should normalize to English keys for consistency.
-
-        ## Raises
-            ValueError: If course name or credits elements not found in XML.
-        """
-        course_obj = {}
-        parser = HtmlParser(xml)
-
-        # Target: Oracle ADF → <h2> (first occurrence) → Course name with code
-        h2_elements = parser.find_all("h2")
-        if not h2_elements:
-            raise ValueError("Course name element not found in prerequisites XML")
-        course_name = h2_elements[0].text_content()
-
-        # Target: Oracle ADF → <span class="detass-creditos"> → nested <span> → Credits
-        credits_elem = parser.find("span", class_="detass-creditos")
-        if credits_elem is None:
-            raise ValueError("Credits element not found in prerequisites XML")
-        credits_spans = credits_elem.findall(".//span")
-        if not credits_spans:
-            raise ValueError("Credits span not found in prerequisites XML")
-        credits = int(credits_spans[-1].text_content().strip())
-
-        course_obj["courseName"] = course_name
-
-        # Logic: Extract course code from name - format: "COURSE_NAME (CODE)"
-        # TODO: Use regex for more robust parsing
-        course_obj["code"] = course_name[course_name.index("(") + 1 : course_name.index(")")]
-        course_obj["credits"] = credits
-
-        # Target: Oracle ADF → <span class="detass-tipologia"> → text → "Tipología: VALUE"
-        # Split on ": " to extract just the VALUE part
-        # TODO: Magic index [1] after split - assumes format never changes
-        tipology_elements = parser.find_all("span", class_="detass-tipologia")
-        if tipology_elements:
-            course_obj["typology"] = tipology_elements[0].text_content().split(": ")[-1]
-        else:
-            course_obj["typology"] = "Unknown"
-
-        course_obj["conditions"] = []
-
-        # Target: Oracle ADF → Condition containers using CSS selector
-        conditions = parser.css_select(
-            "span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout"
-        )
-
-        # ===== Process each prerequisite condition =====
-        for condition_div in conditions:
-            condition_sub_divs = list(condition_div)
-
-            # Logic: Each condition has at least 2 child divs:
-            #   [0]: Condition metadata (headers and values)
-            #   [1+]: Individual prerequisite courses
-            # TODO: Magic number 2 - Oracle ADF structure dependency
-            if len(condition_sub_divs) < 2:
-                continue  # Skip malformed conditions
-
-            # Target: First child div → Condition metadata container
-            condition_info_div = condition_sub_divs[0]
-
-            # Target: Oracle ADF → <span class="strong af_panelGroupLayout"> → <span class="margin-l">
-            # These are the header labels (e.g., "Condición:", "Tipo:", "¿Todas?:", "Número asignaturas:")
-            condition_headers_spans = condition_info_div.css_select(
-                "span.strong.af_panelGroupLayout > span.margin-l"
-            )
-
-            # Target: Oracle ADF quirk - values are stored as nextSibling text nodes
-            # Oracle ADF doesn't wrap values in elements, they're just text after the header span
-            condition_values_spans = [header.getnext() for header in condition_headers_spans]
-
-            # Logic: Validate condition structure - must have exactly 4 header-value pairs
-            # TODO: Magic number 4 - expected metadata fields from Oracle ADF
-            if len(condition_headers_spans) != len(condition_values_spans):
-                continue  # Mismatch between headers and values
-            if len(condition_headers_spans) < 4:
-                continue  # Missing expected metadata fields
-
-            # ===== Extract condition metadata =====
-            # WARNING: These keys are Spanish strings from SIA, not standardized constants
-            # TODO: Standardize keys to English and normalize value formats
-            #       Blocked by: requires DB migration, academic history parser updates,
-            #       prerequisite graph algorithm changes
-            prereq_info = {}
-
-            # Target: condition_headers_spans[0] → "Condición:" → value → Condition type
-            prereq_info[condition_headers_spans[0].text_content()] = (
-                condition_values_spans[0].text_content().strip()
-                if condition_values_spans[0] is not None
-                else ""
-            )
-
-            # Target: condition_headers_spans[1] → "Tipo:" → value → Type
-            prereq_info[condition_headers_spans[1].text_content()] = (
-                condition_values_spans[1].text_content().strip()
-                if len(condition_values_spans) > 1 and condition_values_spans[1] is not None
-                else ""
-            )
-
-            # Target: condition_headers_spans[2] → "¿Todas?:" → value → All required? (yes/no)
-            prereq_info[condition_headers_spans[2].text_content()] = (
-                condition_values_spans[2].text_content().strip()
-                if len(condition_values_spans) > 2 and condition_values_spans[2] is not None
-                else ""
-            )
-
-            # Target: condition_headers_spans[3] → "Número asignaturas:" → value → Number of courses
-            prereq_info[condition_headers_spans[3].text_content()] = (
-                condition_values_spans[3].text_content().strip()
-                if len(condition_values_spans) > 3 and condition_values_spans[3] is not None
-                else ""
-            )
-
-            prereq_info["prerequisites"] = {}
-
-            # ===== Extract prerequisite course codes and names =====
-            # Target: Remaining child divs (index 1+) → Each prerequisite course
-            # TODO: Magic index [1:] - assumes first div is always metadata
-            condition_prereqs_divs = condition_sub_divs[1:]
-
-            for prereq_div in condition_prereqs_divs:
-                # Target: prereq_div → <span class="af_panelGroupLayout"> → <span> → Course code
-                prereq_code_spans = prereq_div.css_select("span.af_panelGroupLayout > span")
-                if not prereq_code_spans:
-                    continue
-                prereq_code_span = prereq_code_spans[0]
-                prereq_code = prereq_code_span.text_content()
-
-                # Target: Oracle ADF quirk - course name is nextSibling text node (not wrapped)
-                # Why does Oracle ADF do this? Unclear, but consistent across all prereq entries
-                next_sibling = prereq_code_span.getnext()
-                prereq_name = (
-                    next_sibling.text_content().strip() if next_sibling is not None else ""
-                )
-
-                prereq_info["prerequisites"][prereq_code] = prereq_name
-
-            course_obj["conditions"].append(prereq_info)
-
-        return course_obj
-
-
-##################### MODULE-LEVEL HELPER FUNCTIONS #####################
-# These factory functions provide convenient session initialization patterns.
 
 
 def init_sia_scraper(
     search_code: str,
     is_electives: bool,
     session_data: dict[str, Any] | None = None,
-    timeout: int = DEFAULT_TIMEOUT,
+    timeout: int = http.DEFAULT_TIMEOUT,
 ) -> SiaScraper:
     """Initialize or restore a SiaScraper with intelligent session management.
 
@@ -777,7 +333,7 @@ def init_sia_scraper(
         If the career in session_data differs from search_code, automatically
         navigates to the new career while preserving the session.
 
-    Warning:
+    ## Warning
         Session validation may have false negatives.
         If session appears invalid, falls back to creating new session.
     """
@@ -799,7 +355,7 @@ def init_sia_scraper(
 
 
 def create_career_session(
-    search_code: str, is_electives: bool, timeout: int = DEFAULT_TIMEOUT
+    search_code: str, is_electives: bool, timeout: int = http.DEFAULT_TIMEOUT
 ) -> SiaScraper:
     """Create a new SiaScraper with a fresh session and navigate to career.
 
@@ -814,29 +370,3 @@ def create_career_session(
     sc = SiaScraper(timeout=timeout)
     sc.set_career(search_code, electives=is_electives)
     return sc
-
-
-##################### MODULE TESTING #####################
-# Run this module directly for basic functionality testing
-
-if __name__ == "__main__":
-    # Example: Create scraper and navigate to a career
-    sc = SiaScraper()
-    print(f"Initial status: {sc.sia_session.STATUS}")
-
-    # Set career to Computer Science (example code: "0-2-8-3")
-    sc.set_career("0-2-8-3", electives=False)
-    print(f"Loaded career: {sc.career_name}")
-    print(f"Available courses: {len(sc.course_list)}")
-
-    # Switch to different career (example: "0-2-8-1")
-    sc.set_career("0-2-8-1", electives=False)
-    print(f"Switched to career: {sc.career_name}")
-
-    # Commented out debugging code:
-    # print(sc.get_plain_text(sc.__sia_session.get_request(sc.__sia_session.url).text))
-    # print(sc.__sia_session.STATUS)
-    # print("-------------------")
-    # sc.__sia_session.get_course_xml(0)
-    # print(sc.get_plain_text(sc.__sia_session.get_request(sc.__sia_session.url).text))
-    # print(sc.__sia_session.STATUS)
