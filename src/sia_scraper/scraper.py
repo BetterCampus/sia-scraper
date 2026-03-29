@@ -24,10 +24,9 @@ import re
 from datetime import datetime
 from typing import Any
 
-from bs4 import BeautifulSoup
-
 from .constants import DEFAULT_TIMEOUT, SiaSessionStatus
 from .date_formatter import DateFormatter
+from .parsers import HtmlParser
 from .session import SiaSession
 
 
@@ -346,8 +345,8 @@ class SiaScraper:
             Oracle ADF uses \xa0\xa0\xa0 as a visual separator in rendered text.
             This method extracts only the primary content before that separator.
         """
-        soup = BeautifulSoup(xml, "lxml")
-        return soup.get_text().split("\xa0\xa0\xa0")[0]
+        parser = HtmlParser(xml)
+        return parser.text_content().split("\xa0\xa0\xa0")[0]
 
     @staticmethod
     def scrape_info(xml: str) -> dict:
@@ -383,31 +382,31 @@ class SiaScraper:
             ValueError: If course name, credits, or tipology elements not found in XML.
         """
         course_obj = {}
-        soup = BeautifulSoup(xml, "lxml")
+        parser = HtmlParser(xml)
 
         # Target: Oracle ADF → <h2> (first occurrence) → Course name
-        course_name_elem = soup.find("h2")
+        course_name_elem = parser.find("h2")
         if course_name_elem is None:
             raise ValueError("Course name element not found in XML")
-        course_name = course_name_elem.text
+        course_name = course_name_elem.text_content()
 
         # Target: Oracle ADF → <span class="detass-creditos"> → nested <span> → Credits
-        credits_elem = soup.find("span", class_="detass-creditos")
+        credits_elem = parser.find("span", class_="detass-creditos")
         if credits_elem is None:
             raise ValueError("Credits element not found in XML")
-        credits_span = credits_elem.find("span")
-        if credits_span is None:
+        credits_spans = credits_elem.findall(".//span")
+        if not credits_spans:
             raise ValueError("Credits span not found in XML")
-        credits = int(credits_span.text.strip())
+        credits = int(credits_spans[-1].text_content().strip())
 
         # Target: Oracle ADF → <span class="detass-tipologia"> → nested <span> → Tipology
-        tipology_elem = soup.find("span", class_="detass-tipologia")
+        tipology_elem = parser.find("span", class_="detass-tipologia")
         if tipology_elem is None:
             raise ValueError("Tipology element not found in XML")
-        tipology_span = tipology_elem.find("span")
-        if tipology_span is None:
+        tipology_spans = tipology_elem.findall(".//span")
+        if not tipology_spans:
             raise ValueError("Tipology span not found in XML")
-        tipology = tipology_span.text.strip()
+        tipology = tipology_spans[-1].text_content().strip()
 
         group_list = []
 
@@ -420,21 +419,30 @@ class SiaScraper:
 
         # Target: Oracle ADF → All <div class="af_showDetailHeader_content0"> → Group containers
         # Each div represents one course group with all its details
-        groups = soup.select(".af_showDetailHeader_content0")
+        groups = parser.css_select(".af_showDetailHeader_content0")
 
         # ===== Process each course group =====
         for group in groups:
             group_obj = {}
 
             # Target: Oracle ADF → group.parent → <h2 class="af_showDetailHeader_title-text0"> → Group name/number
-            group_obj["groupName"] = group.parent.find(
-                "h2", class_="af_showDetailHeader_title-text0"
-            ).text
+            parent_group = group.parent
+            if parent_group is not None:
+                h2_elem = parent_group.find("h2", class_="af_showDetailHeader_title-text0")
+                group_obj["groupName"] = (
+                    h2_elem.text_content().strip() if h2_elem is not None else "Unknown"
+                )
+            else:
+                group_obj["groupName"] = "Unknown"
 
             # Target: Oracle ADF → <div class="af_panelGroupLayout"> → children array
             # Oracle ADF renders group data as ordered child elements (not labeled):
             # TODO: These indices are fragile - Oracle ADF updates could break this
-            group_data = list(group.find("div", class_="af_panelGroupLayout").children)
+            panel_div = group.find("div", class_="af_panelGroupLayout")
+            if panel_div is None:
+                continue
+            group_data = list(panel_div)
+
             # group_data structure:
             #   [0]: Teacher
             #   [1]: Faculty/school
@@ -443,44 +451,47 @@ class SiaScraper:
             #   [4]: Schedule type (e.g., "DIURNA")
             #   [5]: Available spots - OPTIONAL, may not exist
 
+            if len(group_data) == 0:
+                continue
+
             # All subsequent selectors use "span > span" to access nested span values
             # Oracle ADF wraps actual values in a nested <span> inside the label <span>
 
             # Target: group_data[0] → <span> → <span> → Teacher name
-            teacher_name_span = group_data[0].select_one("span > span")
-            if teacher_name_span:  # Teacher info may not be available for some groups
-                group_obj["teacher"] = teacher_name_span.text.strip()
+            teacher_spans = group_data[0].findall(".//span")
+            if teacher_spans:
+                group_obj["teacher"] = teacher_spans[-1].text_content().strip()
             else:
                 group_obj["teacher"] = "Not reported"
 
             # Target: group_data[1] → <span> → <span> → Faculty name
-            group_obj["faculty"] = group_data[1].select_one("span > span").text.strip()
+            faculty_spans = group_data[1].findall(".//span")
+            if faculty_spans:
+                group_obj["faculty"] = faculty_spans[-1].text_content().strip()
+            else:
+                group_obj["faculty"] = "Unknown"
             group_obj["courseName"] = course_name
 
             # ===== Parse schedule information =====
             # Logic: Each group can have multiple schedule entries (e.g., Mon 8-10, Wed 14-16)
             # Each entry includes day, time range, and optional classroom
             schedules = []
-            schedule = {}
 
-            # Target: group_data[2] → <span> → <span> → Schedule container
-            schedule_section = group_data[2].select_one("span > span")
+            # Target: group_data[2] → Schedule container
+            if len(group_data) > 2:
+                schedule_section = group_data[2]
+                all_lista_spans = schedule_section.findall('.//span[@class="lista-elemento"]')
 
-            if schedule_section:  # Schedule section may be empty for some groups
-                # Target: schedule_section → All <span class="lista-elemento"> (non-recursive)
-                # Note: recursive=False prevents selecting nested classroom spans which share the same class
-                # Oracle ADF structure: schedule spans contain classroom spans, both use "lista-elemento"
-                schedule_containers = schedule_section.find_all(
-                    "span", class_="lista-elemento", recursive=False
-                )
+                for lista_span in all_lista_spans:
+                    nested_classroom = lista_span.findall('span[@class="lista-elemento"]')
+                    if not nested_classroom:
+                        continue
 
-                for schedule_container in schedule_containers:
-                    # Target: schedule_container → <span> → Schedule text
-                    # Format: "LUNES de 08:00 a 10:00" (day name, "de" = from, "a" = to)
-                    schedule_span = schedule_container.find("span")
+                    schedule = {}
+                    schedule_span = lista_span.find("span")
                     if schedule_span is None:
                         continue
-                    schedule_txt = schedule_span.text
+                    schedule_txt = schedule_span.text_content()
 
                     # Logic: Parse schedule string using regex
                     # Captures: (day_name) de (HH:MM) a (HH:MM)
@@ -492,21 +503,37 @@ class SiaScraper:
                     schedule["startTime"] = start_time
                     schedule["endTime"] = end_time
 
-                    # Target: schedule_container → nested <span class="lista-elemento"> → Classroom
-                    # Classroom info is nested inside schedule container (if available)
-                    classroom_container = schedule_container.find("span", class_="lista-elemento")
-                    schedule["classroom"] = classroom_container.text if classroom_container else ""
+                    # Target: Schedule container → nested <span class="lista-elemento"> → Classroom
+                    classroom_container = lista_span.find("span[@class='lista-elemento']")
+                    schedule["classroom"] = (
+                        classroom_container.text_content().strip()
+                        if classroom_container is not None
+                        else ""
+                    )
 
                     schedules.append(schedule)
-                    schedule = {}
 
             group_obj["schedules"] = schedules
 
             # Target: group_data[3] → <span> → <span> → Duration
-            group_obj["duration"] = group_data[3].select_one("span > span").text.strip()
+            if len(group_data) > 3:
+                duration_spans = group_data[3].findall(".//span")
+                if duration_spans:
+                    group_obj["duration"] = duration_spans[-1].text_content().strip()
+                else:
+                    group_obj["duration"] = "Unknown"
+            else:
+                group_obj["duration"] = "Unknown"
 
             # Target: group_data[4] → <span> → <span> → Schedule type
-            group_obj["scheduleType"] = group_data[4].select_one("span > span").text.strip()
+            if len(group_data) > 4:
+                schedule_type_spans = group_data[4].findall(".//span")
+                if schedule_type_spans:
+                    group_obj["scheduleType"] = schedule_type_spans[-1].text_content().strip()
+                else:
+                    group_obj["scheduleType"] = "Unknown"
+            else:
+                group_obj["scheduleType"] = "Unknown"
 
             # ===== Parse available spots (optional field) =====
             # Logic: Spots info only exists if group_data has 6+ elements
@@ -515,17 +542,22 @@ class SiaScraper:
                 # No spots information available for this group
                 group_obj["spots"] = "NaN"
             else:
-                # Target: group_data[5] → <span> → <span> → Spots count
-                spots = int(group_data[5].select_one("span > span").text.strip())
-                group_obj["spots"] = spots
-                course_obj["availableSpots"] += spots  # Accumulate total spots
+                spots_spans = group_data[5].findall(".//span")
+                if spots_spans:
+                    try:
+                        spots = int(spots_spans[-1].text_content().strip())
+                        group_obj["spots"] = spots
+                        course_obj["availableSpots"] += spots  # Accumulate total spots
+                    except ValueError:
+                        group_obj["spots"] = "NaN"
+                else:
+                    group_obj["spots"] = "NaN"
 
             # TODO: Remove this legacy field - not part of SIA data model
             group_obj["isFavorite"] = False
 
             # Add completed group to course object
             course_obj["groups"].append(group_obj)
-            group_obj = {}
 
         return course_obj
 
@@ -580,22 +612,22 @@ class SiaScraper:
             ValueError: If course name or credits elements not found in XML.
         """
         course_obj = {}
-        soup = BeautifulSoup(xml, "lxml")
+        parser = HtmlParser(xml)
 
         # Target: Oracle ADF → <h2> (first occurrence) → Course name with code
-        h2_elements = soup.find_all("h2")
+        h2_elements = parser.find_all("h2")
         if not h2_elements:
             raise ValueError("Course name element not found in prerequisites XML")
-        course_name = h2_elements[0].text
+        course_name = h2_elements[0].text_content()
 
         # Target: Oracle ADF → <span class="detass-creditos"> → nested <span> → Credits
-        credits_elem = soup.find("span", class_="detass-creditos")
+        credits_elem = parser.find("span", class_="detass-creditos")
         if credits_elem is None:
             raise ValueError("Credits element not found in prerequisites XML")
-        credits_span = credits_elem.find("span")
-        if credits_span is None:
+        credits_spans = credits_elem.findall(".//span")
+        if not credits_spans:
             raise ValueError("Credits span not found in prerequisites XML")
-        credits = int(credits_span.text.strip())
+        credits = int(credits_spans[-1].text_content().strip())
 
         course_obj["courseName"] = course_name
 
@@ -607,22 +639,22 @@ class SiaScraper:
         # Target: Oracle ADF → <span class="detass-tipologia"> → text → "Tipología: VALUE"
         # Split on ": " to extract just the VALUE part
         # TODO: Magic index [1] after split - assumes format never changes
-        course_obj["typology"] = soup.find_all("span", class_="detass-tipologia")[0].text.split(
-            ": "
-        )[1]
+        tipology_elements = parser.find_all("span", class_="detass-tipologia")
+        if tipology_elements:
+            course_obj["typology"] = tipology_elements[0].text_content().split(": ")[-1]
+        else:
+            course_obj["typology"] = "Unknown"
 
         course_obj["conditions"] = []
 
-        # Target: Oracle ADF → CSS selector chain:
-        #   <span class="borde salto af_panelGroupLayout">  → Container
-        #       > <div class="margin-t af_panelGroupLayout"> → Each condition block
-        conditions = soup.select(
+        # Target: Oracle ADF → Condition containers using CSS selector
+        conditions = parser.css_select(
             "span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout"
         )
 
         # ===== Process each prerequisite condition =====
         for condition_div in conditions:
-            condition_sub_divs = list(condition_div.children)
+            condition_sub_divs = list(condition_div)
 
             # Logic: Each condition has at least 2 child divs:
             #   [0]: Condition metadata (headers and values)
@@ -636,13 +668,13 @@ class SiaScraper:
 
             # Target: Oracle ADF → <span class="strong af_panelGroupLayout"> → <span class="margin-l">
             # These are the header labels (e.g., "Condición:", "Tipo:", "¿Todas?:", "Número asignaturas:")
-            condition_headers_spans = condition_info_div.select(
+            condition_headers_spans = condition_info_div.css_select(
                 "span.strong.af_panelGroupLayout > span.margin-l"
             )
 
             # Target: Oracle ADF quirk - values are stored as nextSibling text nodes
             # Oracle ADF doesn't wrap values in elements, they're just text after the header span
-            condition_values_spans = [header.nextSibling for header in condition_headers_spans]
+            condition_values_spans = [header.getnext() for header in condition_headers_spans]
 
             # Logic: Validate condition structure - must have exactly 4 header-value pairs
             # TODO: Magic number 4 - expected metadata fields from Oracle ADF
@@ -659,16 +691,32 @@ class SiaScraper:
             prereq_info = {}
 
             # Target: condition_headers_spans[0] → "Condición:" → value → Condition type
-            prereq_info[condition_headers_spans[0].text] = condition_values_spans[0].text
+            prereq_info[condition_headers_spans[0].text_content()] = (
+                condition_values_spans[0].text_content().strip()
+                if condition_values_spans[0] is not None
+                else ""
+            )
 
             # Target: condition_headers_spans[1] → "Tipo:" → value → Type
-            prereq_info[condition_headers_spans[1].text] = condition_values_spans[1].text
+            prereq_info[condition_headers_spans[1].text_content()] = (
+                condition_values_spans[1].text_content().strip()
+                if len(condition_values_spans) > 1 and condition_values_spans[1] is not None
+                else ""
+            )
 
             # Target: condition_headers_spans[2] → "¿Todas?:" → value → All required? (yes/no)
-            prereq_info[condition_headers_spans[2].text] = condition_values_spans[2].text
+            prereq_info[condition_headers_spans[2].text_content()] = (
+                condition_values_spans[2].text_content().strip()
+                if len(condition_values_spans) > 2 and condition_values_spans[2] is not None
+                else ""
+            )
 
             # Target: condition_headers_spans[3] → "Número asignaturas:" → value → Number of courses
-            prereq_info[condition_headers_spans[3].text] = condition_values_spans[3].text
+            prereq_info[condition_headers_spans[3].text_content()] = (
+                condition_values_spans[3].text_content().strip()
+                if len(condition_values_spans) > 3 and condition_values_spans[3] is not None
+                else ""
+            )
 
             prereq_info["prerequisites"] = {}
 
@@ -679,12 +727,18 @@ class SiaScraper:
 
             for prereq_div in condition_prereqs_divs:
                 # Target: prereq_div → <span class="af_panelGroupLayout"> → <span> → Course code
-                prereq_code_span = prereq_div.select_one("span.af_panelGroupLayout > span")
-                prereq_code = prereq_code_span.text
+                prereq_code_spans = prereq_div.css_select("span.af_panelGroupLayout > span")
+                if not prereq_code_spans:
+                    continue
+                prereq_code_span = prereq_code_spans[0]
+                prereq_code = prereq_code_span.text_content()
 
                 # Target: Oracle ADF quirk - course name is nextSibling text node (not wrapped)
                 # Why does Oracle ADF do this? Unclear, but consistent across all prereq entries
-                prereq_name = prereq_code_span.nextSibling.text
+                next_sibling = prereq_code_span.getnext()
+                prereq_name = (
+                    next_sibling.text_content().strip() if next_sibling is not None else ""
+                )
 
                 prereq_info["prerequisites"][prereq_code] = prereq_name
 
