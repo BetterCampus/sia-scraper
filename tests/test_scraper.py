@@ -5,6 +5,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sia_scraper.constants import DEFAULT_TIMEOUT, SiaSessionStatus
+from sia_scraper.parsers import (
+    CourseInfo,
+    CoursePrereqs,
+    get_plain_text,
+    scrape_info,
+    scrape_prereqs,
+)
 from sia_scraper.scraper import SiaScraper, create_career_session, init_sia_scraper
 from sia_scraper.session import SiaSessionException
 
@@ -379,11 +386,10 @@ class TestCourseInfoScraping:
         scraper = SiaScraper()
         course_info = scraper.get_course_info(course_index=0)
 
-        assert "courseName" in course_info
-        assert course_info["courseName"] == "CALCULO DIFERENCIAL"
-        assert course_info["credits"] == 4
-        assert "groups" in course_info
-        assert len(course_info["groups"]) == 2
+        assert isinstance(course_info, CourseInfo)
+        assert course_info.courseName == "CALCULO DIFERENCIAL"
+        assert course_info.credits == 4
+        assert len(course_info.groups) == 2
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_get_course_info_by_code(self, mock_session_class, sample_course_xml):
@@ -401,7 +407,7 @@ class TestCourseInfoScraping:
 
         # Should call get_course_xml with index 1 (2016489 is at index 1)
         mock_session.get_course_xml.assert_called_once()
-        assert "courseName" in course_info
+        assert isinstance(course_info, CourseInfo)
 
 
 @pytest.mark.unit
@@ -419,7 +425,7 @@ class TestCoursePrereqsScraping:
         scraper = SiaScraper()
         prereqs = scraper.get_course_prereqs(course_index=0)
 
-        assert isinstance(prereqs, dict)
+        assert isinstance(prereqs, CoursePrereqs)
         mock_session.get_course_xml.assert_called_once_with(0)
 
     @patch("sia_scraper.scraper.SiaSession")
@@ -436,7 +442,7 @@ class TestCoursePrereqsScraping:
 
         prereqs = scraper.get_course_prereqs(course_code="1000001")
 
-        assert isinstance(prereqs, dict)
+        assert isinstance(prereqs, CoursePrereqs)
 
 
 @pytest.mark.unit
@@ -447,7 +453,7 @@ class TestScrapingUtilities:
         """Test extracting plain text from XML."""
         xml = "<div><span>  Text with  spaces  </span></div>"
 
-        plain_text = SiaScraper.get_plain_text(xml)
+        plain_text = get_plain_text(xml)
 
         # Should strip whitespace and normalize
         assert "Text with" in plain_text
@@ -463,7 +469,7 @@ class TestScrapingUtilities:
     )
     def test_get_plain_text_variations(self, xml, expected_contains):
         """Test get_plain_text with various XML formats."""
-        result = SiaScraper.get_plain_text(xml)
+        result = get_plain_text(xml)
         assert expected_contains in result
 
 
@@ -473,69 +479,69 @@ class TestScrapeInfo:
 
     def test_scrape_info_complete_course(self, sample_course_xml):
         """Test scraping complete course information."""
-        course_info = SiaScraper.scrape_info(sample_course_xml)
+        course_info = scrape_info(sample_course_xml)
 
-        assert course_info["courseName"] == "CALCULO DIFERENCIAL"
-        assert course_info["credits"] == 4
-        assert course_info["typology"] == "DISCIPLINAR OBLIGATORIA"
-        assert len(course_info["groups"]) == 2
+        assert course_info.courseName == "CALCULO DIFERENCIAL"
+        assert course_info.credits == 4
+        assert course_info.typology == "DISCIPLINAR OBLIGATORIA"
+        assert len(course_info.groups) == 2
 
     def test_scrape_info_first_group(self, sample_course_xml):
         """Test scraping first group details."""
-        course_info = SiaScraper.scrape_info(sample_course_xml)
+        course_info = scrape_info(sample_course_xml)
 
-        grupo_1 = course_info["groups"][0]
-        assert grupo_1["groupName"] == "1"
-        assert grupo_1["teacher"] == "JUAN PEREZ GARCIA"
-        assert grupo_1["faculty"] == "FACULTAD DE CIENCIAS"
-        assert grupo_1["duration"] == "16 SEMANAS"
-        assert grupo_1["scheduleType"] == "DIURNA"
-        assert grupo_1["spots"] == 5
+        grupo_1 = course_info.groups[0]
+        assert grupo_1.groupName == "1"
+        assert grupo_1.teacher == "JUAN PEREZ GARCIA"
+        assert grupo_1.faculty == "FACULTAD DE CIENCIAS"
+        assert grupo_1.duration == "16 SEMANAS"
+        assert grupo_1.scheduleType == "DIURNA"
+        assert grupo_1.spots == 5
 
     def test_scrape_info_schedules(self, sample_course_xml):
         """Test scraping schedule information."""
-        course_info = SiaScraper.scrape_info(sample_course_xml)
+        course_info = scrape_info(sample_course_xml)
 
-        schedules = course_info["groups"][0]["schedules"]
+        schedules = course_info.groups[0].schedules
         assert len(schedules) == 2
 
-        assert schedules[0]["day"] == "LUNES"
-        assert schedules[0]["startTime"] == "07:00"
-        assert schedules[0]["endTime"] == "09:00"
-        assert schedules[0]["classroom"] == "401-101"
+        assert schedules[0].day == "LUNES"
+        assert schedules[0].startTime == "07:00"
+        assert schedules[0].endTime == "09:00"
+        assert schedules[0].classroom == "401-101"
 
-        assert schedules[1]["day"] == "MIÉRCOLES"
+        assert schedules[1].day == "MIÉRCOLES"
 
     def test_scrape_info_nan_spots(self, sample_course_xml):
         """Test scraping handles NaN spots correctly."""
-        course_info = SiaScraper.scrape_info(sample_course_xml)
+        course_info = scrape_info(sample_course_xml)
 
-        grupo_2 = course_info["groups"][1]
-        assert grupo_2["spots"] == "NaN"
+        grupo_2 = course_info.groups[1]
+        assert grupo_2.spots == "NaN"
 
     def test_scrape_info_total_spots(self, sample_course_xml):
         """Test calculation of total available spots."""
-        course_info = SiaScraper.scrape_info(sample_course_xml)
+        course_info = scrape_info(sample_course_xml)
 
         # First group has 5 spots, second has NaN
         # Total should be 5 (NaN is skipped)
-        assert course_info["availableSpots"] == 5
+        assert course_info.availableSpots == 5
 
     def test_scrape_info_timestamp(self, sample_course_xml):
         """Test scraping includes timestamp."""
-        course_info = SiaScraper.scrape_info(sample_course_xml)
+        course_info = scrape_info(sample_course_xml)
 
-        assert "scrapeTimestamp" in course_info
-        assert course_info["scrapeTimestamp"] != ""
+        assert hasattr(course_info, "scrapeTimestamp")
+        assert course_info.scrapeTimestamp != ""
 
     def test_scrape_info_empty_course(self, sample_empty_course_xml):
         """Test scraping course with no groups."""
-        course_info = SiaScraper.scrape_info(sample_empty_course_xml)
+        course_info = scrape_info(sample_empty_course_xml)
 
-        assert course_info["courseName"] == "CALCULO AVANZADO"
-        assert course_info["credits"] == 3
-        assert course_info["groups"] == []
-        assert course_info["availableSpots"] == 0
+        assert course_info.courseName == "CALCULO AVANZADO"
+        assert course_info.credits == 3
+        assert course_info.groups == []
+        assert course_info.availableSpots == 0
 
     def test_scrape_info_malformed_xml_returns_error(self):
         """Test scraping malformed XML handles gracefully."""
@@ -543,8 +549,8 @@ class TestScrapeInfo:
 
         # Should not raise exception, may return partial data
         try:
-            result = SiaScraper.scrape_info(malformed_xml)
-            assert isinstance(result, dict)
+            result = scrape_info(malformed_xml)
+            assert isinstance(result, CourseInfo)
         except Exception:
             # Some parsing errors are acceptable for malformed input
             pass
@@ -591,11 +597,11 @@ class TestScrapeInfo:
         formatter = MagicMock()
         formatter.format_date.return_value = "now"
         with (
-            patch("sia_scraper.scraper.HtmlParser", return_value=parser),
-            patch("sia_scraper.scraper.DateFormatter", return_value=formatter),
+            patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
+            patch("sia_scraper.parsers.course_parser.DateFormatter", return_value=formatter),
         ):
-            result = SiaScraper.scrape_info("<xml/>")
-        assert result["groups"][0]["teacher"] == "Not reported"
+            result = scrape_info("<xml/>")
+        assert result.groups[0].teacher == "Not reported"
 
     def test_scrape_info_missing_credits_element_raises(self):
         xml = """
@@ -603,7 +609,7 @@ class TestScrapeInfo:
         <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
         """
         with pytest.raises(ValueError, match="Credits element not found in XML"):
-            SiaScraper.scrape_info(xml)
+            scrape_info(xml)
 
     def test_scrape_info_missing_credits_span_raises(self):
         xml = """
@@ -612,15 +618,15 @@ class TestScrapeInfo:
         <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
         """
         with pytest.raises(ValueError, match="Credits span not found in XML"):
-            SiaScraper.scrape_info(xml)
+            scrape_info(xml)
 
     def test_scrape_info_missing_tipology_element_raises(self):
         xml = """
         <h2>CURSO X</h2>
         <span class="detass-creditos"><span>3</span></span>
         """
-        with pytest.raises(ValueError, match="Tipology element not found in XML"):
-            SiaScraper.scrape_info(xml)
+        course_info = scrape_info(xml)
+        assert course_info.typology == "Unknown"
 
     def test_scrape_info_missing_tipology_span_raises(self):
         xml = """
@@ -628,8 +634,8 @@ class TestScrapeInfo:
         <span class="detass-creditos"><span>3</span></span>
         <span class="detass-tipologia"></span>
         """
-        with pytest.raises(ValueError, match="Tipology span not found in XML"):
-            SiaScraper.scrape_info(xml)
+        course_info = scrape_info(xml)
+        assert course_info.typology == "Unknown"
 
     def test_scrape_info_skips_missing_and_invalid_schedule_rows(self):
         parser = MagicMock()
@@ -673,11 +679,11 @@ class TestScrapeInfo:
         formatter = MagicMock()
         formatter.format_date.return_value = "now"
         with (
-            patch("sia_scraper.scraper.HtmlParser", return_value=parser),
-            patch("sia_scraper.scraper.DateFormatter", return_value=formatter),
+            patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
+            patch("sia_scraper.parsers.course_parser.DateFormatter", return_value=formatter),
         ):
-            result = SiaScraper.scrape_info("<xml/>")
-        assert result["groups"][0]["schedules"] == []
+            result = scrape_info("<xml/>")
+        assert result.groups[0].schedules == []
 
 
 @pytest.mark.unit
@@ -686,28 +692,28 @@ class TestScrapePrereqs:
 
     def test_scrape_prereqs_basic(self, sample_prereqs_xml):
         """Test scraping basic prerequisites."""
-        prereqs = SiaScraper.scrape_prereqs(sample_prereqs_xml)
+        prereqs = scrape_prereqs(sample_prereqs_xml)
 
-        assert isinstance(prereqs, dict)
-        assert prereqs["code"] == "1000007"
-        assert prereqs["credits"] == 4
-        assert prereqs["typology"] == "DISCIPLINAR OBLIGATORIA"
-        assert "conditions" in prereqs
+        assert isinstance(prereqs, CoursePrereqs)
+        assert prereqs.code == "1000007"
+        assert prereqs.credits == 4
+        assert prereqs.typology == "DISCIPLINAR OBLIGATORIA"
+        assert hasattr(prereqs, "conditions")
 
     def test_scrape_prereqs_empty_xml(self):
         """Test scraping prerequisites from empty XML."""
         empty_xml = "<div></div>"
 
         with pytest.raises(ValueError, match="Course name element not found in prerequisites XML"):
-            SiaScraper.scrape_prereqs(empty_xml)
+            scrape_prereqs(empty_xml)
 
     def test_scrape_prereqs_missing_credits_element_raises(self):
         xml = """
         <h2>CURSO (1000)</h2>
         <span class="detass-tipologia">Tipología: DISCIPLINAR OBLIGATORIA</span>
         """
-        with pytest.raises(ValueError, match="Credits element not found in prerequisites XML"):
-            SiaScraper.scrape_prereqs(xml)
+        with pytest.raises(ValueError, match="Credits element not found in XML"):
+            scrape_prereqs(xml)
 
     def test_scrape_prereqs_missing_credits_span_raises(self):
         xml = """
@@ -715,8 +721,8 @@ class TestScrapePrereqs:
         <span class="detass-creditos"></span>
         <span class="detass-tipologia">Tipología: DISCIPLINAR OBLIGATORIA</span>
         """
-        with pytest.raises(ValueError, match="Credits span not found in prerequisites XML"):
-            SiaScraper.scrape_prereqs(xml)
+        with pytest.raises(ValueError, match="Credits span not found in XML"):
+            scrape_prereqs(xml)
 
     def test_scrape_prereqs_handles_various_formats(self):
         """Test prerequisite scraping handles different XML formats."""
@@ -728,8 +734,8 @@ class TestScrapePrereqs:
 
         for xml in xml_variations:
             try:
-                result = SiaScraper.scrape_prereqs(xml)
-                assert isinstance(result, dict)
+                result = scrape_prereqs(xml)
+                assert isinstance(result, CoursePrereqs)
             except Exception:
                 # Some formats may not be supported
                 pass
@@ -743,8 +749,8 @@ class TestScrapePrereqs:
           <div class="margin-t af_panelGroupLayout"><div>invalid</div></div>
         </span>
         """
-        result = SiaScraper.scrape_prereqs(xml)
-        assert result["conditions"] == []
+        result = scrape_prereqs(xml)
+        assert result.conditions == []
 
     def test_scrape_prereqs_skips_when_less_than_four_headers(self):
         parser = MagicMock()
@@ -766,8 +772,8 @@ class TestScrapePrereqs:
         condition_info_div.css_select.return_value = [h1, h2, h3]
         condition_div.__iter__ = MagicMock(return_value=iter([condition_info_div, MagicMock()]))
         parser.css_select.return_value = [condition_div]
-        with patch("sia_scraper.scraper.HtmlParser", return_value=parser):
-            assert SiaScraper.scrape_prereqs("<xml/>")["conditions"] == []
+        with patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser):
+            assert scrape_prereqs("<xml/>").conditions == []
 
     def test_scrape_prereqs_parses_multiple_prereqs(self):
         parser = MagicMock()
@@ -807,9 +813,10 @@ class TestScrapePrereqs:
         )
         parser.css_select.return_value = [condition_div]
 
-        with patch("sia_scraper.scraper.HtmlParser", return_value=parser):
-            out = SiaScraper.scrape_prereqs("<xml/>")
-        assert out["conditions"][0]["prerequisites"] == {
+        with patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser):
+            out = scrape_prereqs("<xml/>")
+        prereqs_dict = {p.course_code: p.course_name for p in out.conditions[0].prerequisites}
+        assert prereqs_dict == {
             "1000001": "CALCULO",
             "1000002": "ALGEBRA",
         }
@@ -843,9 +850,9 @@ class TestScrapePrereqs:
         condition_div.__iter__ = MagicMock(return_value=iter([condition_info_div, MagicMock()]))
         parser.css_select.return_value = [condition_div]
 
-        with patch("sia_scraper.scraper.HtmlParser", return_value=parser):
-            out = SiaScraper.scrape_prereqs("<xml/>")
-        assert out["conditions"] == []
+        with patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser):
+            out = scrape_prereqs("<xml/>")
+        assert out.conditions == []
 
 
 @pytest.mark.unit
@@ -879,7 +886,7 @@ class TestScrapeCourses:
         result = scraper.scrape_courses(courses_codes=["1000001", "1000007"])
 
         assert len(result) == 2
-        assert all("courseName" in course for course in result)
+        assert all(isinstance(course, CourseInfo) for course in result)
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_scrape_courses_with_invalid_code(self, mock_session_class, sample_course_xml):
@@ -984,7 +991,7 @@ class TestComplexScenarios:
         course_info = scraper.get_course_info(course_code="1000001")
         scraper.close_session()
 
-        assert course_info["courseName"] == "CALCULO DIFERENCIAL"
+        assert course_info.courseName == "CALCULO DIFERENCIAL"
         mock_session.init_session.assert_called_once()
         mock_session.close_session.assert_called_once()
 
