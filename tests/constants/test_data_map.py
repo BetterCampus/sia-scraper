@@ -24,7 +24,7 @@ from sia_scraper.constants import (
     SELECT_ROW_EVENT_VALUE,
     SELECT_ROW_ID,
     SHOW_COURSES_BTTN,
-    SHOW_CURSES_BTTN_ID,
+    SHOW_COURSES_BTTN_ID,
     STUDY_LEVEL_DD,
     STUDY_LEVEL_DD_ID,
     TIPOLOGY_DD,
@@ -111,7 +111,7 @@ class TestDataMap:
             (FACULTY_DD, FACULTY_DD_ID),
             (CAREER_DD, CAREER_DD_ID),
             (TIPOLOGY_DD, TIPOLOGY_DD_ID),
-            (SHOW_COURSES_BTTN, SHOW_CURSES_BTTN_ID),
+            (SHOW_COURSES_BTTN, SHOW_COURSES_BTTN_ID),
             (FACULTY_CAREER_DD, FACULTY_CAREER_DD_ID),
             (CAMPUS_ELECTIVES_DD, CAMPUS_ELECTIVES_DD_ID),
             (SELECT_ROW, SELECT_ROW_ID),
@@ -162,7 +162,7 @@ class TestDataMap:
 
     def test_button_ids_match_data_map(self) -> None:
         """Test all button component IDs appear in DATA_MAP."""
-        button_ids = [SHOW_CURSES_BTTN_ID, BACK_BTTN_ID]
+        button_ids = [SHOW_COURSES_BTTN_ID, BACK_BTTN_ID]
 
         data_map_component_ids = [comp_id for comp_id, _ in DATA_MAP.values()]
 

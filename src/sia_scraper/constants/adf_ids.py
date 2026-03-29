@@ -14,7 +14,7 @@ CAREER_DD_ID: str = "pt1:r1:0:soc3"
 
 TIPOLOGY_DD_ID: str = "pt1:r1:0:soc4"
 
-SHOW_CURSES_BTTN_ID: str = "pt1:r1:0:cb1"
+SHOW_COURSES_BTTN_ID: str = "pt1:r1:0:cb1"
 
 FACULTY_CAREER_DD_ID: str = "pt1:r1:0:soc5"
 
@@ -28,6 +28,8 @@ ORACLE_ADF_REGION_ID: str = "pt1:r1"
 
 ORACLE_ADF_RENDER_TARGET: str = "pt1:r1"
 
+# Oracle ADF emits this field in request payloads and it shares the same component
+# id as FACULTY_CAREER_DD_ID.
 ORACLE_ADF_UNKNOWN_COMPONENT_1: str = "pt1:r1:0:soc5"
 
 ORACLE_ADF_UNKNOWN_COMPONENT_2: str = "pt1:r1:0:soc10"

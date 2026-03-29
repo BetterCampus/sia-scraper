@@ -10,7 +10,7 @@ from sia_scraper.constants import (
     FACULTY_CAREER_DD_ID,
     FACULTY_DD_ID,
     SELECT_ROW_ID,
-    SHOW_CURSES_BTTN_ID,
+    SHOW_COURSES_BTTN_ID,
     STUDY_LEVEL_DD_ID,
     TIPOLOGY_DD_ID,
 )
@@ -47,7 +47,7 @@ class TestAdfIdsComponentIds:
         Verifies button component IDs use the correct Oracle ADF
         command button (cb) namespace and row positioning.
         """
-        assert SHOW_CURSES_BTTN_ID.startswith("pt1:r1:0:cb")
+        assert SHOW_COURSES_BTTN_ID.startswith("pt1:r1:0:cb")
         assert BACK_BTTN_ID.startswith("pt1:r1:1:cb")
 
     def test_table_component_id(self) -> None:
@@ -71,7 +71,7 @@ class TestAdfIdsComponentIds:
             FACULTY_DD_ID,
             CAREER_DD_ID,
             TIPOLOGY_DD_ID,
-            SHOW_CURSES_BTTN_ID,
+            SHOW_COURSES_BTTN_ID,
             FACULTY_CAREER_DD_ID,
             CAMPUS_ELECTIVES_DD_ID,
             SELECT_ROW_ID,
