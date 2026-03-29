@@ -1021,7 +1021,7 @@ class TestSiaScraperFactories:
         sc.set_career.assert_called_once_with("0-2-8-3", electives=False)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_run_siascraper_module_main():
     mock_sc = MagicMock()
     mock_sc.sia_session.STATUS = "ON_CAREER_PAGE"
