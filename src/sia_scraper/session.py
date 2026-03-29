@@ -41,7 +41,6 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar, cast
 
-from bs4 import BeautifulSoup
 from requests.exceptions import ConnectionError, ReadTimeout, Timeout
 
 from .constants import (
@@ -88,6 +87,7 @@ from .constants import (
     SiaSessionStatus,
 )
 from .enhanced_session import EnhancedSession
+from .parsers import HtmlParser
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -408,23 +408,23 @@ class SiaSession:
         self.main_page_html = r.content
 
         html_content = r.content.decode("utf-8", errors="ignore")
-        soup = BeautifulSoup(html_content, "html.parser")
+        parser = HtmlParser(html_content)
 
         # Target: Oracle ADF JSF page → <input type="hidden" name="javax.faces.ViewState">
-        view_state_input = soup.find("input", {"type": "hidden", "name": "javax.faces.ViewState"})
+        view_state_input = parser.find("input", type="hidden", name="javax.faces.ViewState")
         if view_state_input is None:
             raise SiaSessionException.SessionNotSet from ValueError(
                 "ViewState not found in initial page"
             )
-        self.__javax_faces_ViewState = str(view_state_input["value"])
+        self.__javax_faces_ViewState = str(view_state_input.get("value"))
 
         # Target: Oracle ADF page → <input type="hidden" name="Adf-Window-Id">
-        adf_window_input = soup.find("input", {"type": "hidden", "name": "Adf-Window-Id"})
+        adf_window_input = parser.find("input", type="hidden", name="Adf-Window-Id")
         if adf_window_input is None:
             raise SiaSessionException.SessionNotSet from ValueError(
                 "Adf-Window-Id not found in initial page"
             )
-        self.__Adf_Window_Id = str(adf_window_input["value"])
+        self.__Adf_Window_Id = str(adf_window_input.get("value"))
 
         # self.__Adf_Page_Id = soup.find("input", {"type": "hidden", "name":"Adf-Page-Id"})['value']
         self.__Adf_Page_Id = "0"  # Hardcoded - Oracle ADF accepts [0,1,2], no observable difference
@@ -503,7 +503,7 @@ class SiaSession:
 
         html = r.content
         # Target: Oracle ADF table with class 'af_table_data-row' containing course rows
-        self.__course_list = get_course_list(html, "html.parser")
+        self.__course_list = get_course_list(html)
 
         return self
 
@@ -854,16 +854,15 @@ class SiaSession:
             # Target: Oracle ADF dropdown XML → <option> element at career index
             if data == FACULTY_DD_data:
                 xml = response.text
-                soup = BeautifulSoup(xml, "lxml")
+                parser = HtmlParser(xml)
                 # Dropdown first option is "Select..." placeholder, offset by 1
-                career_dropdown = soup.find(id=DROPDOWNS[3])
-                if career_dropdown is None:
+                dropdown_elements = parser.find_by_xpath(f'//*[@id="{DROPDOWNS[3]}"]/option')
+                if not dropdown_elements:
                     raise SiaSessionException.CareerNotSet from ValueError(
                         "Career dropdown not found"
                     )
-                options = career_dropdown.find_all("option")
                 option_index = int(self.career_indexs[3]) + DROPDOWN_FIRST_OPTION_OFFSET
-                self.__career_name = options[option_index].text
+                self.__career_name = dropdown_elements[option_index].text
 
         # Reset request_dict to clean state
         self.__init_request_dict()
@@ -875,7 +874,7 @@ class SiaSession:
         xml = response.text
 
         # Target: Final response XML contains Oracle ADF table with course list
-        self.__course_list = get_course_list(xml, "lxml")
+        self.__course_list = get_course_list(xml)
         self.__is_electives = electives
 
         self.__STATUS = SiaSessionStatus.ON_CAREER_PAGE
@@ -1196,12 +1195,11 @@ class SiaSession:
 # ============================================================================
 
 
-def get_course_list(html: bytes | str, parser: str) -> list[dict[str, str]]:
+def get_course_list(html: bytes | str) -> list[dict[str, str]]:
     """Extract course list from Oracle ADF table HTML.
 
     ## Args
         html: Oracle ADF page HTML (bytes or string).
-        parser: BeautifulSoup parser to use ('html.parser' or 'lxml').
 
     ## Returns
         List of course dictionaries: [{course_code: course_name}, ...].
@@ -1214,19 +1212,19 @@ def get_course_list(html: bytes | str, parser: str) -> list[dict[str, str]]:
         This function is outside SiaSession class to avoid circular import issues with SiaScraper.
     """
     html_content = html.decode("utf-8", errors="ignore") if isinstance(html, bytes) else html
-    soup = BeautifulSoup(html_content, parser)
+    html_parser = HtmlParser(html_content)
 
     # Target: Oracle ADF table → <tr class="af_table_data-row"> (course rows)
-    rows = soup.find_all("tr", {"class": "af_table_data-row"})
+    rows = html_parser.find_all("tr", class_="af_table_data-row")
 
     course_list = []
     for row in rows:
         # Target: Each row → <span class="af_column_data-container"> (course code & name)
-        data = row.find_all("span", {"class": "af_column_data-container"})
+        data_spans = row.findall(".//span[@class='af_column_data-container']")
 
         # Column indices: [0]=code, [1]=name
-        course_code = data[COURSE_CODE_COL].getText()
-        course_name = data[COURSE_NAME_COL].getText()
+        course_code = data_spans[COURSE_CODE_COL].text_content().strip()
+        course_name = data_spans[COURSE_NAME_COL].text_content().strip()
 
         course_list.append({course_code: course_name})
 
