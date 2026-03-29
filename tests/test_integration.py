@@ -200,7 +200,7 @@ class TestSiaScraperIntegration:
                     continue
 
             if course_info is None or prereqs is None:
-                pytest.skip("Failed to parse any complete course+prereqs pair in first 5 indices")
+                pytest.fail("Failed to parse any course in first 5 indices")
 
             assert isinstance(course_info, CourseInfo)
             assert hasattr(course_info, "course_name")
