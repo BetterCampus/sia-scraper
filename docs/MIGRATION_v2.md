@@ -217,3 +217,23 @@ pytest
 ruff check --fix . && ruff format . && ruff check .
 pyright
 ```
+
+## v0.2.0 -> v0.2.1
+
+### Internal module reorganization
+
+Version `0.2.1` reorganizes internal modules into `core/` and `utils/` to make
+the package layout easier to navigate and maintain.
+
+- `core/`: `adf_state.py`, `enhanced_session.py`, `exceptions.py`, `oracle_adf_request.py`
+- `utils/`: `date_formatter.py`, `decorators.py`, `debug.py`
+- Top-level orchestrators remain `session.py` and `scraper.py`
+
+### Public API impact
+
+No public API changes are required for normal usage. Imports from
+`sia_scraper` root continue to work.
+
+```python
+from sia_scraper import SiaScraper, SiaSessionException, format_date
+```
