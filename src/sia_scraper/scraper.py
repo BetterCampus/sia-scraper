@@ -23,6 +23,7 @@ Architecture:
 from typing import Any
 
 from .constants import http, status
+from .exceptions import SiaSessionException
 from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
 from .session import SiaSession
 
@@ -62,10 +63,6 @@ class SiaScraper:
             Session restoration is used to avoid re-authenticating and re-navigating
             through SIA's multi-page workflow when session_data is available.
         """
-        self.__career_name = "N/A"
-        self.__career_code = ""
-        self.__course_list: list[dict[str, str]] = []
-
         if session_data is None:
             session_data = {}
 
@@ -73,26 +70,23 @@ class SiaScraper:
             timeout=timeout, session_data=session_data, init_session=init_session
         )
 
-        if session_data:
-            if self.__sia_session.career_code != "":
-                self.__career_code = self.__sia_session.career_code
-                self.__career_name = self.__sia_session.career_name
-                self.__course_list = self.__sia_session.course_list
-
     @property
     def career_name(self) -> str:
         """Human-readable name of the current academic program."""
-        return self.__career_name
+        value = self.__sia_session.career_name
+        return value if isinstance(value, str) else "N/A"
 
     @property
     def career_code(self) -> str:
         """Search code identifier for the current career (e.g., "0-2-8-3")."""
-        return self.__career_code
+        value = self.__sia_session.career_code
+        return value if isinstance(value, str) else ""
 
     @property
     def course_list(self) -> list[dict[str, str]]:
         """List of course codes available in the current career."""
-        return self.__course_list
+        value = self.__sia_session.course_list
+        return value if isinstance(value, list) else []
 
     @property
     def sia_session(self) -> SiaSession:
@@ -113,7 +107,7 @@ class SiaScraper:
         self.__sia_session.init_session()
         return self
 
-    def load_session(self, session_data: dict) -> "SiaScraper":
+    def load_session(self, session_data: dict[str, Any]) -> "SiaScraper":
         """Restore a previously saved session from serialized state.
 
         ## Args
@@ -123,15 +117,8 @@ class SiaScraper:
         ## Returns
             Self for method chaining.
 
-        ## Note
-            If the session contains career data, synchronizes local career attributes
-            (__career_code, __career_name, __course_list) with session state.
         """
         self.__sia_session.load_session(session_data)
-        if self.__sia_session.career_code != "":
-            self.__career_code = self.__sia_session.career_code
-            self.__career_name = self.__sia_session.career_name
-            self.__course_list = self.__sia_session.course_list
         return self
 
     def get_session_data(self) -> dict:
@@ -179,13 +166,8 @@ class SiaScraper:
             SiaSessionException.SessionNotSet: If session not initialized.
             SiaSessionException.TimeoutError: If SIA server doesn't respond.
 
-        ## Note
-            Updates internal career context: __career_code, __career_name, __course_list.
         """
         self.__sia_session.set_career(search_code, electives=electives)
-        self.__career_code = self.__sia_session.career_code
-        self.__course_list = self.__sia_session.course_list
-        self.__career_name = self.__sia_session.career_name
         return self
 
     def get_course_info(self, course_index: int = 0, course_code: str = "") -> CourseInfo:
@@ -199,19 +181,20 @@ class SiaScraper:
 
         ## Returns
             CourseInfo dataclass with structure:
-                - courseName: str
+                - course_name: str
                 - credits: int
                 - typology: str
-                - availableSpots: int
-                - scrapeTimestamp: str
+                - available_spots: int
+                - scrape_timestamp: str
                 - groups: list[Group]
-                    - groupName, teacher, faculty, courseName
-                    - schedules: list[Schedule] (day, startTime, endTime, classroom)
-                    - duration, scheduleType, spots
+                    - group_name, teacher, faculty, course_name
+                    - schedules: list[Schedule] (day, start_time, end_time, classroom)
+                    - duration, schedule_type, spots
 
         ## Raises
             ValueError: If course name, credits, or tipology elements not found in XML.
-            AssertionError: If session not on career/course page.
+            SiaSessionException.InvalidStatus: If session not on career/course page.
+            ValueError: If course code is not found in the current course list.
         """
         course_index = self.get_course_index(course_code) if course_code != "" else course_index
         xml = self.__sia_session.get_course_xml(course_index)
@@ -224,27 +207,26 @@ class SiaScraper:
             course_code: Course code to search for (e.g., "2016489").
 
         ## Returns
-            Zero-based index if found, -1 if not found.
+            Zero-based index if found.
 
         ## Raises
-            AssertionError: If session not on career or course page.
+            SiaSessionException.InvalidStatus: If session not on career or course page.
+            ValueError: If course code is not found in the current course list.
 
         ## Note
-            SIA's Oracle ADF table returns indices 0 and 1 in swapped order in its internal
-            state (though the course list order is correct). This function applies the
-            necessary correction when looking up indices.
+            The historical 0/1 swap workaround was removed after ViewState auto-sync.
+            Validate behavior against live SIA if index mismatches are observed.
         """
-        assert self.__sia_session.STATUS in (
+        if self.__sia_session.STATUS not in (
             status.SiaSessionStatus.ON_CAREER_PAGE,
             status.SiaSessionStatus.ON_COURSE_PAGE,
-        ), "Session not on career page or course page, can't get course index"
+        ):
+            raise SiaSessionException.InvalidStatus from None
 
-        for i, course in enumerate(self.__course_list):
+        for i, course in enumerate(self.course_list):
             if course_code in course:
-                if i == 0 or i == 1:
-                    return (i + 1) % 2  # Swap: 0→1, 1→0
                 return i
-        return -1
+        raise ValueError(f"Course code '{course_code}' not found")
 
     def get_course_prereqs(self, course_index: int = 0, course_code: str = "") -> CoursePrereqs:
         """Retrieve course prerequisites and enrollment conditions.
@@ -257,32 +239,33 @@ class SiaScraper:
 
         ## Returns
             CoursePrereqs dataclass with structure:
-                - courseName: str
+                - course_name: str
                 - code: str
                 - credits: int
                 - typology: str
                 - conditions: list[PrereqCondition]
                     - condition, type, all_required, number_of_courses
-                    - prerequisites: list[Prerequisite]
-                        - course_code, course_name
+                        - prerequisites: list[Prerequisite]
+                            - course_code, course_name
 
         ## Raises
-            AssertionError: If session not on career/course page.
+            SiaSessionException.InvalidStatus: If session not on career/course page.
+            ValueError: If course code is not found in the current course list.
         """
         course_index = self.get_course_index(course_code) if course_code != "" else course_index
         xml = self.__sia_session.get_course_xml(course_index)
         return scrape_prereqs(xml)
 
     def scrape_courses(
-        self, courses_indexs: list[int] | None = None, courses_codes: list[str] | None = None
+        self, courses_indices: list[int] | None = None, courses_codes: list[str] | None = None
     ) -> list[CourseInfo]:
         """Batch scrape multiple courses by index or code.
 
         ## Args
-            courses_indexs: List of zero-based indices in course list.
+            courses_indices: List of zero-based indices in course list.
                 If empty, derives from courses_codes.
             courses_codes: List of course codes to scrape.
-                Used to populate courses_indexs if that is empty.
+                Used to populate courses_indices if that is empty.
 
         ## Returns
             List of CourseInfo dataclasses with code field populated.
@@ -290,19 +273,19 @@ class SiaScraper:
         ## Note
             Sorts indices before scraping for more efficient sequential access.
         """
-        if courses_indexs is None:
-            courses_indexs = []
+        if courses_indices is None:
+            courses_indices = []
         if courses_codes is None:
             courses_codes = []
 
-        if courses_indexs == []:
-            courses_indexs = [self.get_course_index(course_code) for course_code in courses_codes]
+        if courses_indices == []:
+            courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
-        courses_indexs.sort()
-        courses = [self.get_course_info(course_index) for course_index in courses_indexs]
+        courses_indices.sort()
+        courses = [self.get_course_info(course_index) for course_index in courses_indices]
 
         for i, course in enumerate(courses):
-            object.__setattr__(course, "code", courses_codes[i])
+            course.code = courses_codes[i]
 
         return courses
 
