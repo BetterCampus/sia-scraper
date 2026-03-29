@@ -14,14 +14,14 @@ class Schedule:
 
     Attributes:
         day: Day of week (e.g., "LUNES", "MARTES")
-        startTime: Start time in "HH:MM" format
-        endTime: End time in "HH:MM" format
+        start_time: Start time in "HH:MM" format
+        end_time: End time in "HH:MM" format
         classroom: Classroom location (may be empty string)
     """
 
     day: str
-    startTime: str
-    endTime: str
+    start_time: str
+    end_time: str
     classroom: str
 
 
@@ -30,25 +30,25 @@ class Group:
     """Course group with teacher, schedules, and availability.
 
     Attributes:
-        groupName: Group identifier (e.g., "1", "CA")
+        group_name: Group identifier (e.g., "1", "CA")
         teacher: Teacher name
         faculty: Faculty/school name
-        courseName: Course name
+        course_name: Course name
         schedules: List of schedule entries
         duration: Duration string (e.g., "16 SEMANAS")
-        scheduleType: Schedule type (e.g., "DIURNA")
-        spots: Available spots (int or "NaN" if unavailable)
+        schedule_type: Schedule type (e.g., "DIURNA")
+        spots: Available spots (None if unavailable)
         code: Course code (optional)
     """
 
-    groupName: str
+    group_name: str
     teacher: str
     faculty: str
-    courseName: str
+    course_name: str
     schedules: list[Schedule]
     duration: str
-    scheduleType: str
-    spots: int | str
+    schedule_type: str
+    spots: int | None
     code: str | None = None
 
 
@@ -57,20 +57,20 @@ class CourseInfo:
     """Complete course information including all groups and schedules.
 
     Attributes:
-        courseName: Full course name
+        course_name: Full course name
         credits: Credit hours
         typology: Course typology
-        availableSpots: Total available spots across all groups
-        scrapeTimestamp: Timestamp when data was scraped
+        available_spots: Total available spots across all groups
+        scrape_timestamp: Timestamp when data was scraped
         groups: List of course groups
         code: Course code (optional, set when scraping multiple)
     """
 
-    courseName: str
+    course_name: str
     credits: int
     typology: str
-    availableSpots: int
-    scrapeTimestamp: str
+    available_spots: int
+    scrape_timestamp: str
     groups: list[Group]
     code: str | None = None
 
@@ -112,14 +112,14 @@ class CoursePrereqs:
     """Course prerequisites and enrollment conditions.
 
     Attributes:
-        courseName: Course name with code
+        course_name: Course name with code
         code: Course code extracted from name
         credits: Credit hours
         typology: Course typology
         conditions: List of prerequisite conditions
     """
 
-    courseName: str
+    course_name: str
     code: str
     credits: int
     typology: str

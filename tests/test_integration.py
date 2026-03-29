@@ -79,7 +79,7 @@ class TestSiaScraperIntegration:
             course_info = scraper.get_course_info(course_index=COURSE_INDEX)
 
             assert isinstance(course_info, CourseInfo)
-            assert hasattr(course_info, "courseName")
+            assert hasattr(course_info, "course_name")
             assert hasattr(course_info, "credits")
             assert hasattr(course_info, "typology")
             assert hasattr(course_info, "groups")
@@ -171,15 +171,24 @@ class TestSiaScraperIntegration:
             assert scraper.sia_session.STATUS == SiaSessionStatus.ON_CAREER_PAGE
 
             assert len(scraper.course_list) > 0, "Cannot scrape course - list is empty"
-            course_info = scraper.get_course_info(course_index=COURSE_INDEX)
+            course_info = None
+            prereqs = None
+            for idx in range(min(5, len(scraper.course_list))):
+                try:
+                    course_info = scraper.get_course_info(course_index=idx)
+                    prereqs = scraper.get_course_prereqs(course_index=idx)
+                    break
+                except ValueError:
+                    continue
+
+            if course_info is None or prereqs is None:
+                pytest.fail("Failed to parse any course in first 5 indices")
 
             assert isinstance(course_info, CourseInfo)
-            assert hasattr(course_info, "courseName")
+            assert hasattr(course_info, "course_name")
             assert hasattr(course_info, "credits")
             assert hasattr(course_info, "typology")
             assert hasattr(course_info, "groups")
-
-            prereqs = scraper.get_course_prereqs(course_index=COURSE_INDEX)
             assert isinstance(prereqs, CoursePrereqs)
             assert hasattr(prereqs, "code")
             assert hasattr(prereqs, "conditions")

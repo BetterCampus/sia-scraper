@@ -11,7 +11,6 @@ from sia_scraper.constants import (
     STUDY_LEVEL_DD,
     SiaSessionStatus,
 )
-from sia_scraper.decorators import check_career
 from sia_scraper.parsers import get_course_list
 from sia_scraper.session import SiaSession, SiaSessionException
 
@@ -602,8 +601,6 @@ class TestCareerNavigation:
         response = MagicMock()
         response.text = '<select id="pt1:r1:0:soc3::content"><option>--</option><option>A</option><option>B</option><option>C</option><option>Ingenieria de Sistemas</option></select>'
         session.post_request = MagicMock(return_value=response)
-        session.update_view_state = MagicMock()
-        session.get_course_xml = MagicMock(return_value="<xml/>")
 
         with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
             mock_parser = MagicMock()
@@ -651,8 +648,6 @@ class TestCoursePageNavigation:
         response = MagicMock()
         response.text = '<select id="pt1:r1:0:soc3::content"><option>--</option><option>A</option><option>B</option><option>C</option><option>Ingenieria de Sistemas</option></select>'
         session.post_request = MagicMock(return_value=response)
-        session.update_view_state = MagicMock()
-        session.get_course_xml = MagicMock(return_value="<xml/>")
 
         with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
             mock_parser = MagicMock()
@@ -686,8 +681,6 @@ class TestCoursePageNavigation:
         response = MagicMock()
         response.text = '<select id="pt1:r1:0:soc3::content"><option>--</option><option>A</option><option>B</option><option>C</option><option>Ingenieria de Sistemas</option></select>'
         session.post_request = MagicMock(return_value=response)
-        session.update_view_state = MagicMock()
-        session.get_course_xml = MagicMock(return_value="<xml/>")
 
         with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
             mock_parser = MagicMock()
@@ -864,8 +857,6 @@ class TestElectivesHandling:
         response = MagicMock()
         response.text = '<select id="pt1:r1:0:soc3::content"><option>--</option><option>A</option><option>B</option><option>C</option><option>Ingenieria de Sistemas</option></select>'
         session.post_request = MagicMock(return_value=response)
-        session.update_view_state = MagicMock()
-        session.get_course_xml = MagicMock(return_value="<xml/>")
 
         with patch("sia_scraper.session.HtmlParser") as mock_HtmlParser:
             mock_parser = MagicMock()
@@ -924,26 +915,6 @@ class TestSessionPersistence:
 
         assert session2.STATUS == session1.STATUS
 
-    def test_check_career_decorator_raises_when_not_set(self):
-        session = SiaSession(init_session=False)
-
-        @check_career
-        def dummy(self):
-            return "ok"
-
-        with pytest.raises(SiaSessionException.CareerNotSet):
-            dummy(session)
-
-    def test_check_career_decorator_runs_when_career_is_set(self):
-        session = SiaSession(init_session=False)
-        session._SiaSession__career_code = "0-2-8-3"  # type: ignore[attr-defined]
-
-        @check_career
-        def dummy(self):
-            return "ok"
-
-        assert dummy(session) == "ok"
-
     def test_get_current_xml_calls_get_request(self):
         session = SiaSession(init_session=False)
         session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
@@ -992,8 +963,6 @@ class TestSessionPersistence:
         session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
         session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
-        session.update_view_state = MagicMock()
-        session.get_course_xml = MagicMock(return_value="<xml/>")
 
         resp1, resp2, resp3, resp4, resp5, resp6 = (MagicMock() for _ in range(6))
         for resp in [resp1, resp2, resp3, resp4, resp5, resp6]:
@@ -1010,8 +979,8 @@ class TestSessionPersistence:
                 session.set_career("0-2-8-3")
 
     @patch("sia_scraper.session.get_course_list")
-    def test_set_career_raises_when_no_response_generated(self, mock_get_courses):
-        """Exercise guard when Oracle sequence yields no final response object."""
+    def test_set_career_raises_when_post_request_returns_none(self, mock_get_courses):
+        """Exercise error handling when post_request returns None (broken connection)."""
         mock_get_courses.return_value = []
         session = SiaSession(init_session=False)
         session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
@@ -1021,14 +990,9 @@ class TestSessionPersistence:
         session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
         session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
-        session.update_view_state = MagicMock()
 
-        class NeverEqual:
-            def __eq__(self, other: object) -> bool:
-                return False
-
-        session._generate_request_body = MagicMock(return_value=NeverEqual())  # type: ignore[method-assign]
+        # post_request returns None → accessing .text on FACULTY_DD response raises
         session.post_request = MagicMock(return_value=None)
 
-        with pytest.raises(SiaSessionException.CareerNotSet):
+        with pytest.raises(AttributeError):
             session.set_career("0-2-8-3")

@@ -9,10 +9,18 @@ performance benefits.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from functools import lru_cache
 from typing import Any
 
 from lxml import etree, html
 from lxml.cssselect import CSSSelector
+
+
+@lru_cache(maxsize=128)
+def _get_css_selector(selector: str) -> CSSSelector:
+    """Cache CSS selector compilation for repeated queries."""
+    return CSSSelector(selector)
 
 
 class HtmlParserError(Exception):
@@ -108,7 +116,7 @@ class BaseHtmlElement(ABC):
         ## Example
             >>> element.css_select("div.container > span.title")
         """
-        sel = CSSSelector(selector)
+        sel = _get_css_selector(selector)
         return [HtmlElement(el) for el in sel(self._element)]  # type: ignore[misc]
 
 
@@ -151,14 +159,14 @@ class HtmlElement(BaseHtmlElement):
         parent = self.__element.getparent()
         return HtmlElement(parent) if parent is not None else None
 
-    def __iter__(self):
-        return iter([HtmlElement(child) for child in self.__element])
+    def __iter__(self) -> Iterator["HtmlElement"]:
+        return (HtmlElement(child) for child in self.__element)
 
     def __len__(self) -> int:
         return len(self.__element)
 
-    def __getitem__(self, index: int) -> html.HtmlElement:
-        return self.__element[index]
+    def __getitem__(self, index: int) -> "HtmlElement":
+        return HtmlElement(self.__element[index])
 
 
 class HtmlParser(BaseHtmlElement):
@@ -230,51 +238,11 @@ class HtmlParser(BaseHtmlElement):
         return self._root
 
 
-def from_string(xml: str, parser: str = "html") -> HtmlParser:
-    """Create HtmlParser from string.
-
-    ## Args
-        xml: HTML/XML string to parse.
-        parser: Parser to use - "html" (default) or "xml".
-
-    ## Returns
-        HtmlParser instance.
-
-    ## Example
-        >>> parser = from_string('<div>Content</div>')
-    """
-    return HtmlParser(xml, parser)
-
-
-def from_html(xml: str) -> HtmlParser:
-    """Create HtmlParser from HTML string.
-
-    ## Args
-        xml: HTML string to parse.
-
-    ## Returns
-        HtmlParser instance for HTML parsing.
-    """
-    return HtmlParser(xml, parser="html")
-
-
-def from_xml(xml: str) -> HtmlParser:
-    """Create HtmlParser from XML string.
-
-    ## Args
-        xml: XML string to parse.
-
-    ## Returns
-        HtmlParser instance for XML parsing.
-    """
-    return HtmlParser(xml, parser="xml")
-
-
-def get_course_list(html: bytes | str) -> list[dict[str, str]]:
+def get_course_list(content: bytes | str) -> list[dict[str, str]]:
     """Extract course list from Oracle ADF table HTML.
 
     ## Args
-        html: Oracle ADF page HTML (bytes or string).
+        content: Oracle ADF page HTML (bytes or string).
 
     ## Returns
         List of course dictionaries: [{course_code: course_name}, ...].
@@ -286,7 +254,9 @@ def get_course_list(html: bytes | str) -> list[dict[str, str]]:
     """
     from sia_scraper.constants import COURSE_CODE_COL, COURSE_NAME_COL
 
-    html_content = html.decode("utf-8", errors="ignore") if isinstance(html, bytes) else html
+    html_content = (
+        content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else content
+    )
     html_parser = HtmlParser(html_content)
 
     rows = html_parser.find_all("tr", class_="af_table_data-row")
@@ -294,6 +264,9 @@ def get_course_list(html: bytes | str) -> list[dict[str, str]]:
     course_list = []
     for row in rows:
         data_spans = row.findall(".//span[@class='af_column_data-container']")
+
+        if len(data_spans) < 2:
+            continue
 
         course_code = data_spans[COURSE_CODE_COL].text_content().strip()
         course_name = data_spans[COURSE_NAME_COL].text_content().strip()

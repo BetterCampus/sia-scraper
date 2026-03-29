@@ -71,7 +71,7 @@ class TestScrapeInfo:
         course_info = scrape_info(sample_course_xml)
 
         assert isinstance(course_info, CourseInfo)
-        assert course_info.courseName == "CALCULO DIFERENCIAL"
+        assert course_info.course_name == "CALCULO DIFERENCIAL"
         assert course_info.credits == 4
         assert course_info.typology == "DISCIPLINAR OBLIGATORIA"
         assert len(course_info.groups) == 2
@@ -82,11 +82,11 @@ class TestScrapeInfo:
 
         grupo_1 = course_info.groups[0]
         assert isinstance(grupo_1, Group)
-        assert grupo_1.groupName == "1"
+        assert grupo_1.group_name == "1"
         assert grupo_1.teacher == "JUAN PEREZ GARCIA"
         assert grupo_1.faculty == "FACULTAD DE CIENCIAS"
         assert grupo_1.duration == "16 SEMANAS"
-        assert grupo_1.scheduleType == "DIURNA"
+        assert grupo_1.schedule_type == "DIURNA"
         assert grupo_1.spots == 5
 
     def test_scrape_info_schedules(self, sample_course_xml):
@@ -99,8 +99,8 @@ class TestScrapeInfo:
         schedule_1 = schedules[0]
         assert isinstance(schedule_1, Schedule)
         assert schedule_1.day == "LUNES"
-        assert schedule_1.startTime == "07:00"
-        assert schedule_1.endTime == "09:00"
+        assert schedule_1.start_time == "07:00"
+        assert schedule_1.end_time == "09:00"
         assert schedule_1.classroom == "401-101"
 
         assert schedules[1].day == "MIÉRCOLES"
@@ -110,29 +110,29 @@ class TestScrapeInfo:
         course_info = scrape_info(sample_course_xml)
 
         grupo_2 = course_info.groups[1]
-        assert grupo_2.spots == "NaN"
+        assert grupo_2.spots is None
 
     def test_scrape_info_total_spots(self, sample_course_xml):
         """Test calculation of total available spots."""
         course_info = scrape_info(sample_course_xml)
 
-        assert course_info.availableSpots == 5
+        assert course_info.available_spots == 5
 
     def test_scrape_info_timestamp(self, sample_course_xml):
         """Test scraping includes timestamp."""
         course_info = scrape_info(sample_course_xml)
 
-        assert hasattr(course_info, "scrapeTimestamp")
-        assert course_info.scrapeTimestamp != ""
+        assert hasattr(course_info, "scrape_timestamp")
+        assert course_info.scrape_timestamp != ""
 
     def test_scrape_info_empty_course(self, sample_empty_course_xml):
         """Test scraping course with no groups."""
         course_info = scrape_info(sample_empty_course_xml)
 
-        assert course_info.courseName == "CALCULO AVANZADO"
+        assert course_info.course_name == "CALCULO AVANZADO"
         assert course_info.credits == 3
         assert course_info.groups == []
-        assert course_info.availableSpots == 0
+        assert course_info.available_spots == 0
 
     def test_scrape_info_malformed_xml_returns_error(self):
         """Test scraping malformed XML handles gracefully."""
@@ -217,11 +217,9 @@ class TestScrapeInfo:
         group.find.return_value = panel
         parser.css_select.return_value = [group]
 
-        formatter = MagicMock()
-        formatter.format_date.return_value = "now"
         with (
             patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
-            patch("sia_scraper.parsers.course_parser.DateFormatter", return_value=formatter),
+            patch("sia_scraper.parsers.course_parser.format_date", return_value="now"),
         ):
             result = scrape_info("<xml/>")
         assert result.groups[0].teacher == "Not reported"
@@ -265,11 +263,9 @@ class TestScrapeInfo:
         group.find.return_value = panel
         parser.css_select.return_value = [group]
 
-        formatter = MagicMock()
-        formatter.format_date.return_value = "now"
         with (
             patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
-            patch("sia_scraper.parsers.course_parser.DateFormatter", return_value=formatter),
+            patch("sia_scraper.parsers.course_parser.format_date", return_value="now"),
         ):
             result = scrape_info("<xml/>")
         assert result.groups[0].schedules == []

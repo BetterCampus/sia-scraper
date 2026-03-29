@@ -296,21 +296,21 @@ class TestCareerNavigation:
 
 @pytest.mark.unit
 class TestCourseIndexHandling:
-    """Test course index lookup and bugfix logic."""
+    """Test course index lookup behavior."""
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_get_course_index_found(self, mock_session_class):
         """Test finding course index by code."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = [
+            {"1000001": "Calculo"},
+            {"1000007": "Algebra"},
+            {"2016489": "Estructuras"},
+        ]
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__course_list = [  # type: ignore[attr-defined]
-            "1000001 - Calculo",
-            "1000007 - Algebra",
-            "2016489 - Estructuras",
-        ]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
         index = scraper.get_course_index("2016489")
@@ -318,48 +318,45 @@ class TestCourseIndexHandling:
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_get_course_index_not_found(self, mock_session_class):
-        """Test get_course_index returns -1 when not found."""
+        """Test get_course_index raises ValueError when not found."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = [{"1000001": "Calculo"}]
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__course_list = ["1000001 - Calculo"]  # type: ignore[attr-defined]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
-        index = scraper.get_course_index("9999999")
-        assert index == -1
+        with pytest.raises(ValueError, match="Course code '9999999' not found"):
+            scraper.get_course_index("9999999")
 
     @patch("sia_scraper.scraper.SiaSession")
-    def test_get_course_index_swap_bugfix(self, mock_session_class):
-        """Test index swap bugfix for indices 0 and 1."""
+    def test_get_course_index_no_swap(self, mock_session_class):
+        """Test index lookup preserves list order (no 0/1 swap workaround)."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = [
+            {"1000001": "First"},
+            {"1000007": "Second"},
+            {"2016489": "Third"},
+        ]
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__course_list = [  # type: ignore[attr-defined]
-            "1000001 - First",
-            "1000007 - Second",
-            "2016489 - Third",
-        ]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
-        # Index 0 should be swapped to 1
         index_0 = scraper.get_course_index("1000001")
-        assert index_0 == 1
+        assert index_0 == 0
 
-        # Index 1 should be swapped to 0
         index_1 = scraper.get_course_index("1000007")
-        assert index_1 == 0
+        assert index_1 == 1
 
-        # Index 2 should remain 2
         index_2 = scraper.get_course_index("2016489")
         assert index_2 == 2
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_get_course_index_invalid_status_raises_assertion(self, mock_session_class):
-        """Test get_course_index raises AssertionError with invalid status."""
+        """Test get_course_index raises InvalidStatus with invalid status."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.NO_SESSION
         mock_session_class.return_value = mock_session
@@ -367,7 +364,7 @@ class TestCourseIndexHandling:
         scraper = SiaScraper(init_session=False)
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(SiaSessionException.InvalidStatus):
             scraper.get_course_index("1000001")
 
 
@@ -387,7 +384,7 @@ class TestCourseInfoScraping:
         course_info = scraper.get_course_info(course_index=0)
 
         assert isinstance(course_info, CourseInfo)
-        assert course_info.courseName == "CALCULO DIFERENCIAL"
+        assert course_info.course_name == "CALCULO DIFERENCIAL"
         assert course_info.credits == 4
         assert len(course_info.groups) == 2
 
@@ -396,11 +393,14 @@ class TestCourseInfoScraping:
         """Test retrieving course info by course code."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = [
+            "1000001 - Calculo",
+            "2016489 - Estructuras",
+        ]
         mock_session.get_course_xml = MagicMock(return_value=sample_course_xml)
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__course_list = ["1000001 - Calculo", "2016489 - Estructuras"]  # type: ignore[attr-defined]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
         course_info = scraper.get_course_info(course_code="2016489")
@@ -433,11 +433,11 @@ class TestCoursePrereqsScraping:
         """Test retrieving course prerequisites by course code."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = ["1000001 - Calculo"]
         mock_session.get_course_xml = MagicMock(return_value=sample_prereqs_xml)
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__course_list = ["1000001 - Calculo"]  # type: ignore[attr-defined]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
         prereqs = scraper.get_course_prereqs(course_code="1000001")
@@ -481,7 +481,7 @@ class TestScrapeInfo:
         """Test scraping complete course information."""
         course_info = scrape_info(sample_course_xml)
 
-        assert course_info.courseName == "CALCULO DIFERENCIAL"
+        assert course_info.course_name == "CALCULO DIFERENCIAL"
         assert course_info.credits == 4
         assert course_info.typology == "DISCIPLINAR OBLIGATORIA"
         assert len(course_info.groups) == 2
@@ -491,11 +491,11 @@ class TestScrapeInfo:
         course_info = scrape_info(sample_course_xml)
 
         grupo_1 = course_info.groups[0]
-        assert grupo_1.groupName == "1"
+        assert grupo_1.group_name == "1"
         assert grupo_1.teacher == "JUAN PEREZ GARCIA"
         assert grupo_1.faculty == "FACULTAD DE CIENCIAS"
         assert grupo_1.duration == "16 SEMANAS"
-        assert grupo_1.scheduleType == "DIURNA"
+        assert grupo_1.schedule_type == "DIURNA"
         assert grupo_1.spots == 5
 
     def test_scrape_info_schedules(self, sample_course_xml):
@@ -506,8 +506,8 @@ class TestScrapeInfo:
         assert len(schedules) == 2
 
         assert schedules[0].day == "LUNES"
-        assert schedules[0].startTime == "07:00"
-        assert schedules[0].endTime == "09:00"
+        assert schedules[0].start_time == "07:00"
+        assert schedules[0].end_time == "09:00"
         assert schedules[0].classroom == "401-101"
 
         assert schedules[1].day == "MIÉRCOLES"
@@ -517,7 +517,7 @@ class TestScrapeInfo:
         course_info = scrape_info(sample_course_xml)
 
         grupo_2 = course_info.groups[1]
-        assert grupo_2.spots == "NaN"
+        assert grupo_2.spots is None
 
     def test_scrape_info_total_spots(self, sample_course_xml):
         """Test calculation of total available spots."""
@@ -525,23 +525,23 @@ class TestScrapeInfo:
 
         # First group has 5 spots, second has NaN
         # Total should be 5 (NaN is skipped)
-        assert course_info.availableSpots == 5
+        assert course_info.available_spots == 5
 
     def test_scrape_info_timestamp(self, sample_course_xml):
         """Test scraping includes timestamp."""
         course_info = scrape_info(sample_course_xml)
 
-        assert hasattr(course_info, "scrapeTimestamp")
-        assert course_info.scrapeTimestamp != ""
+        assert hasattr(course_info, "scrape_timestamp")
+        assert course_info.scrape_timestamp != ""
 
     def test_scrape_info_empty_course(self, sample_empty_course_xml):
         """Test scraping course with no groups."""
         course_info = scrape_info(sample_empty_course_xml)
 
-        assert course_info.courseName == "CALCULO AVANZADO"
+        assert course_info.course_name == "CALCULO AVANZADO"
         assert course_info.credits == 3
         assert course_info.groups == []
-        assert course_info.availableSpots == 0
+        assert course_info.available_spots == 0
 
     def test_scrape_info_malformed_xml_returns_error(self):
         """Test scraping malformed XML handles gracefully."""
@@ -594,11 +594,9 @@ class TestScrapeInfo:
         group.find.return_value = panel
         parser.css_select.return_value = [group]
 
-        formatter = MagicMock()
-        formatter.format_date.return_value = "now"
         with (
             patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
-            patch("sia_scraper.parsers.course_parser.DateFormatter", return_value=formatter),
+            patch("sia_scraper.parsers.course_parser.format_date", return_value="now"),
         ):
             result = scrape_info("<xml/>")
         assert result.groups[0].teacher == "Not reported"
@@ -676,11 +674,9 @@ class TestScrapeInfo:
         group.find.return_value = panel
         parser.css_select.return_value = [group]
 
-        formatter = MagicMock()
-        formatter.format_date.return_value = "now"
         with (
             patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
-            patch("sia_scraper.parsers.course_parser.DateFormatter", return_value=formatter),
+            patch("sia_scraper.parsers.course_parser.format_date", return_value="now"),
         ):
             result = scrape_info("<xml/>")
         assert result.groups[0].schedules == []
@@ -876,11 +872,11 @@ class TestScrapeCourses:
         """Test scraping multiple courses by code."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = ["1000001 - Calculo", "1000007 - Algebra"]
         mock_session.get_course_xml = MagicMock(return_value=sample_course_xml)
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__course_list = ["1000001 - Calculo", "1000007 - Algebra"]  # type: ignore[attr-defined]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
         result = scraper.scrape_courses(courses_codes=["1000001", "1000007"])
@@ -890,21 +886,18 @@ class TestScrapeCourses:
 
     @patch("sia_scraper.scraper.SiaSession")
     def test_scrape_courses_with_invalid_code(self, mock_session_class, sample_course_xml):
-        """Test scraping with invalid course code skips gracefully."""
+        """Test scraping with invalid course code raises ValueError."""
         mock_session = MagicMock()
         mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = ["1000001 - Calculo"]
         mock_session.get_course_xml = MagicMock(return_value=sample_course_xml)
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__course_list = ["1000001 - Calculo"]  # type: ignore[attr-defined]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
-        # Attempt to scrape a course that doesn't exist
-        result = scraper.scrape_courses(courses_codes=["1000001", "9999999"])
-
-        # Should return data for valid course only
-        assert len(result) >= 0
+        with pytest.raises(ValueError, match="Course code '9999999' not found"):
+            scraper.scrape_courses(courses_codes=["1000001", "9999999"])
 
 
 @pytest.mark.unit
@@ -985,13 +978,12 @@ class TestComplexScenarios:
         mock_session.course_list = ["1000001"]
 
         scraper.set_career("0-2-8-3")
-        scraper._SiaScraper__course_list = ["1000001"]  # type: ignore[attr-defined]
         scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
 
         course_info = scraper.get_course_info(course_code="1000001")
         scraper.close_session()
 
-        assert course_info.courseName == "CALCULO DIFERENCIAL"
+        assert course_info.course_name == "CALCULO DIFERENCIAL"
         mock_session.init_session.assert_called_once()
         mock_session.close_session.assert_called_once()
 

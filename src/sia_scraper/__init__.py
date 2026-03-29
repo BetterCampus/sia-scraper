@@ -36,13 +36,13 @@ scraper.set_career("0-2-8-3")  # Computer Science in Bogotá
 
 # Get course information
 course = scraper.get_course_info(course_code="2016489")
-print(course["courseName"])
-print(f"Credits: {course['credits']}")
-print(f"Groups: {len(course['groups'])}")
+print(course.course_name)
+print(f"Credits: {course.credits}")
+print(f"Groups: {len(course.groups)}")
 
 # Get prerequisites
 prereqs = scraper.get_course_prereqs(course_code="2016489")
-print(f"Conditions: {len(prereqs['conditions'])}")
+print(f"Conditions: {len(prereqs.conditions)}")
 
 # Clean up
 scraper.close_session()
@@ -77,8 +77,8 @@ without notice. Component IDs and request formats are brittle dependencies.
 """
 
 from .constants import SiaSessionStatus
-from .date_formatter import DateFormatter
-from .decorators import check_career, check_session, check_status, handle_timeout_error
+from .date_formatter import format_date
+from .decorators import check_session, check_status, handle_timeout_error
 from .enhanced_session import EnhancedSession
 from .exceptions import SiaSessionException
 from .scraper import SiaScraper, create_career_session, init_sia_scraper
@@ -90,8 +90,7 @@ __all__ = [
     "SiaSessionException",
     "SiaSessionStatus",
     "EnhancedSession",
-    "DateFormatter",
-    "check_career",
+    "format_date",
     "check_session",
     "check_status",
     "handle_timeout_error",
