@@ -38,33 +38,7 @@ when processing courses at indices 0 and 1.
 from typing import Any
 
 from .adf_state import extract_view_state, extract_view_state_from_response
-from .constants import (
-    BACK_BTTN_ID,
-    BTTN_EVENT_VALUE,
-    CAMPUS_DD,
-    CAMPUS_DD_ID,
-    CAMPUS_ELECTIVES_DD,
-    CAREER_DD,
-    CAREER_DD_ID,
-    COURSE_PAGE_LINK,
-    DEFAULT_TIMEOUT,
-    DROPDOWN_FIRST_OPTION_OFFSET,
-    DROPDOWNS,
-    ELECTIVES_TYPOLOGY_INDEX,
-    FACULTY_CAREER_DD,
-    FACULTY_DD,
-    FACULTY_DD_ID,
-    ORACLE_ADF_REGION_ID,
-    SELECT_ROW,
-    SESSION_TIMEOUT_ALERT,
-    SHOW_COURSES_BTTN,
-    SIA_BASE_URL,
-    SIA_HEADERS,
-    STUDY_LEVEL_DD,
-    STUDY_LEVEL_DD_ID,
-    TIPOLOGY_DD,
-    SiaSessionStatus,
-)
+from .constants import actions, adf_events, adf_ids, business, data_map, http, status
 from .decorators import check_session, check_status, handle_timeout_error
 from .enhanced_session import EnhancedSession
 from .exceptions import SiaSessionException
@@ -99,7 +73,7 @@ class SiaSession:
 
     def __init__(
         self,
-        timeout: int = DEFAULT_TIMEOUT,
+        timeout: int = http.DEFAULT_TIMEOUT,
         session_data: dict[str, Any] | None = None,
         init_session: bool = False,
     ) -> None:
@@ -113,7 +87,7 @@ class SiaSession:
         ## Note
             Either session_data OR init_session should be provided, not both.
         """
-        self.__url: str = SIA_BASE_URL
+        self.__url: str = http.SIA_BASE_URL
         self.timeout: int = timeout
 
         self.__career_name: str = "N/A"
@@ -131,7 +105,7 @@ class SiaSession:
         self.__session: EnhancedSession | None = None
         self.__course_list: list[dict[str, str]] = []
 
-        self.__STATUS: SiaSessionStatus = SiaSessionStatus.NO_SESSION
+        self.__STATUS: status.SiaSessionStatus = status.SiaSessionStatus.NO_SESSION
         self.main_page_html: bytes | None = None  # Cached initial page HTML
 
         if session_data:
@@ -167,7 +141,7 @@ class SiaSession:
         return self.__course_list
 
     @property
-    def STATUS(self) -> SiaSessionStatus:
+    def STATUS(self) -> status.SiaSessionStatus:
         """Current navigation state in the SIA workflow."""
         return self.__STATUS
 
@@ -187,7 +161,7 @@ class SiaSession:
         ## Raises
             SiaSessionException.SessionNotSet: If no session exists
         """
-        if SESSION_TIMEOUT_ALERT in self.post_request(data={}).text:
+        if adf_events.SESSION_TIMEOUT_ALERT in self.post_request(data={}).text:
             return False
         return True
 
@@ -241,7 +215,7 @@ class SiaSession:
             "Adf-Window-Id": self.__Adf_Window_Id,
             "Adf-Page-Id": self.__Adf_Page_Id,
         }
-        self.__STATUS = SiaSessionStatus.CAREER_NOT_SET
+        self.__STATUS = status.SiaSessionStatus.CAREER_NOT_SET
 
     @check_session
     def get_session_data(self) -> dict[str, Any]:
@@ -302,7 +276,7 @@ class SiaSession:
         )  # Split into [level, campus, faculty, career]
 
         self.__is_electives = session_data["is_electives"]
-        self.__STATUS = SiaSessionStatus[session_data["STATUS"]]
+        self.__STATUS = status.SiaSessionStatus[session_data["STATUS"]]
 
         # Re-fetch current page to get updated course list
         r = self.get_request(f"{self.__url}?taskflowId=task-flow-AC_CatalogoAsignaturas")
@@ -331,7 +305,7 @@ class SiaSession:
         self.__course_list = []
         self.__is_electives = False
         self.__init_request_dict()
-        self.__STATUS = SiaSessionStatus.NO_SESSION
+        self.__STATUS = status.SiaSessionStatus.NO_SESSION
 
     @check_session
     def keep_alive(self) -> Any:
@@ -364,7 +338,9 @@ class SiaSession:
             SiaSessionException.SessionNotSet: If no session exists
             SiaSessionException.TimeoutError: If request times out
         """
-        return self.__session.post(self.__url, params=self.__params, headers=SIA_HEADERS, data=data)  # type: ignore[OptionalMemberAccess]
+        return self.__session.post(
+            self.__url, params=self.__params, headers=http.SIA_HEADERS, data=data
+        )  # type: ignore[OptionalMemberAccess]
 
     @handle_timeout_error
     def get_request(self, url: str, params: dict[str, str] | None = None) -> Any:
@@ -467,7 +443,7 @@ class SiaSession:
         except SiaSessionException.SessionNotSet:
             debug_log("SYNC_VIEW_STATE: ViewState not found in response, keeping current")
 
-    @check_status(SiaSessionStatus.ON_CAREER_PAGE)
+    @check_status(status.SiaSessionStatus.ON_CAREER_PAGE)
     def reset_row_selection_state(self) -> None:
         """Reset Oracle ADF's table row selection state.
 
@@ -489,7 +465,7 @@ class SiaSession:
 
         # Make a preliminary request with index -1 to reset selection state
         self.__init_request_dict()
-        request_body = self._generate_request_body(SELECT_ROW, -1)
+        request_body = self._generate_request_body(actions.SELECT_ROW, -1)
 
         # Override DELTAS to indicate no row selected
         request_body["oracle.adf.view.rich.DELTAS"] = (
@@ -538,7 +514,7 @@ class SiaSession:
         """
 
         if electives:
-            self.__tipology_index = ELECTIVES_TYPOLOGY_INDEX
+            self.__tipology_index = business.ELECTIVES_TYPOLOGY_INDEX
         else:
             self.__tipology_index = ""
 
@@ -548,17 +524,17 @@ class SiaSession:
         self.__init_request_dict()
 
         # Populate request_dict with selected dropdown indices
-        self.request_dict[STUDY_LEVEL_DD_ID] = self.career_indexs[0]
-        self.request_dict[CAMPUS_DD_ID] = self.career_indexs[1]
-        self.request_dict[FACULTY_DD_ID] = self.career_indexs[2]
-        self.request_dict[CAREER_DD_ID] = self.career_indexs[3]
+        self.request_dict[adf_ids.STUDY_LEVEL_DD_ID] = self.career_indexs[0]
+        self.request_dict[adf_ids.CAMPUS_DD_ID] = self.career_indexs[1]
+        self.request_dict[adf_ids.FACULTY_DD_ID] = self.career_indexs[2]
+        self.request_dict[adf_ids.CAREER_DD_ID] = self.career_indexs[3]
 
         # Generate Oracle ADF request bodies for each sequential interaction
-        STUDY_LEVEL_DD_data = self._generate_request_body(STUDY_LEVEL_DD)
-        CAMPUS_DD_data = self._generate_request_body(CAMPUS_DD)
-        FACULTY_DD_data = self._generate_request_body(FACULTY_DD)
-        CAREER_DD_data = self._generate_request_body(CAREER_DD)
-        TIPOLOGY_DD_data = self._generate_request_body(TIPOLOGY_DD)
+        STUDY_LEVEL_DD_data = self._generate_request_body(actions.STUDY_LEVEL_DD)
+        CAMPUS_DD_data = self._generate_request_body(actions.CAMPUS_DD)
+        FACULTY_DD_data = self._generate_request_body(actions.FACULTY_DD)
+        CAREER_DD_data = self._generate_request_body(actions.CAREER_DD)
+        TIPOLOGY_DD_data = self._generate_request_body(actions.TIPOLOGY_DD)
 
         data_list = [
             STUDY_LEVEL_DD_data,
@@ -570,14 +546,14 @@ class SiaSession:
 
         if not electives:
             # Regular courses: Just click "Mostrar"
-            SHOW_CURSES_BTTN_data = self._generate_request_body(SHOW_COURSES_BTTN)
+            SHOW_CURSES_BTTN_data = self._generate_request_body(actions.SHOW_COURSES_BTTN)
             data_list.append(SHOW_CURSES_BTTN_data)
 
         else:
             # Electives: Two extra dropdown selections before "Mostrar"
-            FACULTY_CAREER_DD_data = self._generate_request_body(FACULTY_CAREER_DD)
-            CAMPUS_ELECTIVES_DD_data = self._generate_request_body(CAMPUS_ELECTIVES_DD)
-            SHOW_CURSES_BTTN_data = self._generate_request_body(SHOW_COURSES_BTTN)
+            FACULTY_CAREER_DD_data = self._generate_request_body(actions.FACULTY_CAREER_DD)
+            CAMPUS_ELECTIVES_DD_data = self._generate_request_body(actions.CAMPUS_ELECTIVES_DD)
+            SHOW_CURSES_BTTN_data = self._generate_request_body(actions.SHOW_COURSES_BTTN)
 
             data_list.append(FACULTY_CAREER_DD_data)
             data_list.append(CAMPUS_ELECTIVES_DD_data)
@@ -598,12 +574,14 @@ class SiaSession:
                 xml = response.text
                 parser = HtmlParser(xml)
                 # Dropdown first option is "Select..." placeholder, offset by 1
-                dropdown_elements = parser.find_by_xpath(f'//*[@id="{DROPDOWNS[3]}"]/option')
+                dropdown_elements = parser.find_by_xpath(
+                    f'//*[@id="{data_map.DROPDOWNS[3]}"]/option'
+                )
                 if not dropdown_elements:
                     raise SiaSessionException.CareerNotSet from ValueError(
                         "Career dropdown not found"
                     )
-                option_index = int(self.career_indexs[3]) + DROPDOWN_FIRST_OPTION_OFFSET
+                option_index = int(self.career_indexs[3]) + business.DROPDOWN_FIRST_OPTION_OFFSET
                 self.__career_name = dropdown_elements[option_index].text
 
         # Reset request_dict to clean state
@@ -619,13 +597,13 @@ class SiaSession:
         self.__course_list = get_course_list(xml)
         self.__is_electives = electives
 
-        self.__STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        self.__STATUS = status.SiaSessionStatus.ON_CAREER_PAGE
 
         debug_log(f"SET_CAREER: Course list loaded, {len(self.__course_list)} courses")
 
         return self
 
-    @check_status(SiaSessionStatus.ON_CAREER_PAGE)
+    @check_status(status.SiaSessionStatus.ON_CAREER_PAGE)
     def __select_course_row(self, course_index: int, prime: bool = False) -> None:
         """Select (highlight) a course row in the Oracle ADF table.
 
@@ -659,7 +637,7 @@ class SiaSession:
         debug_log(f"ViewState before SELECT_ROW [{marker}]", {"ViewState": viewstate_preview})
 
         self.__init_request_dict()
-        request_body = self._generate_request_body(SELECT_ROW, course_index)
+        request_body = self._generate_request_body(actions.SELECT_ROW, course_index)
 
         # Log DELTAS being sent
         if "oracle.adf.view.rich.DELTAS" in request_body:
@@ -677,7 +655,7 @@ class SiaSession:
         if not prime:
             self.sync_view_state_from_response(response)
 
-    @check_status(SiaSessionStatus.ON_CAREER_PAGE)
+    @check_status(status.SiaSessionStatus.ON_CAREER_PAGE)
     def enter_course_page(self, course_index: int) -> Any:
         """Navigate to course detail page for a specific course.
 
@@ -709,7 +687,7 @@ class SiaSession:
         self.__select_course_row(course_index)
         self.__init_request_dict()
 
-        request_body = self._generate_request_body(COURSE_PAGE_LINK, course_index)
+        request_body = self._generate_request_body(actions.COURSE_PAGE_LINK, course_index)
         debug_log(
             f"COURSE_PAGE_LINK request for index {course_index}",
             {"PROCESS": request_body.get("oracle.adf.view.rich.PROCESS", "N/A")},
@@ -724,12 +702,12 @@ class SiaSession:
             {"response_length": len(response_text), "status_code": response.status_code},
         )
 
-        self.__STATUS = SiaSessionStatus.ON_COURSE_PAGE
+        self.__STATUS = status.SiaSessionStatus.ON_COURSE_PAGE
 
         debug_log(f"ENTER_COURSE_PAGE: Success, Status={self.__STATUS.value}")
         return response
 
-    @check_status(SiaSessionStatus.ON_COURSE_PAGE)
+    @check_status(status.SiaSessionStatus.ON_COURSE_PAGE)
     def exit_course_page(self) -> None:
         """Return to course list from course detail page.
 
@@ -753,18 +731,18 @@ class SiaSession:
             "Adf-Window-Id": self.__Adf_Window_Id,
             "Adf-Page-Id": self.__Adf_Page_Id,
             "javax.faces.ViewState": self.__javax_faces_ViewState,
-            "event": BACK_BTTN_ID,
-            f"event.{BACK_BTTN_ID}": BTTN_EVENT_VALUE,
-            "oracle.adf.view.rich.PROCESS": f"{ORACLE_ADF_REGION_ID},{BACK_BTTN_ID}4",
+            "event": adf_ids.BACK_BTTN_ID,
+            f"event.{adf_ids.BACK_BTTN_ID}": adf_events.BTTN_EVENT_VALUE,
+            "oracle.adf.view.rich.PROCESS": f"{adf_ids.ORACLE_ADF_REGION_ID},{adf_ids.BACK_BTTN_ID}4",
         }
         self.post_request(data)
-        self.__STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        self.__STATUS = status.SiaSessionStatus.ON_CAREER_PAGE
 
         debug_log(f"EXIT_COURSE_PAGE: Back button posted, Status={self.__STATUS.value}")
 
         debug_log("EXIT_COURSE_PAGE: Complete")
 
-    @check_status(SiaSessionStatus.ON_CAREER_PAGE)
+    @check_status(status.SiaSessionStatus.ON_CAREER_PAGE)
     def get_course_xml(self, course_index: int) -> str:
         """Retrieve course detail XML for a specific course.
 
