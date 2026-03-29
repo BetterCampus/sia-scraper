@@ -90,6 +90,29 @@ pytest tests/utils/test_date_formatter.py
 pytest -k "format"
 ```
 
+### Fixture-based Regression Tests
+
+The repository includes sanitized snapshots of live SIA responses under `tests/fixtures/`.
+These fixtures back contract and regression tests designed to detect Oracle ADF structure
+changes early.
+
+- Fixture validity: `pytest tests/test_fixtures_validity.py`
+- Structure contracts: `pytest tests/test_contracts.py`
+- Parser regression baselines: `pytest tests/test_regression.py`
+
+Refresh fixtures when SIA markup or parser behavior changes:
+
+```bash
+python scripts/capture_sia_fixtures.py
+pytest tests/test_fixtures_validity.py tests/test_contracts.py tests/test_regression.py
+```
+
+Notes:
+
+- Capture configuration lives in `scripts/capture_config.yaml`.
+- The capture script keeps only latest date-stamped fixtures by default.
+- Captured data is sanitized before writing files.
+
 ## Linting, Formatting, and Type Checking
 
 Use this local sequence before opening a PR:

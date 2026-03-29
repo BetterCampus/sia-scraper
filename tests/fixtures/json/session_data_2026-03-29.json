@@ -1,0 +1,21 @@
+{
+  "STATUS": "ON_CAREER_PAGE",
+  "career_code": "0-2-8-3",
+  "career_name": "2A74 INGENIER\u00cdA DE SISTEMAS Y COMPUTACI\u00d3N",
+  "is_electives": false,
+  "javax_faces_ViewState": "SANITIZED_VIEWSTATE_TOKEN_12345",
+  "params": {
+    "Adf-Page-Id": "0",
+    "Adf-Window-Id": "SANITIZED_WINDOW_ID_67890"
+  },
+  "session_cookies": {
+    "PortalJSESSION": "SANITIZED_PortalJSESSION_VALUE",
+    "cookiesession1": "SANITIZED_cookiesession1_VALUE"
+  },
+  "session_headers": {
+    "Accept": "*/*",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "keep-alive",
+    "User-Agent": "python-requests/2.32.5"
+  }
+}

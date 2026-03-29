@@ -31,49 +31,21 @@ def mock_enhanced_session():
 
 
 @pytest.fixture
-def mock_sia_initial_html():
-    """Mock HTML response for SIA initial page load."""
-    return b"""
-    <!DOCTYPE html>
-    <html>
-    <body>
-        <input type="hidden" name="javax.faces.ViewState" value="test_view_state_12345">
-        <input type="hidden" name="Adf-Window-Id" value="test_window_id_67890">
-        <input type="hidden" name="Adf-Page-Id" value="0">
-    </body>
-    </html>
-    """
+def mock_sia_initial_html(sia_initial_html: bytes):
+    """Use captured HTML response for SIA initial page load."""
+    return sia_initial_html
 
 
 @pytest.fixture
-def mock_sia_career_page_html():
-    """Mock HTML response for SIA career page with course list."""
-    return b"""
-    <!DOCTYPE html>
-    <html>
-    <body>
-        <table class="af_table_data-row">
-            <tr><td>1000001 - Calculo Diferencial</td></tr>
-            <tr><td>1000007 - Calculo Integral</td></tr>
-            <tr><td>2016489 - Estructuras de Datos</td></tr>
-        </table>
-    </body>
-    </html>
-    """
+def mock_sia_career_page_html(sia_career_page_regular_html: bytes):
+    """Use captured HTML response for SIA career page with course list."""
+    return sia_career_page_regular_html
 
 
 @pytest.fixture
-def mock_sia_course_detail_xml():
-    """Mock XML response for course detail page."""
-    return """
-    <div class="course-detail">
-        <div class="course-name">Calculo Diferencial</div>
-        <div class="course-credits">4</div>
-        <div class="course-groups">
-            <div class="group">Grupo 1</div>
-        </div>
-    </div>
-    """
+def mock_sia_course_detail_xml(sia_course_detail_xml: str):
+    """Use captured XML response for course detail page."""
+    return sia_course_detail_xml
 
 
 @pytest.fixture

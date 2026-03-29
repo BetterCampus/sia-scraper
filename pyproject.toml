@@ -20,7 +20,9 @@ dev = [
     "pytest-mock",
     "pytest-cov",
     "pyright",
+    "ruff~=0.15.8",
     "lxml-stubs",
+    "pyyaml",
 ]
 
 [tool.setuptools.packages.find]
