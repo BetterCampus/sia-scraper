@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import TypeVar
 
 from ..date_formatter import DateFormatter
-from ..html_parser import HtmlParser
+from .html_parser import HtmlParser
 from .models import (
     CourseInfo,
     CoursePrereqs,

@@ -12,8 +12,8 @@ responses returned by SIA's web interface.
 | `models` | Dataclasses for type-safe data structures |
 """
 
-from ..html_parser import HtmlParser, from_html, from_string, from_xml, get_course_list
 from .course_parser import get_plain_text, scrape_info, scrape_prereqs
+from .html_parser import HtmlParser, from_html, from_string, from_xml, get_course_list
 from .models import (
     CourseInfo,
     CoursePrereqs,

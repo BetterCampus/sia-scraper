@@ -42,8 +42,8 @@ from .constants import actions, adf_events, adf_ids, business, data_map, http, s
 from .decorators import check_session, check_status, handle_timeout_error
 from .enhanced_session import EnhancedSession
 from .exceptions import SiaSessionException
-from .html_parser import HtmlParser, get_course_list
 from .oracle_adf_request import OracleAdfRequestBuilder
+from .parsers.html_parser import HtmlParser, get_course_list
 from .utils import debug_log
 
 
