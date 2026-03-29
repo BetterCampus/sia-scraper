@@ -35,90 +35,44 @@ index 0's data instead of index 1's data. Users should be aware of this limitati
 when processing courses at indices 0 and 1.
 """
 
-import os
-import re
 from typing import Any
 
+from .adf_state import extract_view_state, extract_view_state_from_response
 from .constants import (
     BACK_BTTN_ID,
     BTTN_EVENT_VALUE,
     CAMPUS_DD,
     CAMPUS_DD_ID,
     CAMPUS_ELECTIVES_DD,
-    CAMPUS_ELECTIVES_DD_ID,
     CAREER_DD,
     CAREER_DD_ID,
-    COURSE_CODE_COL,
-    COURSE_NAME_COL,
     COURSE_PAGE_LINK,
-    DATA_MAP,
     DEFAULT_TIMEOUT,
     DROPDOWN_EVENT_VALUE,
     DROPDOWN_FIRST_OPTION_OFFSET,
     DROPDOWNS,
-    ELECTIVES_CAMPUS_INCREMENT,
     ELECTIVES_TYPOLOGY_INDEX,
     FACULTY_CAREER_DD,
-    FACULTY_CAREER_DD_ID,
-    FACULTY_CAREER_DEFAULT_INDEX,
     FACULTY_DD,
     FACULTY_DD_ID,
     ORACLE_ADF_REGION_ID,
-    ORACLE_ADF_RENDER_TARGET,
-    ORACLE_ADF_UNKNOWN_COMPONENT_1,
-    ORACLE_ADF_UNKNOWN_COMPONENT_2,
-    ORACLE_ADF_UNKNOWN_COMPONENT_3,
-    ORACLE_ADF_UNKNOWN_COMPONENT_4,
     SELECT_ROW,
     SELECT_ROW_EVENT_VALUE,
     SESSION_TIMEOUT_ALERT,
     SHOW_COURSES_BTTN,
-    SHOW_CURSES_BTTN_ID,
     SIA_BASE_URL,
     SIA_HEADERS,
     STUDY_LEVEL_DD,
     STUDY_LEVEL_DD_ID,
     TIPOLOGY_DD,
-    TIPOLOGY_DD_ID,
     SiaSessionStatus,
 )
 from .decorators import check_session, check_status, handle_timeout_error
 from .enhanced_session import EnhancedSession
 from .exceptions import SiaSessionException
-from .parsers import HtmlParser
-
-# ============================================================================
-# Debug Logging for Oracle ADF State Investigation
-# ============================================================================
-
-# Set SIA_DEBUG=1 environment variable to enable debug logging
-DEBUG_MODE: bool = os.environ.get("SIA_DEBUG", "0") == "1"
-
-
-def _debug_log(message: str, data: str | dict | None = None) -> None:
-    """Log debug messages when DEBUG_MODE is enabled.
-
-    ## Args
-        message: Debug message describing the event.
-        data: Optional additional data to log (ViewState, DELTAS, etc.)
-    """
-    if not DEBUG_MODE:
-        return
-
-    prefix = "[ADF-DEBUG]"
-    if data:
-        print(f"{prefix} {message}")
-        if isinstance(data, dict):
-            for key, value in data.items():
-                value_str = str(value)
-                if len(value_str) > 200:
-                    value_str = value_str[:200] + "..."
-                print(f"  {key}: {value_str}")
-        else:
-            data_str = str(data)
-            print(f"  Data: {data_str[:200]}..." if len(data_str) > 200 else f"  Data: {data}")
-    else:
-        print(f"{prefix} {message}")
+from .oracle_adf_request import OracleAdfRequestBuilder
+from .parsers import HtmlParser, get_course_list
+from .utils import debug_log
 
 
 class SiaSession:
@@ -306,11 +260,9 @@ class SiaSession:
             to avoid repeated authentication and career navigation.
         """
         session = self.__session
-        if session is None:
-            raise SiaSessionException.SessionNotSet from SiaSessionException
         return {
-            "session_headers": dict(session.headers),
-            "session_cookies": session.cookies.get_dict(),
+            "session_headers": dict(session.headers),  # type: ignore[OptionalMemberAccess]
+            "session_cookies": session.cookies.get_dict(),  # type: ignore[OptionalMemberAccess]
             "params": self.__params,
             "javax_faces_ViewState": self.__javax_faces_ViewState,
             "career_code": self.__career_code,
@@ -374,10 +326,7 @@ class SiaSession:
             After calling this, the instance returns to NO_SESSION state.
             Call init_session() to start a new session.
         """
-        session = self.__session
-        if session is None:
-            raise SiaSessionException.SessionNotSet from SiaSessionException
-        session.close()
+        self.__session.close()  # type: ignore[OptionalMemberAccess]
         self.__session = None
         self.__career_code = ""
         self.__career_name = "N/A"
@@ -417,10 +366,7 @@ class SiaSession:
             SiaSessionException.SessionNotSet: If no session exists
             SiaSessionException.TimeoutError: If request times out
         """
-        session = self.__session
-        if session is None:
-            raise SiaSessionException.SessionNotSet from SiaSessionException
-        return session.post(self.__url, params=self.__params, headers=SIA_HEADERS, data=data)
+        return self.__session.post(self.__url, params=self.__params, headers=SIA_HEADERS, data=data)  # type: ignore[OptionalMemberAccess]
 
     @handle_timeout_error
     def get_request(self, url: str, params: dict[str, str] | None = None) -> Any:
@@ -452,28 +398,9 @@ class SiaSession:
         in every request to maintain session state.
 
         Specific requests augment this with additional fields via _generate_request_body.
-
-        ## Note
-            Some fields have unknown purposes but are required for requests:
-            - ORACLE_ADF_UNKNOWN_COMPONENT_* (unknown Oracle ADF components - observed in requests)
-            - org.apache.myfaces.trinidad.faces.FORM = "f1" (Trinidad form identifier)
         """
-        self.request_dict = {
-            STUDY_LEVEL_DD_ID: "",
-            CAMPUS_DD_ID: "",
-            FACULTY_DD_ID: "",
-            CAREER_DD_ID: "",
-            TIPOLOGY_DD_ID: self.__tipology_index,
-            SHOW_CURSES_BTTN_ID: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_1: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_2: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_3: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_4: "",
-            "org.apache.myfaces.trinidad.faces.FORM": "f1",  # Trinidad JSF form ID
-            "Adf-Window-Id": self.__Adf_Window_Id,
-            "Adf-Page-Id": self.__Adf_Page_Id,
-            "javax.faces.ViewState": self.__javax_faces_ViewState,
-        }
+        builder = OracleAdfRequestBuilder(self)
+        self.request_dict = builder.init_request_dict()
 
     @check_session
     def update_view_state(self) -> None:
@@ -488,28 +415,18 @@ class SiaSession:
 
         ## Note
             Makes GET request to current SIA page.
-            Uses regex to extract ViewState from HTML (faster than BeautifulSoup for single value).
+            Uses regex to extract ViewState from HTML.
             Updates both __javax_faces_ViewState and request_dict.
         """
-        _debug_log("UPDATE_VIEW_STATE: Fetching current page for ViewState")
+        debug_log("UPDATE_VIEW_STATE: Fetching current page for ViewState")
 
         r = self.get_request(self.__url, params=self.__params)
+        self.__javax_faces_ViewState = extract_view_state(r.content)
+        self.request_dict["javax.faces.ViewState"] = self.__javax_faces_ViewState  # type: ignore[arg-type]
 
-        # Target: Oracle ADF JSF → <input type="hidden" name="javax.faces.ViewState" value="...">
-        view_state_regex = re.compile(
-            b'<input type="hidden" name="javax.faces.ViewState" value="(.*?)">'
+        debug_log(
+            f"UPDATE_VIEW_STATE: ViewState updated, length={len(self.__javax_faces_ViewState)}"
         )
-        match = view_state_regex.search(r.content)
-        if match is None:
-            raise SiaSessionException.SessionNotSet from ValueError("ViewState regex did not match")
-        view_state = match.group(1)
-
-        self.__javax_faces_ViewState = view_state.decode("utf-8")
-        self.request_dict["javax.faces.ViewState"] = self.__javax_faces_ViewState
-
-        # Log ViewState length as debug info
-        viewstate_value = self.__javax_faces_ViewState or ""
-        _debug_log(f"UPDATE_VIEW_STATE: ViewState updated, length={len(viewstate_value)}")
 
     def extract_view_state_from_response(self, response: Any) -> str:
         """Extract ViewState from a partial POST response.
@@ -526,37 +443,8 @@ class SiaSession:
 
         ## Raises
             SiaSessionException.SessionNotSet: If ViewState not found in response.
-
-        ## Note
-            This method looks for ViewState in the XML portion of Oracle ADF's
-            partial page rendering response. The ViewState is embedded in the response
-            as a hidden input field.
         """
-        if hasattr(response, "content") and response.content:
-            content = response.content
-        elif hasattr(response, "text") and response.text:
-            content = response.text
-        else:
-            raise SiaSessionException.SessionNotSet from ValueError("Response has no content")
-
-        if isinstance(content, str):
-            content_bytes = content.encode("utf-8")
-        elif isinstance(content, bytes):
-            content_bytes = content
-        else:
-            raise SiaSessionException.SessionNotSet from TypeError(
-                f"Content is not string or bytes: {type(content)}"
-            )
-
-        view_state_regex = re.compile(
-            b'<input type="hidden" name="javax.faces.ViewState" value="(.*?)">'
-        )
-        match = view_state_regex.search(content_bytes)
-        if match is None:
-            raise SiaSessionException.SessionNotSet from ValueError(
-                "ViewState not found in response"
-            )
-        return match.group(1).decode("utf-8")
+        return extract_view_state_from_response(response)
 
     def sync_view_state_from_response(self, response: Any) -> None:
         """Sync ViewState from a partial POST response.
@@ -573,13 +461,13 @@ class SiaSession:
             the server's state after making a request.
         """
         try:
-            self.__javax_faces_ViewState = self.extract_view_state_from_response(response)
-            self.request_dict["javax.faces.ViewState"] = self.__javax_faces_ViewState
-            _debug_log(
+            self.__javax_faces_ViewState = extract_view_state_from_response(response)
+            self.request_dict["javax.faces.ViewState"] = self.__javax_faces_ViewState  # type: ignore[arg-type]
+            debug_log(
                 f"SYNC_VIEW_STATE: ViewState synced from response, length={len(self.__javax_faces_ViewState)}"
             )
         except SiaSessionException.SessionNotSet:
-            _debug_log("SYNC_VIEW_STATE: ViewState not found in response, keeping current")
+            debug_log("SYNC_VIEW_STATE: ViewState not found in response, keeping current")
 
     @check_status(SiaSessionStatus.ON_CAREER_PAGE)
     def reset_row_selection_state(self) -> None:
@@ -599,7 +487,7 @@ class SiaSession:
             actually selecting any row. This can be called before get_course_xml()
             to ensure a clean state.
         """
-        _debug_log("RESET_ROW_SELECTION: Sending preliminary request to reset state")
+        debug_log("RESET_ROW_SELECTION: Sending preliminary request to reset state")
 
         # Make a preliminary request with index -1 to reset selection state
         self.__init_request_dict()
@@ -614,7 +502,7 @@ class SiaSession:
         response = self.post_request(request_body)
         self.sync_view_state_from_response(response)
 
-        _debug_log("RESET_ROW_SELECTION: State reset complete")
+        debug_log("RESET_ROW_SELECTION: State reset complete")
 
     @check_session
     def set_career(self, search_code: str, electives: bool = False) -> "SiaSession":
@@ -699,7 +587,7 @@ class SiaSession:
 
         # Refresh ViewState before starting request sequence
         self.update_view_state()
-        self.request_dict["javax.faces.ViewState"] = self.__javax_faces_ViewState
+        self.request_dict["javax.faces.ViewState"] = self.__javax_faces_ViewState  # type: ignore[arg-type]
 
         # Execute request sequence in order (ORDER IS CRITICAL - Oracle ADF enforces workflow)
         response = None
@@ -735,7 +623,7 @@ class SiaSession:
 
         self.__STATUS = SiaSessionStatus.ON_CAREER_PAGE
 
-        _debug_log(f"SET_CAREER: Course list loaded, {len(self.__course_list)} courses")
+        debug_log(f"SET_CAREER: Course list loaded, {len(self.__course_list)} courses")
 
         return self
 
@@ -763,14 +651,14 @@ class SiaSession:
             else ("SECOND" if course_index == 1 else f"OTHER({course_index})")
         )
         marker = "PRIME" if prime else index_marker
-        _debug_log(f"SELECT_ROW: [{marker}] Index={course_index}")
+        debug_log(f"SELECT_ROW: [{marker}] Index={course_index}")
 
         # Log ViewState before request
         viewstate_value = self.__javax_faces_ViewState or ""
         viewstate_preview = (
             viewstate_value[:50] + "..." if len(viewstate_value) > 50 else viewstate_value
         )
-        _debug_log(f"ViewState before SELECT_ROW [{marker}]", {"ViewState": viewstate_preview})
+        debug_log(f"ViewState before SELECT_ROW [{marker}]", {"ViewState": viewstate_preview})
 
         self.__init_request_dict()
         request_body = self._generate_request_body(SELECT_ROW, course_index)
@@ -778,12 +666,12 @@ class SiaSession:
         # Log DELTAS being sent
         if "oracle.adf.view.rich.DELTAS" in request_body:
             deltas = request_body["oracle.adf.view.rich.DELTAS"]
-            _debug_log(f"DELTAS [{marker}]", {"DELTAS": deltas})
+            debug_log(f"DELTAS [{marker}]", {"DELTAS": deltas})
             # Highlight the selectedRowKeys value
             if "selectedRowKeys=" in deltas:
                 for part in deltas.split(","):
                     if "selectedRowKeys" in part:
-                        _debug_log(f"selectedRowKeys [{marker}]", {"selectedRowKeys": part})
+                        debug_log(f"selectedRowKeys [{marker}]", {"selectedRowKeys": part})
 
         response = self.post_request(request_body)
 
@@ -812,19 +700,19 @@ class SiaSession:
             4. Click course link to navigate
             5. Update STATUS to ON_COURSE_PAGE
         """
-        _debug_log(f"ENTER_COURSE_PAGE: Index={course_index}, Status={self.__STATUS.value}")
+        debug_log(f"ENTER_COURSE_PAGE: Index={course_index}, Status={self.__STATUS.value}")
 
         # Log course being accessed for index comparison
         if course_index < len(self.__course_list):
             course_at_idx = self.__course_list[course_index]
-            _debug_log(f"Index {course_index} target", {"course": str(course_at_idx)})
+            debug_log(f"Index {course_index} target", {"course": str(course_at_idx)})
 
         self.update_view_state()
         self.__select_course_row(course_index)
         self.__init_request_dict()
 
         request_body = self._generate_request_body(COURSE_PAGE_LINK, course_index)
-        _debug_log(
+        debug_log(
             f"COURSE_PAGE_LINK request for index {course_index}",
             {"PROCESS": request_body.get("oracle.adf.view.rich.PROCESS", "N/A")},
         )
@@ -833,14 +721,14 @@ class SiaSession:
 
         # Log response info for debugging
         response_text = response.text
-        _debug_log(
+        debug_log(
             f"ENTER_COURSE_PAGE response for index {course_index}",
             {"response_length": len(response_text), "status_code": response.status_code},
         )
 
         self.__STATUS = SiaSessionStatus.ON_COURSE_PAGE
 
-        _debug_log(f"ENTER_COURSE_PAGE: Success, Status={self.__STATUS.value}")
+        debug_log(f"ENTER_COURSE_PAGE: Success, Status={self.__STATUS.value}")
         return response
 
     @check_status(SiaSessionStatus.ON_COURSE_PAGE)
@@ -853,14 +741,14 @@ class SiaSession:
             SiaSessionException.InvalidStatus: If not on course page.
             SiaSessionException.TimeoutError: If request times out.
         """
-        _debug_log(f"EXIT_COURSE_PAGE: Current Status={self.__STATUS.value}")
+        debug_log(f"EXIT_COURSE_PAGE: Current Status={self.__STATUS.value}")
 
         # Log ViewState before exit
         viewstate_value = self.__javax_faces_ViewState or ""
         viewstate_preview = (
             viewstate_value[:50] + "..." if len(viewstate_value) > 50 else viewstate_value
         )
-        _debug_log("ViewState before BACK_BTTN", {"ViewState": viewstate_preview})
+        debug_log("ViewState before BACK_BTTN", {"ViewState": viewstate_preview})
 
         data = {
             "org.apache.myfaces.trinidad.faces.FORM": "f1",
@@ -874,9 +762,9 @@ class SiaSession:
         self.post_request(data)
         self.__STATUS = SiaSessionStatus.ON_CAREER_PAGE
 
-        _debug_log(f"EXIT_COURSE_PAGE: Back button posted, Status={self.__STATUS.value}")
+        debug_log(f"EXIT_COURSE_PAGE: Back button posted, Status={self.__STATUS.value}")
 
-        _debug_log("EXIT_COURSE_PAGE: Complete")
+        debug_log("EXIT_COURSE_PAGE: Complete")
 
     @check_status(SiaSessionStatus.ON_CAREER_PAGE)
     def get_course_xml(self, course_index: int) -> str:
@@ -904,20 +792,20 @@ class SiaSession:
 
             See module docstring for full details on the bug and its limitations.
         """
-        _debug_log(f"=== GET_COURSE_XML START: Index={course_index} ===")
-        _debug_log(f"Current course list size: {len(self.__course_list)}")
+        debug_log(f"=== GET_COURSE_XML START: Index={course_index} ===")
+        debug_log(f"Current course list size: {len(self.__course_list)}")
 
         if course_index < len(self.__course_list):
             course_info = self.__course_list[course_index]
-            _debug_log(f"Course at index {course_index}", {"course": str(course_info)})
+            debug_log(f"Course at index {course_index}", {"course": str(course_info)})
         else:
-            _debug_log(f"WARNING: Index {course_index} out of bounds!")
+            debug_log(f"WARNING: Index {course_index} out of bounds!")
 
         xml = self.enter_course_page(course_index).text
-        _debug_log(f"ENTER_COURSE_PAGE returned, XML length: {len(xml)}")
+        debug_log(f"ENTER_COURSE_PAGE returned, XML length: {len(xml)}")
 
         self.exit_course_page()
-        _debug_log(f"=== GET_COURSE_XML END: Index={course_index} ===")
+        debug_log(f"=== GET_COURSE_XML END: Index={course_index} ===")
 
         return xml
 
@@ -1002,86 +890,6 @@ class SiaSession:
 
         ## Raises
             KeyError: If data_name not found in DATA_MAP.
-
-        ## Note
-            1. Look up (component_id, event_xml) from DATA_MAP
-            2. Add action-specific fields to request_dict (e.g., electives campus offset)
-            3. Generate specific request dict with event fields
-            4. Add final action-specific fields (e.g., table viewport size for SELECT_ROW)
-            5. Return complete request body
-
-            Special handling:
-            - FACULTY_CAREER_DD: Sets dropdown value to "0" (first option)
-            - CAMPUS_ELECTIVES_DD: Adds +40 offset to campus index (SIA electives convention)
-            - SELECT_ROW: Includes table viewport metadata (viewportSize, rows, selectedRowKeys)
-            - COURSE_PAGE_LINK: Includes render directive for Oracle ADF partial page rendering
         """
-        if data_name in DATA_MAP:
-            id, event_value = DATA_MAP[data_name]
-
-            # Add specific fields to request_dict for certain actions
-            if data_name == FACULTY_CAREER_DD:
-                # First option in faculty/career electives dropdown
-                self.request_dict[FACULTY_CAREER_DD_ID] = FACULTY_CAREER_DEFAULT_INDEX
-            elif data_name == CAMPUS_ELECTIVES_DD:
-                # Apply SIA electives campus offset (+40 to regular campus index)
-                self.request_dict[CAMPUS_ELECTIVES_DD_ID] = str(
-                    int(self.career_indexs[1]) + ELECTIVES_CAMPUS_INCREMENT
-                )
-
-            specific_request_dict = self.__generate_specific_request_dict(id, event_value, idx)
-
-            # Add Oracle ADF-specific metadata for certain actions
-            if data_name == SELECT_ROW:
-                # Oracle ADF table selection requires viewport and selection metadata
-                # Format: {{table_id={{viewportSize=N,rows=M,selectedRowKeys=idx}}}}
-                specific_request_dict["oracle.adf.view.rich.DELTAS"] = (
-                    f"{{pt1:r1:0:t4={{viewportSize={len(self.__course_list) + 1},rows={len(self.__course_list)},selectedRowKeys={idx}}}}}"
-                )
-            elif data_name == COURSE_PAGE_LINK:
-                # Oracle ADF partial page rendering directive - re-render region
-                specific_request_dict["oracle.adf.view.rich.RENDER"] = ORACLE_ADF_RENDER_TARGET
-
-            return specific_request_dict
-        raise KeyError(f"Unknown data_name in DATA_MAP: {data_name}")
-
-
-# ============================================================================
-# Module-Level Helper Functions
-# ============================================================================
-
-
-def get_course_list(html: bytes | str) -> list[dict[str, str]]:
-    """Extract course list from Oracle ADF table HTML.
-
-    ## Args
-        html: Oracle ADF page HTML (bytes or string).
-
-    ## Returns
-        List of course dictionaries: [{course_code: course_name}, ...].
-
-    ## Note
-        Target: Oracle ADF table → <tr class="af_table_data-row"> elements.
-        Each row contains <span class="af_column_data-container"> for code and name.
-        First span = course code, second span = course name.
-
-        This function is outside SiaSession class to avoid circular import issues with SiaScraper.
-    """
-    html_content = html.decode("utf-8", errors="ignore") if isinstance(html, bytes) else html
-    html_parser = HtmlParser(html_content)
-
-    # Target: Oracle ADF table → <tr class="af_table_data-row"> (course rows)
-    rows = html_parser.find_all("tr", class_="af_table_data-row")
-
-    course_list = []
-    for row in rows:
-        # Target: Each row → <span class="af_column_data-container"> (course code & name)
-        data_spans = row.findall(".//span[@class='af_column_data-container']")
-
-        # Column indices: [0]=code, [1]=name
-        course_code = data_spans[COURSE_CODE_COL].text_content().strip()
-        course_name = data_spans[COURSE_NAME_COL].text_content().strip()
-
-        course_list.append({course_code: course_name})
-
-    return course_list
+        builder = OracleAdfRequestBuilder(self, self.request_dict)
+        return builder.build_request_body(data_name, idx)

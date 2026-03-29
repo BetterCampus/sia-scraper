@@ -12,7 +12,8 @@ from sia_scraper.constants import (
     SiaSessionStatus,
 )
 from sia_scraper.decorators import check_career
-from sia_scraper.session import SiaSession, SiaSessionException, get_course_list
+from sia_scraper.parsers import get_course_list
+from sia_scraper.session import SiaSession, SiaSessionException
 
 
 @pytest.fixture
@@ -359,13 +360,6 @@ class TestSessionLifecycle:
         assert "STATUS" in session_data
         assert session_data["STATUS"] == "CAREER_NOT_SET"
 
-    def test_get_session_data_internal_guard_with_wrapped(self):
-        """Exercise internal None-session guard in get_session_data implementation."""
-        session = SiaSession(init_session=False)
-        session._SiaSession__session = None  # type: ignore[attr-defined]
-        with pytest.raises(SiaSessionException.SessionNotSet):
-            SiaSession.get_session_data.__wrapped__(session)  # type: ignore[attr-defined]
-
     @patch("sia_scraper.session.EnhancedSession")
     @patch("sia_scraper.session.HtmlParser")
     def test_close_session(self, mock_HtmlParser, mock_session_class, mock_sia_initial_html):
@@ -392,13 +386,6 @@ class TestSessionLifecycle:
         assert session.career_code == ""
         assert session.course_list == []
         mock_session_instance.close.assert_called_once()
-
-    def test_close_session_internal_guard_with_wrapped(self):
-        """Exercise internal None-session guard in close_session implementation."""
-        session = SiaSession(init_session=False)
-        session._SiaSession__session = None  # type: ignore[attr-defined]
-        with pytest.raises(SiaSessionException.SessionNotSet):
-            SiaSession.close_session.__wrapped__(session)  # type: ignore[attr-defined]
 
     def test_session_not_set_raises_exception(self):
         """Test operations without session raise SessionNotSet."""
@@ -528,13 +515,6 @@ class TestHttpRequests:
         session = SiaSession(init_session=False)
         with pytest.raises(SiaSessionException.SessionNotSet):
             session.post_request({"k": "v"})
-
-    def test_post_request_internal_guard_with_wrapped(self):
-        """Exercise internal None-session guard in post_request implementation."""
-        session = SiaSession(init_session=False)
-        session._SiaSession__session = None  # type: ignore[attr-defined]
-        with pytest.raises(SiaSessionException.SessionNotSet):
-            SiaSession.post_request.__wrapped__.__wrapped__(session, {"k": "v"})  # type: ignore[attr-defined]
 
     def test_get_request_without_session_raises(self):
         session = SiaSession(init_session=False)

@@ -290,3 +290,36 @@ def from_xml(xml: str) -> HtmlParser:
         HtmlParser instance for XML parsing.
     """
     return HtmlParser(xml, parser="xml")
+
+
+def get_course_list(html: bytes | str) -> list[dict[str, str]]:
+    """Extract course list from Oracle ADF table HTML.
+
+    ## Args
+        html: Oracle ADF page HTML (bytes or string).
+
+    ## Returns
+        List of course dictionaries: [{course_code: course_name}, ...].
+
+    ## Note
+        Target: Oracle ADF table → <tr class="af_table_data-row"> elements.
+        Each row contains <span class="af_column_data-container"> for code and name.
+        First span = course code, second span = course name.
+    """
+    from sia_scraper.constants import COURSE_CODE_COL, COURSE_NAME_COL
+
+    html_content = html.decode("utf-8", errors="ignore") if isinstance(html, bytes) else html
+    html_parser = HtmlParser(html_content)
+
+    rows = html_parser.find_all("tr", class_="af_table_data-row")
+
+    course_list = []
+    for row in rows:
+        data_spans = row.findall(".//span[@class='af_column_data-container']")
+
+        course_code = data_spans[COURSE_CODE_COL].text_content().strip()
+        course_name = data_spans[COURSE_NAME_COL].text_content().strip()
+
+        course_list.append({course_code: course_name})
+
+    return course_list
