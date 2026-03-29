@@ -11,6 +11,7 @@ from sia_scraper.constants import (
     STUDY_LEVEL_DD,
     SiaSessionStatus,
 )
+from sia_scraper.decorators import check_career
 from sia_scraper.session import SiaSession, SiaSessionException, get_course_list
 
 
@@ -946,7 +947,7 @@ class TestSessionPersistence:
     def test_check_career_decorator_raises_when_not_set(self):
         session = SiaSession(init_session=False)
 
-        @SiaSession.check_career
+        @check_career
         def dummy(self):
             return "ok"
 
@@ -957,7 +958,7 @@ class TestSessionPersistence:
         session = SiaSession(init_session=False)
         session._SiaSession__career_code = "0-2-8-3"  # type: ignore[attr-defined]
 
-        @SiaSession.check_career
+        @check_career
         def dummy(self):
             return "ok"
 

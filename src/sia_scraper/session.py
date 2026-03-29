@@ -37,11 +37,7 @@ when processing courses at indices 0 and 1.
 
 import os
 import re
-from collections.abc import Callable
-from functools import wraps
-from typing import Any, ParamSpec, TypeVar, cast
-
-from requests.exceptions import ConnectionError, ReadTimeout, Timeout
+from typing import Any
 
 from .constants import (
     BACK_BTTN_ID,
@@ -86,11 +82,10 @@ from .constants import (
     TIPOLOGY_DD_ID,
     SiaSessionStatus,
 )
+from .decorators import check_session, check_status, handle_timeout_error
 from .enhanced_session import EnhancedSession
+from .exceptions import SiaSessionException
 from .parsers import HtmlParser
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 # ============================================================================
 # Debug Logging for Oracle ADF State Investigation
@@ -124,51 +119,6 @@ def _debug_log(message: str, data: str | dict | None = None) -> None:
             print(f"  Data: {data_str[:200]}..." if len(data_str) > 200 else f"  Data: {data}")
     else:
         print(f"{prefix} {message}")
-
-
-class SiaSessionException(Exception):
-    """Base exception for SIA session-related errors."""
-
-    class SessionNotSet(Exception):
-        """Raised when attempting session operations without an active session.
-
-        Resolution: Call init_session() or load_session(session_data) first.
-        """
-
-        def __init__(self) -> None:
-            """Initialize with instruction to start session."""
-            super().__init__("Must set session by create_session() or load_session(session_data)")
-
-    class CareerNotSet(Exception):
-        """Raised when attempting course operations without selecting a career.
-
-        Resolution: Call set_career(search_code) to navigate to a career page.
-        """
-
-        def __init__(self) -> None:
-            """Initialize with instruction to set career."""
-            super().__init__("Must set career by set_career(search_code)")
-
-    class TimeoutError(Exception):
-        """Raised when SIA HTTP requests exceed the configured timeout.
-
-        This typically indicates SIA server overload or network issues.
-        """
-
-        def __init__(self) -> None:
-            """Initialize with timeout message."""
-            super().__init__("Request to SIA took too long")
-
-    class InvalidStatus(Exception):
-        """Raised when attempting an action incompatible with current session state.
-
-        ## Example
-            Trying to exit_course_page() when STATUS != ON_COURSE_PAGE.
-        """
-
-        def __init__(self) -> None:
-            """Initialize with invalid status message."""
-            super().__init__("Invalid action to current SIA status")
 
 
 class SiaSession:
@@ -268,100 +218,6 @@ class SiaSession:
     def STATUS(self) -> SiaSessionStatus:
         """Current navigation state in the SIA workflow."""
         return self.__STATUS
-
-    ##################### DECORATORS #####################
-
-    @staticmethod
-    def check_session(func: Callable[P, R]) -> Callable[P, R]:
-        """Decorator: Ensures an active HTTP session exists before executing method.
-
-        ## Raises
-            SiaSessionException.SessionNotSet: If session is None
-        """
-
-        @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            """Execute method after checking session exists.
-
-            Raises SessionNotSet if __session is None.
-            """
-            self = cast("SiaSession", args[0])
-            if self.__session is None:
-                raise SiaSessionException.SessionNotSet from SiaSessionException
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    @staticmethod
-    def check_career(func: Callable[P, R]) -> Callable[P, R]:
-        """Decorator: Ensures a career has been selected before executing method.
-
-        ## Raises
-            SiaSessionException.CareerNotSet: If career_code is empty
-        """
-
-        @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            """Execute method after checking career is set.
-
-            Raises CareerNotSet if __career_code is empty.
-            """
-            self = cast("SiaSession", args[0])
-            if self.__career_code == "":
-                raise SiaSessionException.CareerNotSet from SiaSessionException
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    @staticmethod
-    def check_status(status: SiaSessionStatus) -> Callable[[Callable[P, R]], Callable[P, R]]:
-        """Decorator factory: Ensures session is in required status before executing.
-
-        ## Args
-            status: Required SiaSessionStatus for method execution
-
-        ## Returns
-            Decorator function that validates STATUS matches required value
-
-        ## Raises
-            SiaSessionException.InvalidStatus: If current STATUS != required status
-        """
-
-        def decorator(func: Callable[P, R]) -> Callable[P, R]:
-            """Apply status check to a function."""
-
-            @wraps(func)
-            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-                """Execute method after validating session STATUS."""
-                self = cast("SiaSession", args[0])
-                if self.__STATUS != status:
-                    raise SiaSessionException.InvalidStatus from SiaSessionException
-                return func(*args, **kwargs)
-
-            return wrapper
-
-        return decorator
-
-    @staticmethod
-    def handle_timeout_error(func: Callable[P, R]) -> Callable[P, R]:
-        """Decorator: Wraps HTTP operations and converts timeout exceptions.
-
-        ## Raises
-            SiaSessionException.TimeoutError: When requests timeout or connection fails
-        """
-
-        @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            """Execute method with timeout error handling.
-
-            Converts requests timeout/connection errors to SiaSessionException.TimeoutError.
-            """
-            try:
-                return func(*args, **kwargs)
-            except (Timeout, ReadTimeout, ConnectionError) as e:
-                raise SiaSessionException.TimeoutError from e
-
-        return wrapper
 
     ##################### METHODS #####################
 

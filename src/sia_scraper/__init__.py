@@ -78,9 +78,11 @@ without notice. Component IDs and request formats are brittle dependencies.
 
 from .constants import SiaSessionStatus
 from .date_formatter import DateFormatter
+from .decorators import check_career, check_session, check_status, handle_timeout_error
 from .enhanced_session import EnhancedSession
+from .exceptions import SiaSessionException
 from .scraper import SiaScraper, create_career_session, init_sia_scraper
-from .session import SiaSession, SiaSessionException
+from .session import SiaSession
 
 __all__ = [
     "SiaScraper",
@@ -89,6 +91,10 @@ __all__ = [
     "SiaSessionStatus",
     "EnhancedSession",
     "DateFormatter",
+    "check_career",
+    "check_session",
+    "check_status",
+    "handle_timeout_error",
     "init_sia_scraper",
     "create_career_session",
 ]
