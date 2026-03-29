@@ -21,6 +21,7 @@ dev = [
     "pytest-cov",
     "pyright",
     "lxml-stubs",
+    "pyyaml",
 ]
 
 [tool.setuptools.packages.find]
