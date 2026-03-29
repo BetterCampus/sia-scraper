@@ -1,0 +1,22 @@
+career:
+  code: "0-2-8-3"
+
+capture:
+  num_regular_courses: 5
+  num_elective_courses: 2
+  timeout: 30
+  include_electives: true
+
+sanitization:
+  enabled: true
+  sanitize_viewstate: true
+  sanitize_window_id: true
+  sanitize_page_id: false
+  sanitize_cookies: true
+
+error_scenarios:
+  capture_timeout: true
+
+output:
+  include_timestamp: true
+  keep_only_latest: true
