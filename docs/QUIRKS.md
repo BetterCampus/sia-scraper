@@ -124,3 +124,11 @@ reproducing consistently and is currently treated as state-drift related.
 - Keep `post_request()` as the only place where ViewState sync is guaranteed.
 - Avoid precomputing long request chains with a single stale request dictionary.
 - If scraping starts returning mismatched rows, verify ViewState and DELTAS first.
+
+## Module locations (v0.2.1+)
+
+Related implementation modules now live under `core/`:
+
+- `src/sia_scraper/core/adf_state.py`
+- `src/sia_scraper/core/oracle_adf_request.py`
+- `src/sia_scraper/core/exceptions.py`
