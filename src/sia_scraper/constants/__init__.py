@@ -74,7 +74,7 @@ from .business import (
     TIPOLOGY_VALUE_INDEX,
 )
 from .data_map import DATA_MAP, DROPDOWNS
-from .http import ADF_ADS_PAGE_ID, DEFAULT_TIMEOUT, SIA_BASE_URL, SIA_HEADERS
+from .http import ADF_ADS_PAGE_ID, DEFAULT_TIMEOUT, SIA_BASE_URL, SIA_HEADERS, VIEW_STATE_REGEX
 from .status import SiaSessionStatus
 
 __all__ = [
@@ -82,6 +82,7 @@ __all__ = [
     "DEFAULT_TIMEOUT",
     "SIA_BASE_URL",
     "SIA_HEADERS",
+    "VIEW_STATE_REGEX",
     # ADF IDs
     "ADF_ADS_PAGE_ID",
     "BACK_BTTN_ID",

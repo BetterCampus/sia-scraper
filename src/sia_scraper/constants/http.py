@@ -3,6 +3,8 @@
 This module defines HTTP-related constants for connecting to SIA's Oracle ADF backend.
 """
 
+import re
+
 DEFAULT_TIMEOUT: int = 15
 
 SIA_BASE_URL: str = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"
@@ -26,3 +28,7 @@ SIA_HEADERS: dict[str, str] = {
     "sec-fetch-site": "same-origin",
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
 }
+
+VIEW_STATE_REGEX: re.Pattern[bytes] = re.compile(
+    b'<input type="hidden" name="javax.faces.ViewState" value="(.*?)">'
+)
