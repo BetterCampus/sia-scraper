@@ -8,8 +8,7 @@ BeautifulSoup patterns, making migration straightforward while leveraging lxml's
 performance benefits.
 """
 
-from __future__ import annotations
-
+from abc import ABC, abstractmethod
 from typing import Any
 
 from lxml import etree, html
@@ -20,118 +19,22 @@ class HtmlParserError(Exception):
     """Base exception for HTML parsing errors."""
 
 
-class HtmlElement:
-    """Wrapper for lxml elements with BeautifulSoup-compatible interface.
+class BaseHtmlElement(ABC):
+    """Base class for HTML/XML element wrappers with shared search methods.
 
-    This class wraps lxml HtmlElement to provide methods like find(), find_all(),
-    findall(), text_content(), and css_select() that work like BeautifulSoup.
+    This abstract class provides common functionality for finding and selecting
+    elements using XPath and CSS selectors. Both HtmlElement and HtmlParser
+    inherit from this class to avoid code duplication.
     """
 
-    def __init__(self, element: html.HtmlElement) -> None:
-        self._element = element
-
-    def find(self, tag: str, **attrs: Any) -> HtmlElement | None:
-        """Find first matching element."""
-        elements = self.find_all(tag, **attrs)
-        return elements[0] if elements else None
-
-    def find_all(self, tag: str, **attrs: Any) -> list[HtmlElement]:
-        """Find all matching elements."""
-        xpath_parts = [f"descendant::{tag}"]
-        for key, value in attrs.items():
-            normalized_key = key.rstrip("_").replace("_", "-")
-            if normalized_key == "class":
-                xpath_parts.append(
-                    f"[contains(concat(' ', normalize-space(@class), ' '), ' {value} ')]"
-                )
-            else:
-                xpath_parts.append(f"[@{normalized_key}='{value}']")
-
-        xpath_expr = "".join(xpath_parts)
-        results = self._element.xpath(xpath_expr)
-        return [HtmlElement(r) for r in results]  # type: ignore[misc]
-
-    def findall(self, xpath: str) -> list[HtmlElement]:
-        """Find elements using XPath expression."""
-        results = self._element.xpath(xpath)
-        return [HtmlElement(r) for r in results]
-
-    def text_content(self) -> str:
-        """Get all text content."""
-        return self._element.text_content() or ""
-
-    def css_select(self, selector: str) -> list[HtmlElement]:
-        """Find elements using CSS selector."""
-        sel = CSSSelector(selector)
-        return [HtmlElement(el) for el in sel(self._element)]  # type: ignore[misc]
-
-    def get(self, attr: str, default: str | None = None) -> str | None:
-        """Get element attribute."""
-        return self._element.get(attr, default)
-
     @property
-    def text(self) -> str:
-        """Get text content of element (like BeautifulSoup)."""
-        return self._element.text or ""
+    @abstractmethod
+    def _element(self) -> html.HtmlElement:
+        """Return the underlying lxml element for search operations."""
+        ...
 
-    def getnext(self) -> HtmlElement | None:
-        """Get next sibling element."""
-        sibling = self._element.getnext()
-        return HtmlElement(sibling) if sibling is not None else None
-
-    @property
-    def parent(self) -> HtmlElement | None:
-        """Get parent element."""
-        parent = self._element.getparent()
-        return HtmlElement(parent) if parent is not None else None
-
-    def __iter__(self):
-        return iter([HtmlElement(child) for child in self._element])
-
-    def __len__(self) -> int:
-        return len(self._element)
-
-    def __getitem__(self, index: int) -> html.HtmlElement:
-        return self._element[index]
-
-
-class HtmlParser:
-    """HTML/XML parser using lxml with BeautifulSoup-compatible interface.
-
-    This class provides a simplified interface for common HTML parsing operations,
-    combining lxml's speed with familiar method names.
-
-    ## Example
-        >>> parser = HtmlParser('<html><body><div id="main">Content</div></body></html>')
-        >>> div = parser.find("div", id="main")
-        >>> print(div.text_content())
-        Content
-    """
-
-    def __init__(self, xml: str, parser: str = "html") -> None:
-        """Initialize parser with XML content.
-
-        ## Args
-            xml: HTML/XML string to parse.
-            parser: Parser to use - "html" (default) or "xml".
-                Use "xml" for strict XML parsing.
-
-        ## Raises
-            HtmlParserError: If parsing fails.
-        """
-        from lxml import etree
-
-        self._parser_type = parser
-        try:
-            if parser == "xml":
-                self._root = etree.fromstring(xml.encode("utf-8"))
-            else:
-                self._root = html.fromstring(xml)
-        except etree.XMLSyntaxError as e:
-            raise HtmlParserError(f"Failed to parse XML: {e}") from e
-
-    def find(self, tag: str, **attrs: Any) -> HtmlElement | None:
-        """Find first matching element (like BeautifulSoup's find).
+    def find(self, tag: str, **attrs: Any) -> "HtmlElement | None":
+        """Find first matching element.
 
         ## Args
             tag: HTML tag name (e.g., "div", "span", "h2").
@@ -141,14 +44,14 @@ class HtmlParser:
             First matching element wrapped in HtmlElement, or None if not found.
 
         ## Example
-            >>> parser.find("div", id="main")
+            >>> element.find("div", id="main")
             <HtmlElement div>
         """
         elements = self.find_all(tag, **attrs)
         return elements[0] if elements else None
 
-    def find_all(self, tag: str, **attrs: Any) -> list[HtmlElement]:
-        """Find all matching elements (like BeautifulSoup's find_all).
+    def find_all(self, tag: str, **attrs: Any) -> list["HtmlElement"]:
+        """Find all matching elements.
 
         ## Args
             tag: HTML tag name (e.g., "div", "span", "tr").
@@ -175,22 +78,10 @@ class HtmlParser:
                 xpath_parts.append(f"[@{normalized_key}='{value}']")
 
         xpath_expr = "".join(xpath_parts)
-        results = self._root.xpath(xpath_expr)
+        results = self._element.xpath(xpath_expr)
         return [HtmlElement(r) for r in results]  # type: ignore[misc]
 
-    def findall(self, xpath: str) -> list[HtmlElement]:
-        """Find elements using XPath expression.
-
-        ## Args
-            xpath: XPath expression.
-
-        ## Returns
-            List of HtmlElement wrappers.
-        """
-        results = self._root.xpath(xpath)
-        return [HtmlElement(r) for r in results]  # type: ignore[misc]
-
-    def find_by_xpath(self, xpath: str) -> list[HtmlElement]:
+    def findall(self, xpath: str) -> list["HtmlElement"]:
         """Find elements using XPath expression.
 
         ## Args
@@ -200,13 +91,13 @@ class HtmlParser:
             List of HtmlElement wrappers.
 
         ## Example
-            >>> parser.find_by_xpath("//div[@class='container']//span")
+            >>> element.findall("//div[@class='container']//span")
         """
-        results = self._root.xpath(xpath)
+        results = self._element.xpath(xpath)
         return [HtmlElement(r) for r in results]  # type: ignore[misc]
 
-    def css_select(self, selector: str) -> list[HtmlElement]:
-        """Find elements using CSS selector (via cssselect).
+    def css_select(self, selector: str) -> list["HtmlElement"]:
+        """Find elements using CSS selector.
 
         ## Args
             selector: CSS selector string.
@@ -215,11 +106,98 @@ class HtmlParser:
             List of HtmlElement wrappers.
 
         ## Example
-            >>> parser.css_select("div.container > span.title")
+            >>> element.css_select("div.container > span.title")
         """
         sel = CSSSelector(selector)
-        results = sel(self._root)
-        return [HtmlElement(r) for r in results]  # type: ignore[misc]
+        return [HtmlElement(el) for el in sel(self._element)]  # type: ignore[misc]
+
+
+class HtmlElement(BaseHtmlElement):
+    """Wrapper for lxml elements with BeautifulSoup-compatible interface.
+
+    This class wraps lxml HtmlElement to provide methods like find(), find_all(),
+    findall(), text_content(), and css_select() that work like BeautifulSoup.
+    """
+
+    def __init__(self, element: html.HtmlElement) -> None:
+        self.__element = element
+
+    @property
+    def _element(self) -> html.HtmlElement:
+        """Return the underlying lxml element for search operations."""
+        return self.__element
+
+    def text_content(self) -> str:
+        """Get all text content."""
+        return self.__element.text_content() or ""
+
+    def get(self, attr: str, default: str | None = None) -> str | None:
+        """Get element attribute."""
+        return self.__element.get(attr, default)
+
+    @property
+    def text(self) -> str:
+        """Get text content of element (like BeautifulSoup)."""
+        return self.__element.text or ""
+
+    def getnext(self) -> "HtmlElement | None":
+        """Get next sibling element."""
+        sibling = self.__element.getnext()
+        return HtmlElement(sibling) if sibling is not None else None
+
+    @property
+    def parent(self) -> "HtmlElement | None":
+        """Get parent element."""
+        parent = self.__element.getparent()
+        return HtmlElement(parent) if parent is not None else None
+
+    def __iter__(self):
+        return iter([HtmlElement(child) for child in self.__element])
+
+    def __len__(self) -> int:
+        return len(self.__element)
+
+    def __getitem__(self, index: int) -> html.HtmlElement:
+        return self.__element[index]
+
+
+class HtmlParser(BaseHtmlElement):
+    """HTML/XML parser using lxml with BeautifulSoup-compatible interface.
+
+    This class provides a simplified interface for common HTML parsing operations,
+    combining lxml's speed with familiar method names.
+
+    ## Example
+        >>> parser = HtmlParser('<html><body><div id="main">Content</div></body></html>')
+        >>> div = parser.find("div", id="main")
+        >>> print(div.text_content())
+        Content
+    """
+
+    def __init__(self, xml: str, parser: str = "html") -> None:
+        """Initialize parser with XML content.
+
+        ## Args
+            xml: HTML/XML string to parse.
+            parser: Parser to use - "html" (default) or "xml".
+                Use "xml" for strict XML parsing.
+
+        ## Raises
+            HtmlParserError: If parsing fails.
+        """
+        self._parser_type = parser
+        try:
+            if parser == "xml":
+                self._root = etree.fromstring(xml.encode("utf-8"))
+            else:
+                self._root = html.fromstring(xml)
+        except etree.XMLSyntaxError as e:
+            raise HtmlParserError(f"Failed to parse XML: {e}") from e
+
+    @property
+    def _element(self) -> html.HtmlElement:
+        """Return the root element for search operations."""
+        return self._root
 
     def text_content(self) -> str:
         """Get all text content of element and its descendants.
@@ -229,7 +207,7 @@ class HtmlParser:
         """
         return etree.tostring(self._root, method="text", encoding="unicode")  # type: ignore[return-value]
 
-    def children(self) -> list[HtmlElement]:
+    def children(self) -> list["HtmlElement"]:
         """Get direct child elements.
 
         ## Returns
@@ -237,7 +215,7 @@ class HtmlParser:
         """
         return [HtmlElement(child) for child in self._root]
 
-    def next_sibling(self) -> HtmlElement | None:
+    def next_sibling(self) -> "HtmlElement | None":
         """Get the next sibling element.
 
         ## Returns
