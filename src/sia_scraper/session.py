@@ -574,9 +574,7 @@ class SiaSession:
                 xml = response.text
                 parser = HtmlParser(xml)
                 # Dropdown first option is "Select..." placeholder, offset by 1
-                dropdown_elements = parser.find_by_xpath(
-                    f'//*[@id="{data_map.DROPDOWNS[3]}"]/option'
-                )
+                dropdown_elements = parser.findall(f'//*[@id="{data_map.DROPDOWNS[3]}"]/option')
                 if not dropdown_elements:
                     raise SiaSessionException.CareerNotSet from ValueError(
                         "Career dropdown not found"

@@ -1004,7 +1004,7 @@ class TestSessionPersistence:
             mock_parser = MagicMock()
             mock_parser.find.return_value = None
             mock_parser.find_all.return_value = []
-            mock_parser.find_by_xpath.return_value = []
+            mock_parser.findall.return_value = []
             mock_HtmlParser.return_value = mock_parser
             with pytest.raises(SiaSessionException.CareerNotSet):
                 session.set_career("0-2-8-3")
