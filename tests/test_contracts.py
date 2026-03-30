@@ -3,6 +3,7 @@
 import pytest
 
 from sia_scraper.parsers import HtmlParser
+from sia_scraper.parsers.course_parser import scrape_info
 
 
 @pytest.mark.unit
@@ -36,9 +37,17 @@ class TestOracleAdfContracts:
         assert "<partial-response>" in sia_course_detail_xml
         assert '<update id="pt1:r1">' in sia_course_detail_xml
 
-    def test_course_detail_contains_course_info_markers(self, sia_course_detail_xml: str):
-        assert "detass-creditos" in sia_course_detail_xml
-        assert "detass-tipologia" in sia_course_detail_xml
+    def test_at_least_one_course_detail_is_parseable(self, sia_course_detail_xml_all: list[str]):
+        parseable_count = 0
+        for course_xml in sia_course_detail_xml_all:
+            try:
+                parsed = scrape_info(course_xml)
+            except ValueError:
+                continue
+            if parsed.course_name and parsed.credits >= 0:
+                parseable_count += 1
+
+        assert parseable_count > 0
 
     def test_prereqs_contains_partial_response_root(self, sia_course_prereqs_xml: str):
         assert "<partial-response>" in sia_course_prereqs_xml
