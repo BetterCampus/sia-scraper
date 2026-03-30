@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Refactored
+
+- **Smart Models, Dumb Parser**: Moved data cleaning and transformation logic from `course_parser.py` into Pydantic model validators
+  - `Schedule`: Added `classroom` cleaning validator
+  - `Group`: Added validators for `group_name`, `teacher`, `faculty`, `duration`, `schedule_type`
+  - `CourseInfo`: Added validators for `course_name` and `typology`
+  - `CoursePrereqs`: Added code extraction from course_name and typology cleaning
+  - Parser now passes raw values, models handle all cleaning/defaults
+  - Single Responsibility: Parser extracts HTML, models validate and transform
+
 ## [1.0.0] - 2026-03-30
 
 ### Added

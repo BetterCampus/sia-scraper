@@ -5,6 +5,8 @@ returned by SIA scraper functions, replacing implicit dict structures with
 type-safe Pydantic models for runtime validation.
 """
 
+import re
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -24,6 +26,15 @@ class Schedule(BaseModel):
     start_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="Start time in HH:MM format")
     end_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="End time in HH:MM format")
     classroom: str = Field(default="", description="Classroom location")
+
+    @field_validator("classroom", mode="before")
+    @classmethod
+    def clean_classroom(cls, v: str | None) -> str:
+        """Clean and normalize classroom value."""
+        if v is None:
+            return ""
+        cleaned = str(v).strip()
+        return cleaned if cleaned else ""
 
     @field_validator("end_time")
     @classmethod
@@ -63,6 +74,51 @@ class Group(BaseModel):
     spots: int | None = Field(default=None, ge=0, description="Available spots")
     code: str | None = Field(default=None, description="7-digit course code")
 
+    @field_validator("group_name", mode="before")
+    @classmethod
+    def clean_group_name(cls, v: str | None) -> str:
+        """Clean and set default for group_name."""
+        if v is None:
+            return "Unknown"
+        cleaned = str(v).strip()
+        return cleaned if cleaned else "Unknown"
+
+    @field_validator("teacher", mode="before")
+    @classmethod
+    def clean_teacher(cls, v: str | None) -> str:
+        """Clean and set default for teacher."""
+        if v is None:
+            return "Not reported"
+        cleaned = str(v).strip()
+        return cleaned if cleaned else "Not reported"
+
+    @field_validator("faculty", mode="before")
+    @classmethod
+    def clean_faculty(cls, v: str | None) -> str:
+        """Clean and set default for faculty."""
+        if v is None:
+            return "Unknown"
+        cleaned = str(v).strip()
+        return cleaned if cleaned else "Unknown"
+
+    @field_validator("duration", mode="before")
+    @classmethod
+    def clean_duration(cls, v: str | None) -> str:
+        """Clean and set default for duration."""
+        if v is None:
+            return "Unknown"
+        cleaned = str(v).strip()
+        return cleaned if cleaned else "Unknown"
+
+    @field_validator("schedule_type", mode="before")
+    @classmethod
+    def clean_schedule_type(cls, v: str | None) -> str:
+        """Clean and set default for schedule_type."""
+        if v is None:
+            return "Unknown"
+        cleaned = str(v).strip()
+        return cleaned if cleaned else "Unknown"
+
     @field_validator("code")
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
@@ -100,6 +156,26 @@ class CourseInfo(BaseModel):
     )
     groups: list[Group] = Field(default_factory=list, description="List of course groups")
     code: str | None = Field(default=None, description="7-digit course code")
+
+    @field_validator("course_name", mode="before")
+    @classmethod
+    def clean_course_name(cls, v: str | None) -> str:
+        """Clean course name value."""
+        if v is None:
+            raise ValueError("course_name cannot be None")
+        cleaned = str(v).strip()
+        if not cleaned:
+            raise ValueError("course_name cannot be empty")
+        return cleaned
+
+    @field_validator("typology", mode="before")
+    @classmethod
+    def clean_typology(cls, v: str | None) -> str:
+        """Clean and set default for typology."""
+        if v is None:
+            return "Unknown"
+        cleaned = str(v).strip()
+        return cleaned if cleaned else "Unknown"
 
     @field_validator("code")
     @classmethod
@@ -167,6 +243,21 @@ class CoursePrereqs(BaseModel):
         default_factory=list, description="List of prerequisite conditions"
     )
 
+    @field_validator("code", mode="before")
+    @classmethod
+    def extract_code_from_name(cls, v: str | None, info) -> str | None:
+        """Extract course code from course_name if code not explicitly provided."""
+        if v is not None:
+            return v
+        course_name = info.data.get("course_name")
+        if course_name:
+            match = re.search(r"\((\d+)\)$", str(course_name).strip())
+            if match:
+                code = match.group(1)
+                if len(code) == 7 and code.isdigit():
+                    return code
+        return None
+
     @field_validator("code")
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
@@ -176,6 +267,19 @@ class CoursePrereqs(BaseModel):
         if not v.isdigit() or len(v) != 7:
             raise ValueError(f"Course code must be 7 digits, got '{v}'")
         return v
+
+    @field_validator("typology", mode="before")
+    @classmethod
+    def clean_typology(cls, v: str | None) -> str:
+        """Clean and set default for typology."""
+        if v is None:
+            return "Unknown"
+        cleaned = str(v).strip()
+        if not cleaned:
+            return "Unknown"
+        if ": " in cleaned:
+            cleaned = cleaned.split(": ")[-1]
+        return cleaned
 
 
 class SessionState(BaseModel):
