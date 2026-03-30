@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **HTTP Resilience with tenacity**: Automatic retry logic for network failures
+  - 3 retry attempts with exponential backoff (2s → 4s → 8s, max 10s)
+  - Retries on: `Timeout`, `ReadTimeout`, `ConnectionError`
+  - Applied to: `post_request()`, `get_request()`
+  - Final failure converts to `SiaSessionException.TimeoutError`
+- **Production Logging with loguru**: Structured logging with rotation and retention
+  - Log files: `logs/sia_scraper_YYYY-MM-DD.log` (10 MB rotation, 7-day retention)
+  - Error logs: `logs/sia_scraper_errors_YYYY-MM-DD.log` (14-day retention)
+  - Console output when `SIA_DEBUG=1`
+  - New logging functions: `debug_log()`, `info_log()`, `error_log()`
+- **lxml 5.x**: Upgraded from lxml 4.9 to 5.2 for improved parsing performance
+
 ### Refactored
 
 - **Smart Models, Dumb Parser**: Moved data cleaning and transformation logic from `course_parser.py` into Pydantic model validators
