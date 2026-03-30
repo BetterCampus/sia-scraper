@@ -895,6 +895,39 @@ class TestScrapeCourses:
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.scrape_courses(courses_codes=["1000001", "9999999"])
 
+    @patch("sia_scraper.scraper.SiaSession")
+    def test_scrape_courses_sorted_indices_maintain_code_alignment(
+        self, mock_session_class, sample_course_xml
+    ):
+        """Test that sorting indices doesn't cause code misalignment.
+
+        When scrape_courses receives unsorted indices and codes, they must
+        remain correctly paired after sorting. This was a critical bug
+        where indices were sorted but codes were not.
+        """
+        mock_session = MagicMock()
+        mock_session.STATUS = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = [
+            "1000001 - Calculo",
+            "1000002 - Algebra",
+            "1000003 - Fisica",
+            "1000004 - Quimica",
+        ]
+        mock_session.get_course_xml = MagicMock(return_value=sample_course_xml)
+        mock_session_class.return_value = mock_session
+
+        scraper = SiaScraper(init_session=False)
+        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+
+        result = scraper.scrape_courses(
+            courses_indices=[3, 1, 2], courses_codes=["QUIMICA", "ALGEBRA", "FISICA"]
+        )
+
+        assert len(result) == 3
+        assert result[0].code == "ALGEBRA"
+        assert result[1].code == "FISICA"
+        assert result[2].code == "QUIMICA"
+
 
 @pytest.mark.unit
 class TestMethodChaining:

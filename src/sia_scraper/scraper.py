@@ -272,6 +272,7 @@ class SiaScraper:
 
         ## Note
             Sorts indices before scraping for more efficient sequential access.
+            Pairs indices with codes before sorting to prevent misalignment.
         """
         if courses_indices is None:
             courses_indices = []
@@ -281,11 +282,14 @@ class SiaScraper:
         if courses_indices == []:
             courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
-        courses_indices.sort()
-        courses = [self.get_course_info(course_index) for course_index in courses_indices]
+        paired = list(zip(courses_indices, courses_codes))
+        paired.sort(key=lambda x: x[0])
 
-        for i, course in enumerate(courses):
-            course.code = courses_codes[i]
+        courses: list[CourseInfo] = []
+        for index, code in paired:
+            course = self.get_course_info(index)
+            course.code = code
+            courses.append(course)
 
         return courses
 
