@@ -12,15 +12,15 @@ Usage:
 import argparse
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from sia_scraper.core import extract_view_state
 from sia_scraper.parsers import scrape_info, scrape_prereqs
 from sia_scraper.parsers.html_parser import HtmlParser
-from sia_scraper.core import extract_view_state
-
 
 FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
 
@@ -44,7 +44,7 @@ def time_function(
     times = []
     for _ in range(iterations):
         start = time.perf_counter()
-        result = func(*args, **kwargs)
+        func(*args, **kwargs)
         end = time.perf_counter()
         times.append(end - start)
 

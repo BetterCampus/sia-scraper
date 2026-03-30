@@ -15,7 +15,6 @@ Usage:
 
 import argparse
 import cProfile
-import io
 import json
 import os
 import sys
@@ -35,10 +34,9 @@ except ImportError:
     import pstats
     from pstats import SortKey
 
-from sia_scraper.parsers import scrape_info, scrape_prereqs
-from sia_scraper.parsers.html_parser import HtmlParser
 from sia_scraper.core import extract_view_state
-
+from sia_scraper.parsers import scrape_info
+from sia_scraper.parsers.html_parser import HtmlParser
 
 FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
 
