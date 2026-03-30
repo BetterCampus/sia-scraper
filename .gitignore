@@ -19,3 +19,5 @@ build/
 .github/copilot-instructions.md
 AGENTS.md
 .obsidian/
+
+logs/

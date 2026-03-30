@@ -80,7 +80,13 @@ from .constants import SiaSessionStatus
 from .core import EnhancedSession, SiaSessionException
 from .scraper import SiaScraper, create_career_session, init_sia_scraper
 from .session import SiaSession
-from .utils import check_session, check_status, format_date, handle_timeout_error
+from .utils import (
+    check_session,
+    check_status,
+    format_date,
+    handle_timeout_error,
+    handle_timeout_with_retry,
+)
 
 __all__ = [
     "SiaScraper",
@@ -92,6 +98,7 @@ __all__ = [
     "check_session",
     "check_status",
     "handle_timeout_error",
+    "handle_timeout_with_retry",
     "init_sia_scraper",
     "create_career_session",
 ]
