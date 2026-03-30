@@ -6,6 +6,7 @@ responses returned by SIA's web interface.
 
 import re
 from datetime import datetime
+from typing import Any
 
 from ..constants.business import (
     GROUP_DURATION_INDEX,
@@ -79,14 +80,26 @@ def _extract_typology(parser: HtmlParser) -> str:
     tipology_spans = tipology_elem.findall(".//span")
     if not tipology_spans:
         return "Unknown"
-    return tipology_spans[-1].text_content().strip()
+    return _safe_text_content(tipology_spans[-1], fallback="Unknown")
 
 
-def _extract_label_value(item: HtmlElement) -> str:
+def _safe_text_content(element: Any, fallback: str = "") -> str:
+    """Safely extract text content from an element, ensuring a string return."""
+    if element is None:
+        return fallback
+    try:
+        text = element.text_content()
+        return str(text).strip() if text else fallback
+    except (AttributeError, TypeError):
+        return fallback
+
+
+def _extract_label_value(item: HtmlElement, fallback: str = "Unknown") -> str:
     spans = item.findall(".//span")
     if not spans:
-        return "Unknown"
-    return spans[-1].text_content().strip()
+        return fallback
+    value = spans[-1].text_content().strip()
+    return value if value else fallback
 
 
 def _extract_schedules(group_data: list[HtmlElement]) -> list[Schedule]:
@@ -149,11 +162,13 @@ def _extract_spots(group_data: list[HtmlElement]) -> int | None:
 def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
     """Extract one group from a group container."""
     parent_group = group.parent
+    group_name = "Unknown"
     if parent_group is not None:
         h2_elem = parent_group.find("h2", class_="af_showDetailHeader_title-text0")
-        group_name = h2_elem.text_content().strip() if h2_elem is not None else "Unknown"
-    else:
-        group_name = "Unknown"
+        if h2_elem is not None:
+            group_name_value = h2_elem.text_content().strip()
+            if group_name_value:
+                group_name = group_name_value
 
     panel_div = group.find("div", class_="af_panelGroupLayout")
     if panel_div is None:
@@ -164,7 +179,8 @@ def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
         return None
 
     teacher_spans = group_data[GROUP_TEACHER_INDEX].findall(".//span")
-    teacher = teacher_spans[-1].text_content().strip() if teacher_spans else "Not reported"
+    teacher_value = teacher_spans[-1].text_content().strip() if teacher_spans else ""
+    teacher = teacher_value if teacher_value else "Not reported"
     faculty = (
         _extract_label_value(group_data[GROUP_FACULTY_INDEX])
         if len(group_data) > GROUP_FACULTY_INDEX
@@ -256,19 +272,20 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
     h2_elements = parser.find_all("h2")
     if not h2_elements:
         raise ValueError("Course name element not found in prerequisites XML")
-    course_name = h2_elements[0].text_content()
+    course_name = _safe_text_content(h2_elements[0])
 
     credits = _extract_credits(parser)
 
-    if not isinstance(course_name, str):
+    match = re.search(r"\((\d+)\)$", course_name.strip())
+    course_code = match.group(1) if match else ""
+
+    if course_code and (len(course_code) != 7 or not course_code.isdigit()):
         course_code = ""
-    else:
-        match = re.search(r"\((\d+)\)$", course_name.strip())
-        course_code = match.group(1) if match else ""
 
     tipology_elements = parser.find_all("span", class_="detass-tipologia")
     if tipology_elements:
-        typology = tipology_elements[0].text_content().split(": ")[-1]
+        typology_raw = _safe_text_content(tipology_elements[0])
+        typology = typology_raw.split(": ")[-1] if typology_raw else "Unknown"
     else:
         typology = "Unknown"
 
@@ -295,10 +312,10 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
             continue
 
         prereq_values = [
-            condition_values_spans[0].text_content().strip() if condition_values_spans[0] else "",
-            condition_values_spans[1].text_content().strip() if condition_values_spans[1] else "",
-            condition_values_spans[2].text_content().strip() if condition_values_spans[2] else "",
-            condition_values_spans[3].text_content().strip() if condition_values_spans[3] else "",
+            _safe_text_content(condition_values_spans[0]),
+            _safe_text_content(condition_values_spans[1]),
+            _safe_text_content(condition_values_spans[2]),
+            _safe_text_content(condition_values_spans[3]),
         ]
 
         prereqs: list[Prerequisite] = []
@@ -310,9 +327,9 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
                 continue
 
             prereq_code_span = prereq_code_spans[0]
-            prereq_code = prereq_code_span.text_content()
+            prereq_code = _safe_text_content(prereq_code_span)
             next_sibling = prereq_code_span.getnext()
-            prereq_name = next_sibling.text_content().strip() if next_sibling is not None else ""
+            prereq_name = _safe_text_content(next_sibling)
 
             prereqs.append(Prerequisite(course_code=prereq_code, course_name=prereq_name))
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sia-scraper"
-version = "0.2.1"
+version = "1.0.0"
 description = "Library to extract academic information from the SIA"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,7 @@ dependencies = [
     "requests~=2.32.3",
     "lxml~=4.9.2",
     "cssselect~=1.2.0",
+    "pydantic>=2.0,<3.0",
 ]
 
 [project.optional-dependencies]

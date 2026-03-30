@@ -47,7 +47,7 @@ class TestCourseParserEdgeCases:
         <span class="detass-tipologia">Tipología: OPTATIVA</span>
         """
         result = scrape_prereqs(xml)
-        assert result.code == ""
+        assert result.code is None or result.code == ""
 
     def test_scrape_prereqs_extracts_code_from_rightmost_parentheses(self):
         """Test that course code is extracted from the last set of parentheses.

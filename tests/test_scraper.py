@@ -592,7 +592,7 @@ class TestScrapeInfo:
 
         with (
             patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
-            patch("sia_scraper.parsers.course_parser.format_date", return_value="now"),
+            patch("sia_scraper.parsers.course_parser.format_date", return_value="2026-03-30 10:00"),
         ):
             result = scrape_info("<xml/>")
         assert result.groups[0].teacher == "Not reported"
@@ -672,7 +672,7 @@ class TestScrapeInfo:
 
         with (
             patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser),
-            patch("sia_scraper.parsers.course_parser.format_date", return_value="now"),
+            patch("sia_scraper.parsers.course_parser.format_date", return_value="2026-03-30 10:00"),
         ):
             result = scrape_info("<xml/>")
         assert result.groups[0].schedules == []

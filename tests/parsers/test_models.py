@@ -36,8 +36,8 @@ class TestGroupModel:
 
     def test_group_fields_with_spots_and_code(self) -> None:
         schedules = [
-            Schedule("MARTES", "10:00", "12:00", "301-202"),
-            Schedule("JUEVES", "10:00", "12:00", "301-202"),
+            Schedule(day="MARTES", start_time="10:00", end_time="12:00", classroom="301-202"),
+            Schedule(day="JUEVES", start_time="10:00", end_time="12:00", classroom="301-202"),
         ]
         group = Group(
             group_name="1",
@@ -83,7 +83,9 @@ class TestCourseInfoModel:
             teacher="Docente",
             faculty="Ingenieria",
             course_name="Programacion",
-            schedules=[Schedule("VIERNES", "08:00", "10:00", "A-101")],
+            schedules=[
+                Schedule(day="VIERNES", start_time="08:00", end_time="10:00", classroom="A-101")
+            ],
             duration="16 SEMANAS",
             schedule_type="DIURNA",
             spots=5,

@@ -323,13 +323,13 @@ class TestSessionLifecycle:
         session = SiaSession(init_session=True)
         session_data = session.get_session_data()
 
-        assert "session_headers" in session_data
-        assert "session_cookies" in session_data
-        assert "params" in session_data
-        assert "javax_faces_ViewState" in session_data
-        assert "career_code" in session_data
-        assert "STATUS" in session_data
-        assert session_data["STATUS"] == "CAREER_NOT_SET"
+        assert hasattr(session_data, "session_headers")
+        assert hasattr(session_data, "session_cookies")
+        assert hasattr(session_data, "params")
+        assert hasattr(session_data, "javax_faces_ViewState")
+        assert hasattr(session_data, "career_code")
+        assert hasattr(session_data, "STATUS")
+        assert session_data.STATUS == "CAREER_NOT_SET"
 
     @patch("sia_scraper.session.EnhancedSession")
     @patch("sia_scraper.session.HtmlParser")

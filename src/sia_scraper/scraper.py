@@ -25,6 +25,7 @@ from typing import Any
 from .constants import http, status
 from .core import SiaSessionException
 from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
+from .parsers.models import SessionState
 from .session import SiaSession
 
 
@@ -121,11 +122,11 @@ class SiaScraper:
         self._sia_session.load_session(session_data)
         return self
 
-    def get_session_data(self) -> dict:
+    def get_session_data(self) -> SessionState:
         """Serialize current session state for later restoration.
 
         ## Returns
-            Dictionary containing session cookies, Oracle ADF tokens, and career context.
+            SessionState containing session cookies, Oracle ADF tokens, and career context.
             Can be passed to load_session() to restore the session.
 
         ## Note
@@ -288,7 +289,7 @@ class SiaScraper:
         courses: list[CourseInfo] = []
         for index, code in paired:
             course = self.get_course_info(index)
-            course.code = code
+            course = course.model_copy(update={"code": code})
             courses.append(course)
 
         return courses

@@ -21,6 +21,7 @@ from .models import (
     PrereqCondition,
     Prerequisite,
     Schedule,
+    SessionState,
 )
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     "PrereqCondition",
     "Prerequisite",
     "Schedule",
+    "SessionState",
 ]
