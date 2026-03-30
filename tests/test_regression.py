@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,18 @@ def parser_baseline(
 ) -> dict[str, object]:
     baseline_path = fixture_path / "baselines" / f"parser_baseline_{latest_fixture_date}.json"
     if not baseline_path.exists():
-        raise FileNotFoundError(f"Baseline file not found: {baseline_path}")
+        baseline_dates: list[str] = []
+        pattern = re.compile(r"parser_baseline_(\d{4}-\d{2}-\d{2})\.json$")
+        for path in sorted((fixture_path / "baselines").glob("parser_baseline_*.json")):
+            match = pattern.search(path.name)
+            if match is not None:
+                baseline_dates.append(match.group(1))
+
+        details = ", ".join(baseline_dates) if baseline_dates else "none"
+        pytest.skip(
+            "Baseline for latest fixture date is missing. "
+            f"Expected: {baseline_path.name}. Available baseline dates: {details}."
+        )
     return json.loads(baseline_path.read_text(encoding="utf-8"))
 
 

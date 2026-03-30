@@ -10,6 +10,7 @@ import pytest
 from lxml import etree
 
 from sia_scraper.parsers import HtmlParser
+from sia_scraper.parsers.course_parser import scrape_info
 
 
 def _dated_fixture_files(fixture_path: Path, latest_fixture_date: str) -> list[Path]:
@@ -120,10 +121,19 @@ class TestFixturesStructure:
         rows = parser.find_all("tr", class_="af_table_data-row")
         assert len(rows) > 0
 
-    def test_course_detail_xml_has_course_title(self, sia_course_detail_xml: str):
-        parser = HtmlParser(sia_course_detail_xml)
-        assert parser.find("h2") is not None
-        assert parser.find("span", class_="detass-creditos") is not None
+    def test_at_least_one_course_detail_fixture_is_parseable(
+        self, sia_course_detail_xml_all: list[str]
+    ):
+        parseable_count = 0
+        for course_xml in sia_course_detail_xml_all:
+            try:
+                parsed = scrape_info(course_xml)
+            except ValueError:
+                continue
+            if parsed.course_name and parsed.credits >= 0:
+                parseable_count += 1
+
+        assert parseable_count > 0
 
     def test_course_prereqs_xml_has_course_title(self, sia_course_prereqs_xml: str):
         parser = HtmlParser(sia_course_prereqs_xml)

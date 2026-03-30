@@ -112,6 +112,9 @@ Notes:
 - Capture configuration lives in `scripts/capture_config.yaml`.
 - The capture script keeps only latest date-stamped fixtures by default.
 - Captured data is sanitized before writing files.
+- Parser baselines are auto-generated during fixture capture and stored in
+  `tests/fixtures/baselines/`; if baseline generation fails, regression tests skip
+  with a clear message until a baseline is available for the latest fixture date.
 
 ## Linting, Formatting, and Type Checking
 

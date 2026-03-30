@@ -25,6 +25,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - runtime dependency mess
 from sia_scraper import SiaScraper
 from sia_scraper.constants import SIA_BASE_URL
 from sia_scraper.core import SiaSessionException
+from sia_scraper.parsers import scrape_info, scrape_prereqs
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ def ensure_directories(fixtures_root: Path) -> None:
     (fixtures_root / "html").mkdir(parents=True, exist_ok=True)
     (fixtures_root / "xml").mkdir(parents=True, exist_ok=True)
     (fixtures_root / "json").mkdir(parents=True, exist_ok=True)
+    (fixtures_root / "baselines").mkdir(parents=True, exist_ok=True)
 
 
 def build_filename(base_name: str, extension: str, with_date: bool) -> str:
@@ -304,6 +306,90 @@ def capture_adf_error_response(config: CaptureConfig, replacements: dict[str, st
     return sanitize_text(error_xml, replacements, config.sanitization_enabled)
 
 
+def build_parser_baseline_payload(
+    course_detail_xml_candidates: list[str],
+    prereqs_xml_candidates: list[str],
+    regular_courses: list[dict[str, str]],
+) -> dict[str, object] | None:
+    """Build parser regression baseline payload from captured fixture content."""
+
+    parsed_info = None
+    for xml in course_detail_xml_candidates:
+        try:
+            parsed_info = scrape_info(xml)
+            break
+        except ValueError:
+            continue
+
+    if parsed_info is None:
+        return None
+
+    parsed_prereqs = None
+    for xml in prereqs_xml_candidates:
+        try:
+            parsed_prereqs = scrape_prereqs(xml)
+            break
+        except ValueError:
+            continue
+
+    if parsed_prereqs is None:
+        return None
+
+    first_group = parsed_info.groups[0] if parsed_info.groups else None
+    first_condition = parsed_prereqs.conditions[0] if parsed_prereqs.conditions else None
+    first_prerequisite = (
+        first_condition.prerequisites[0]
+        if first_condition is not None and first_condition.prerequisites
+        else None
+    )
+
+    return {
+        "course_info": {
+            "course_name": parsed_info.course_name,
+            "credits": parsed_info.credits,
+            "typology": parsed_info.typology,
+            "groups_count": len(parsed_info.groups),
+            "available_spots": parsed_info.available_spots,
+            "first_group": {
+                "group_name": first_group.group_name if first_group is not None else "",
+                "teacher": first_group.teacher if first_group is not None else "",
+                "spots": first_group.spots if first_group is not None else None,
+                "schedules_count": len(first_group.schedules) if first_group is not None else 0,
+            },
+        },
+        "course_prereqs": {
+            "course_name": parsed_prereqs.course_name,
+            "code": parsed_prereqs.code,
+            "credits": parsed_prereqs.credits,
+            "typology": parsed_prereqs.typology,
+            "conditions_count": len(parsed_prereqs.conditions),
+            "first_condition": {
+                "condition": first_condition.condition if first_condition is not None else "",
+                "type": first_condition.type if first_condition is not None else "",
+                "all_required": first_condition.all_required if first_condition is not None else "",
+                "number_of_courses": (
+                    first_condition.number_of_courses if first_condition is not None else ""
+                ),
+                "prerequisites_count": (
+                    len(first_condition.prerequisites) if first_condition is not None else 0
+                ),
+            },
+            "first_prerequisite": {
+                "course_code": (
+                    first_prerequisite.course_code if first_prerequisite is not None else ""
+                ),
+                "course_name": (
+                    first_prerequisite.course_name if first_prerequisite is not None else ""
+                ),
+            },
+        },
+        "course_list_regular": {
+            "count": len(regular_courses),
+            "first": regular_courses[0] if regular_courses else {},
+        },
+    }
+
+
 def main() -> int:
     """Execute fixture capture workflow."""
     repo_root = Path(__file__).resolve().parent.parent
@@ -382,9 +468,11 @@ def main() -> int:
         )
 
         regular_capture_count = min(config.num_regular_courses, len(regular_courses))
+        regular_course_xmls: list[str] = []
         for idx in range(regular_capture_count):
             xml = scraper.sia_session.get_course_xml(idx)
             xml = sanitize_text(xml, replacements, config.sanitization_enabled)
+            regular_course_xmls.append(xml)
             generated_files.append(
                 write_fixture(
                     target_dir=fixtures_root / "xml",
@@ -405,8 +493,10 @@ def main() -> int:
             except ValueError:
                 continue
 
+        prereqs_xml_candidates = [*regular_course_xmls]
         if prereqs_xml is not None:
             prereqs_xml = sanitize_text(prereqs_xml, replacements, config.sanitization_enabled)
+            prereqs_xml_candidates.insert(0, prereqs_xml)
             generated_files.append(
                 write_fixture(
                     target_dir=fixtures_root / "xml",
@@ -508,6 +598,28 @@ def main() -> int:
                     include_timestamp=config.include_timestamp,
                     keep_only_latest=config.keep_only_latest,
                 )
+            )
+
+        baseline_payload = build_parser_baseline_payload(
+            course_detail_xml_candidates=regular_course_xmls,
+            prereqs_xml_candidates=prereqs_xml_candidates,
+            regular_courses=regular_courses,
+        )
+        if baseline_payload is not None:
+            generated_files.append(
+                save_json_fixture(
+                    target_dir=fixtures_root / "baselines",
+                    base_name="parser_baseline",
+                    payload=baseline_payload,
+                    include_timestamp=config.include_timestamp,
+                    keep_only_latest=config.keep_only_latest,
+                )
+            )
+        else:
+            print(
+                "WARNING: Could not generate parser baseline from captured fixtures. "
+                "Regression tests for this capture date may be skipped.",
+                file=sys.stderr,
             )
 
         print("[6/6] Writing fixtures README...")
