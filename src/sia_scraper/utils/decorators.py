@@ -1,12 +1,20 @@
 """SIA Session decorators.
 
 This module provides decorators for SiaSession methods to enforce session state,
-career selection, status validation, and timeout error handling.
+career selection, status validation, and timeout error handling with automatic retry.
 """
 
 from collections.abc import Callable
 from functools import wraps
 from typing import ParamSpec, TypeVar
+
+from requests.exceptions import ConnectionError, ReadTimeout, Timeout
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from sia_scraper.constants import SiaSessionStatus
 
@@ -70,8 +78,42 @@ def handle_timeout_error(func: Callable[P, R]) -> Callable[P, R]:
 
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        from requests.exceptions import ConnectionError, ReadTimeout, Timeout
+        try:
+            return func(*args, **kwargs)
+        except (Timeout, ReadTimeout, ConnectionError) as e:
+            raise SiaSessionException.TimeoutError from e
 
+    return wrapper
+
+
+def handle_timeout_with_retry(func: Callable[P, R]) -> Callable[P, R]:
+    """Decorator: Wraps HTTP operations with retry logic and timeout handling.
+
+    Retries up to 3 times with exponential backoff (2s → 4s → 8s, max 10s)
+    on network errors (Timeout, ReadTimeout, ConnectionError).
+    Converts final exception to SiaSessionException.TimeoutError.
+
+    ## Configuration
+        - Max attempts: 3
+        - Backoff: exponential with multiplier=1, min=2, max=10
+
+    ## Raises
+        SiaSessionException.TimeoutError: When all retry attempts fail
+
+    ## Example
+        @handle_timeout_with_retry
+        def get_post(self, data: dict[str, str]) -> Any:
+            return self._session.post(url, data=data)
+    """
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((Timeout, ReadTimeout, ConnectionError)),
+        reraise=True,
+    )
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return func(*args, **kwargs)
         except (Timeout, ReadTimeout, ConnectionError) as e:
