@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
+  issues: write
 
 jobs:
   recapture:
@@ -38,19 +38,66 @@ jobs:
       - name: Validate fixture integrity
         run: pytest tests/test_fixtures_validity.py tests/test_contracts.py tests/test_regression.py
 
-      - name: Create pull request with fixture updates
-        uses: peter-evans/create-pull-request@v6
+      - name: Push fixture updates to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          BRANCH_NAME="automation/monthly-fixture-refresh"
+
+          if [ -z "$(git status --porcelain tests/fixtures)" ]; then
+            echo "No fixture changes detected"
+            echo "HAS_CHANGES=false" >> "$GITHUB_ENV"
+          else
+            git checkout -B "$BRANCH_NAME"
+            git add tests/fixtures
+            git commit -m "test: refresh captured SIA fixtures"
+            git push origin "$BRANCH_NAME" --force
+            echo "HAS_CHANGES=true" >> "$GITHUB_ENV"
+          fi
+
+          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
+
+      - name: Create or update notification issue
+        if: env.HAS_CHANGES == 'true'
+        uses: actions/github-script@v7
         with:
-          commit-message: "test: refresh captured SIA fixtures"
-          title: "test: monthly refresh of captured SIA fixtures"
-          body: |
-            ## Summary
-            - refreshes captured SIA fixture snapshots from the monthly scheduled workflow
-            - re-runs fixture validity and contract/regression tests against refreshed files
-            - updates fixture metadata and baselines when capture output changes
-          branch: automation/monthly-fixture-refresh
-          base: main
-          delete-branch: true
-          labels: |
-            testing
-            fixtures
+          script: |
+            const branchName = process.env.BRANCH_NAME;
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const compareUrl = `${{ github.server_url }}/${{ github.repository }}/compare/main...${branchName}`;
+
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "automation,fixtures",
+              per_page: 100,
+            });
+
+            const existingIssue = existingIssues.data.find(
+              (issue) => issue.title === "Monthly fixture refresh ready for review"
+            );
+
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `## Fixture Refresh Updated\n\nA new fixture refresh has completed.\n\n- Branch: \`${branchName}\` (force-pushed)\n- Workflow run: ${runUrl}\n- Compare: ${compareUrl}`,
+              });
+              core.info(`Updated issue #${existingIssue.number}`);
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "Monthly fixture refresh ready for review",
+                body: `## Automated Fixture Refresh\n\nThe monthly SIA fixture recapture workflow completed successfully.\n\n- Branch: \`${branchName}\`\n- Workflow run: ${runUrl}\n- Compare: ${compareUrl}\n\n### Next steps\n1. Review fixture changes from the compare link above.\n2. Open a pull request from \`${branchName}\` into \`main\`.\n3. Merge after CI passes.\n\nThis issue is closed automatically when the fixture refresh PR is merged.`,
+                labels: ["testing", "fixtures", "automation"],
+              });
+              core.info("Created new fixture refresh issue");
+            }
+
+      - name: Skip notification when no changes
+        if: env.HAS_CHANGES == 'false'
+        run: echo "No fixture changes detected. Skipping issue creation."
