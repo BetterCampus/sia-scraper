@@ -128,16 +128,14 @@ def _extract_schedules(group_data: list[HtmlElement]) -> list[Schedule]:
 
         day, start_time, end_time = match.groups()
         classroom_container = lista_span.find("span[@class='lista-elemento']")
-        classroom = (
-            classroom_container.text_content().strip() if classroom_container is not None else ""
-        )
+        classroom = classroom_container.text_content() if classroom_container is not None else None
 
         schedules.append(
             Schedule(
                 day=day,
                 start_time=start_time,
                 end_time=end_time,
-                classroom=classroom,
+                classroom=classroom or "",
             )
         )
 
@@ -162,13 +160,11 @@ def _extract_spots(group_data: list[HtmlElement]) -> int | None:
 def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
     """Extract one group from a group container."""
     parent_group = group.parent
-    group_name = "Unknown"
+    group_name: str | None = None
     if parent_group is not None:
         h2_elem = parent_group.find("h2", class_="af_showDetailHeader_title-text0")
         if h2_elem is not None:
-            group_name_value = h2_elem.text_content().strip()
-            if group_name_value:
-                group_name = group_name_value
+            group_name = h2_elem.text_content()
 
     panel_div = group.find("div", class_="af_panelGroupLayout")
     if panel_div is None:
@@ -179,34 +175,33 @@ def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
         return None
 
     teacher_spans = group_data[GROUP_TEACHER_INDEX].findall(".//span")
-    teacher_value = teacher_spans[-1].text_content().strip() if teacher_spans else ""
-    teacher = teacher_value if teacher_value else "Not reported"
-    faculty = (
+    teacher: str | None = teacher_spans[-1].text_content() if teacher_spans else None
+    faculty: str | None = (
         _extract_label_value(group_data[GROUP_FACULTY_INDEX])
         if len(group_data) > GROUP_FACULTY_INDEX
-        else "Unknown"
+        else None
     )
     schedules = _extract_schedules(group_data)
-    duration = (
+    duration: str | None = (
         _extract_label_value(group_data[GROUP_DURATION_INDEX])
         if len(group_data) > GROUP_DURATION_INDEX
-        else "Unknown"
+        else None
     )
-    schedule_type = (
+    schedule_type: str | None = (
         _extract_label_value(group_data[GROUP_SCHEDULE_TYPE_INDEX])
         if len(group_data) > GROUP_SCHEDULE_TYPE_INDEX
-        else "Unknown"
+        else None
     )
     spots = _extract_spots(group_data)
 
     return Group(
-        group_name=group_name,
-        teacher=teacher,
-        faculty=faculty,
+        group_name=group_name or "",
+        teacher=teacher or "",
+        faculty=faculty or "",
         course_name=course_name,
         schedules=schedules,
-        duration=duration,
-        schedule_type=schedule_type,
+        duration=duration or "",
+        schedule_type=schedule_type or "",
         spots=spots,
     )
 
@@ -276,18 +271,8 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
 
     credits = _extract_credits(parser)
 
-    match = re.search(r"\((\d+)\)$", course_name.strip())
-    course_code = match.group(1) if match else ""
-
-    if course_code and (len(course_code) != 7 or not course_code.isdigit()):
-        course_code = ""
-
     tipology_elements = parser.find_all("span", class_="detass-tipologia")
-    if tipology_elements:
-        typology_raw = _safe_text_content(tipology_elements[0])
-        typology = typology_raw.split(": ")[-1] if typology_raw else "Unknown"
-    else:
-        typology = "Unknown"
+    typology: str | None = tipology_elements[0].text_content() if tipology_elements else None
 
     conditions: list[PrereqCondition] = []
 
@@ -345,8 +330,8 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
 
     return CoursePrereqs(
         course_name=course_name,
-        code=course_code,
+        code=None,
         credits=credits,
-        typology=typology,
+        typology=typology or "",
         conditions=conditions,
     )

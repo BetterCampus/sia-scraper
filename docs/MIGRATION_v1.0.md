@@ -138,3 +138,47 @@ Pydantic models provide better type hints for IDE autocomplete and static analys
 - [ ] Use `model_copy(update={...})` instead of direct attribute assignment
 - [ ] Update session serialization/deserialization code
 - [ ] Handle `ValidationError` for invalid input
+
+## Architecture: Smart Models, Dumb Parser
+
+Starting from v1.1, the architecture follows the principle of "Smart Models, Dumb Parser":
+
+- **Parser** (`course_parser.py`): Dumb - extracts raw data from HTML
+- **Models** (`models.py`): Smart - validate, clean, transform, and set defaults
+
+### What Models Handle Automatically
+
+Each model includes `mode="before"` validators that automatically:
+
+1. **Clean strings**: Strip whitespace, handle None values
+2. **Set defaults**: "Unknown", "Not reported", etc.
+3. **Extract embedded data**: Course code extracted from course_name
+
+### Example
+
+```python
+# Parser passes raw values (even None or unstripped)
+schedule = Schedule(
+    day="LUNES",
+    start_time="08:00",
+    end_time="10:00",
+    classroom=None,  # Raw value
+)
+
+# Model automatically handles the None - no extra code needed
+assert schedule.classroom == ""  # Default applied
+
+# Same for Group fields
+group = Group(
+    group_name=None,  # Raw value
+    teacher=None,
+    faculty=None,
+    ...
+)
+
+# All default values applied automatically
+assert group.group_name == "Unknown"
+assert group.teacher == "Not reported"
+```
+
+This separation makes the parser simpler and models more reusable (they can be instantiated from any source, not just the parser).
