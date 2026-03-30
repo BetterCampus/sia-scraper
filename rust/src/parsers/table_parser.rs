@@ -4,6 +4,7 @@
 //! table HTML, specifically parsing the course list displayed on career pages.
 
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
@@ -13,36 +14,48 @@ use crate::error::SiaScraperError;
 const COURSE_CODE_COL: usize = 0;
 const COURSE_NAME_COL: usize = 1;
 
+static TAG_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<[^>]+>").expect("tag regex must compile"));
+
+static ROW_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?is)<tr[^>]*class\s*=\s*[\"'][^\"']*\baf_table_data-row\b[^\"']*[\"'][^>]*>(.*?)</tr>"#,
+    )
+    .expect("row regex must compile")
+});
+
+static SPAN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?is)<span[^>]*class\s*=\s*[\"'][^\"']*\baf_column_data-container\b[^\"']*[\"'][^>]*>(.*?)</span>"#,
+    )
+    .expect("span regex must compile")
+});
+
+static ROW_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("tr.af_table_data-row").expect("row selector must parse"));
+
+static SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.af_column_data-container").expect("span selector must parse")
+});
+
 fn extract_text_from_elem(elem: &ElementRef) -> String {
     elem.text().collect::<String>().trim().to_string()
 }
 
 fn strip_tags(content: &str) -> String {
-    let tag_regex = Regex::new(r"(?is)<[^>]+>").expect("tag regex must compile");
-    tag_regex.replace_all(content, "").trim().to_string()
+    TAG_REGEX.replace_all(content, "").trim().to_string()
 }
 
-fn extract_course_list_from_raw_html(
-    html_content: &str,
-) -> Result<Vec<HashMap<String, String>>, SiaScraperError> {
-    let row_regex = Regex::new(
-        r#"(?is)<tr[^>]*class\s*=\s*[\"'][^\"']*\baf_table_data-row\b[^\"']*[\"'][^>]*>(.*?)</tr>"#,
-    )
-    .map_err(|e| SiaScraperError::ParseError(format!("Failed to parse row regex: {}", e)))?;
-
-    let span_regex = Regex::new(
-        r#"(?is)<span[^>]*class\s*=\s*[\"'][^\"']*\baf_column_data-container\b[^\"']*[\"'][^>]*>(.*?)</span>"#,
-    )
-    .map_err(|e| SiaScraperError::ParseError(format!("Failed to parse span regex: {}", e)))?;
-
+fn extract_course_list_from_raw_html(html_content: &str) -> Vec<HashMap<String, String>> {
     let mut course_list = Vec::new();
 
-    for row_capture in row_regex.captures_iter(html_content) {
-        let Some(row_inner_html) = row_capture.get(1).map(|m| m.as_str()) else {
-            continue;
-        };
+    for row_capture in ROW_REGEX.captures_iter(html_content) {
+        let row_inner_html = row_capture
+            .get(1)
+            .expect("row regex capture group must exist")
+            .as_str();
 
-        let mut spans = span_regex.captures_iter(row_inner_html);
+        let mut spans = SPAN_REGEX.captures_iter(row_inner_html);
         let first_span = spans
             .next()
             .and_then(|cap| cap.get(1).map(|m| strip_tags(m.as_str())));
@@ -59,7 +72,7 @@ fn extract_course_list_from_raw_html(
         }
     }
 
-    Ok(course_list)
+    course_list
 }
 
 /// Extracts course list from Oracle ADF table HTML.
@@ -93,33 +106,28 @@ pub fn get_course_list(
 ) -> Result<Vec<HashMap<String, String>>, SiaScraperError> {
     let html = Html::parse_document(html_content);
 
-    let row_selector = Selector::parse("tr.af_table_data-row")
-        .map_err(|e| SiaScraperError::ParseError(format!("Failed to parse row selector: {}", e)))?;
-
-    let span_selector = Selector::parse("span.af_column_data-container").map_err(|e| {
-        SiaScraperError::ParseError(format!("Failed to parse span selector: {}", e))
-    })?;
-
-    let rows = html.select(&row_selector);
+    let rows = html.select(&ROW_SELECTOR);
     let mut course_list = Vec::new();
 
     for row in rows {
-        let data_spans: Vec<ElementRef> = row.select(&span_selector).collect();
+        let data_spans: Vec<ElementRef> = row.select(&SPAN_SELECTOR).collect();
 
         if data_spans.len() >= 2 {
             let course_code = extract_text_from_elem(&data_spans[COURSE_CODE_COL]);
             let course_name = extract_text_from_elem(&data_spans[COURSE_NAME_COL]);
 
-            if !course_code.is_empty() {
-                let mut entry = HashMap::new();
-                entry.insert(course_code, course_name);
-                course_list.push(entry);
+            if course_code.is_empty() {
+                continue;
             }
+
+            let mut entry = HashMap::new();
+            entry.insert(course_code, course_name);
+            course_list.push(entry);
         }
     }
 
     if course_list.is_empty() {
-        return extract_course_list_from_raw_html(html_content);
+        return Ok(extract_course_list_from_raw_html(html_content));
     }
 
     Ok(course_list)
@@ -220,6 +228,28 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_get_course_list_empty_code_row_is_skipped_in_primary_parser() {
+        let html = r#"
+        <html><body>
+        <table>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container"></span></td>
+                <td><span class="af_column_data-container">Should Skip</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">1000002</span></td>
+                <td><span class="af_column_data-container">Valid Course</span></td>
+            </tr>
+        </table>
+        </body></html>
+        "#;
+
+        let result = get_course_list(html).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].get("1000002"), Some(&"Valid Course".to_string()));
     }
 
     #[test]

@@ -22,18 +22,12 @@ const GROUP_SPOTS_INDEX: usize = 5;
 const MIN_GROUP_DATA_LENGTH_WITH_SPOTS: usize = 6;
 
 fn css_select_html<'a>(root: &'a Html, selector_str: &str) -> Vec<ElementRef<'a>> {
-    let selector = match Selector::parse(selector_str) {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
+    let selector = Selector::parse(selector_str).expect("selector must parse");
     root.select(&selector).collect()
 }
 
 fn css_select_elem<'a>(root: &'a ElementRef<'a>, selector_str: &str) -> Vec<ElementRef<'a>> {
-    let selector = match Selector::parse(selector_str) {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
+    let selector = Selector::parse(selector_str).expect("selector must parse");
     root.select(&selector).collect()
 }
 
@@ -108,13 +102,7 @@ fn extract_schedules(elem: &ElementRef<'_>) -> Vec<Py<pyo3::types::PyAny>> {
             continue;
         }
 
-        let child_spans = css_select_elem(&lista_span, "span");
-        if child_spans.is_empty() {
-            continue;
-        }
-
-        let schedule_span = &child_spans[0];
-        let schedule_txt = extract_text_from_elem(schedule_span);
+        let schedule_txt = extract_text_from_elem(&lista_span);
 
         if let Some(captures) = SCHEDULE_REGEX.captures(&schedule_txt) {
             let day = captures.get(1).map_or("", |m| m.as_str());
@@ -150,9 +138,7 @@ fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
 }
 
 fn extract_group(group: &ElementRef<'_>, course_name: &str) -> Option<Py<pyo3::types::PyAny>> {
-    let parent = group.parent()?;
-    let parent_elem = ElementRef::wrap(parent)?;
-    let parent_ref = parent_elem;
+    let parent_ref = group.parent().and_then(ElementRef::wrap).unwrap_or(*group);
 
     let h2_elems = css_select_elem(&parent_ref, "h2.af_showDetailHeader_title-text0");
     let group_name = h2_elems
@@ -255,10 +241,11 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
         if let Some(group_dict) = extract_group(group, &course_name) {
             let spots = Python::with_gil(|py| {
                 let dict_ref = group_dict.as_ref(py);
-                match dict_ref.get_item("spots") {
-                    Ok(v) => v.extract::<i64>().unwrap_or(0),
-                    Err(_) => 0,
-                }
+                dict_ref
+                    .get_item("spots")
+                    .ok()
+                    .and_then(|v| v.extract::<i64>().ok())
+                    .unwrap_or(0)
             });
             available_spots += spots;
             group_list.push(group_dict);
@@ -332,10 +319,6 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             } else {
                 header_values.push(String::new());
             }
-        }
-
-        if header_values.len() < 4 {
-            continue;
         }
 
         let mut prereqs: Vec<Py<pyo3::types::PyAny>> = Vec::new();

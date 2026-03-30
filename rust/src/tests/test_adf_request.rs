@@ -156,3 +156,50 @@ fn test_get_event_dict_button_event_uses_region_prefixed_process() {
         Some(&"pt1:r1,button-id".to_string())
     );
 }
+
+#[test]
+fn test_build_request_body_supports_all_dropdown_and_button_actions() {
+    let mut builder = OracleAdfRequestBuilderState::new();
+    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+
+    let actions = [
+        "STUDY_LEVEL_DD",
+        "CAMPUS_DD",
+        "FACULTY_DD",
+        "CAREER_DD",
+        "TIPOLOGY_DD",
+        "SHOW_COURSES_BTTN",
+        "BACK_BTTN",
+    ];
+
+    for action in actions {
+        let body = builder
+            .build_request_body(action, -1, &["0".to_string(), "5".to_string()], 10)
+            .expect("action should build request body");
+        assert!(body.contains_key("event"));
+        assert!(body.contains_key("oracle.adf.view.rich.PROCESS"));
+    }
+}
+
+#[test]
+fn test_build_request_body_electives_requires_second_career_index() {
+    let mut builder = OracleAdfRequestBuilderState::new();
+    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+
+    let result = builder.build_request_body("CAMPUS_ELECTIVES_DD", -1, &["0".to_string()], 2);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_build_request_body_electives_requires_numeric_second_index() {
+    let mut builder = OracleAdfRequestBuilderState::new();
+    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+
+    let result = builder.build_request_body(
+        "CAMPUS_ELECTIVES_DD",
+        -1,
+        &["0".to_string(), "x".to_string()],
+        2,
+    );
+    assert!(result.is_err());
+}
