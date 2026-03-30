@@ -60,21 +60,43 @@ Goal: 2-5x performance improvement while maintaining idiomatic Python API.
 **Completed:** 2026-03-30
 
 **Completed:**
-- `get_course_list()` direct Rust call path (no Python fallback)
-- `get_plain_text()` direct Rust call path (no Python fallback)
-- Malformed row compatibility for `<tr><span ...>` test fixture shape
-- Fuzzing infrastructure (`fuzz/` + cargo-fuzz targets)
+- ✅ `get_course_list()` direct Rust call path (no Python fallback)
+- ✅ `get_plain_text()` direct Rust call path (no Python fallback)
+- ✅ Malformed row compatibility for `<tr><span ...>` test fixture shape
+- ✅ Fuzzing infrastructure (`fuzz/` + cargo-fuzz targets)
+- ⏳ **IN PROGRESS:** 100% Rust test coverage (currently ~90%)
 
-### Phase 4: HTTP Client & Session 🔮 FUTURE
-**Status:** Deferred
+**Post-Migration Cleanup:**
+See [Phase 3/4 Execution Plan](#phase-34-execution-plan) below for detailed execution steps.
 
-**Planned:**
-- Replace `requests` with `reqwest` (async-enabled)
-- Port retry logic from `tenacity` to Rust
-- Convert `SiaSession` to `#[pyclass]`
+### Phase 4: HTTP Client & Session Migration 🚀 HIGH PRIORITY
+**Status:** Planned (execute after Phase 3 cleanup)
+
+**Design Decisions:**
+- ✅ **API Style:** Expose async methods (`async def`, requires `asyncio`)
+- ✅ **Fallback Strategy:** Full Rust commitment (remove Python `requests` fallback)
+- ✅ **Priority:** High (start after Phase 3 execution steps complete)
+- ✅ **TLS Backend:** `rustls` (pure Rust, cross-platform)
+
+**Goals:**
+- Replace `requests` with `reqwest` (async HTTP/1.1 + HTTP/2)
+- Port retry logic from `tenacity` to Rust backoff
+- Convert `SiaSession` to Rust `#[pyclass]`
 - Connection pooling & cookie management in Rust
+- ViewState auto-synchronization in Rust
+- Async Python API for high-throughput concurrent scraping
 
-**Note:** Designed async-ready for future `tokio` integration.
+**Estimated Effort:** 19-31 hours (6 sub-phases)
+
+**Sub-Phases:**
+- **Phase 4.1:** Research & Proof of Concept (2-4 hours)
+- **Phase 4.2:** Core HTTP Module Structure (4-6 hours)
+- **Phase 4.3:** Session & Cookie Management (3-4 hours)
+- **Phase 4.4:** Retry Logic & Error Handling (2-3 hours)
+- **Phase 4.5:** Python API Integration (3-5 hours)
+- **Phase 4.6:** Testing, Benchmarking & Documentation (5-9 hours)
+
+See [Phase 4 Detailed Breakdown](#phase-4-detailed-breakdown) for implementation details.
 
 ### Phase 5: Async & Production Polish 🔮 FUTURE
 **Status:** Planned
@@ -83,6 +105,188 @@ Goal: 2-5x performance improvement while maintaining idiomatic Python API.
 - Fuzz testing integration (`cargo fuzz`)
 - GitHub Actions with maturin wheel building
 - PyPI publishing
+
+---
+
+## Phase 3/4 Execution Plan
+
+**Purpose:** Post-migration cleanup, commit hygiene, and a concrete execution path for Phase 4.
+
+**Last Updated:** 2026-03-30
+
+### Step 1: Review and Commit Unstaged Changes
+
+#### Commit 1: Documentation Enhancement
+**Files:** `AGENTS.md`  
+**Type:** `docs`  
+**Message:** `docs: add comprehensive Rust extension development guidelines to AGENTS.md`
+
+**Changes:**
+- Added PyO3 + Maturin build commands
+- Added Rust code quality standards (clippy, testing, rustdoc)
+- Added error handling patterns and PyO3 best practices
+- Added performance optimization guidelines and project Rust patterns
+
+**Verification:**
+```bash
+ruff check .
+pyright
+```
+
+#### Commit 2: Benchmark Cleanup
+**Files:** `benchmarks/benchmark_parsing.py`, `benchmarks/profile_scraper.py`  
+**Type:** `refactor`  
+**Message:** `refactor: clean up benchmark script imports and unused variables`
+
+**Changes:**
+- Use `collections.abc.Callable` instead of `typing.Callable`
+- Remove unused `result` variable in `time_function()`
+- Remove unused imports (`io`, `scrape_prereqs`)
+- Keep import ordering compliant with ruff/isort
+
+**Verification:**
+```bash
+ruff check .
+ruff format .
+```
+
+#### Commit 3: Rust Error Enhancement
+**Files:** `rust/src/error.rs`  
+**Type:** `feat`  
+**Message:** `feat: enhance Rust error types with detailed variants and documentation`
+
+**Changes:**
+- Add module-level rustdoc documentation
+- Add `MissingElement { element, selector }`
+- Add `ParseFieldError { field, value }`
+- Add rustdoc comments to `SiaScraperError` variants
+- Remove unused `pyo3::prelude::*` import
+
+**Verification:**
+```bash
+cargo clippy --manifest-path Cargo.toml
+```
+
+#### Commit 4: Pyright Configuration
+**Files:** `pyrightconfig.json`  
+**Type:** `config`  
+**Message:** `config: exclude benchmarks and Rust parity tests from pyright checking`
+
+**Changes:**
+- Add `"exclude": ["benchmarks", "tests/test_rust_parity.py"]`
+- Keeps strict typing focused on production modules
+
+**Verification:**
+```bash
+pyright
+```
+
+#### Step 1 Exit Criteria
+- Four logical commits created with clean commit messages
+- All relevant checks pass (`ruff`, `pyright`, `clippy`, `pytest`, `cargo test`)
+
+### Step 2: Push to Remote Repository
+
+**Pre-Push Checklist:**
+- Clean working tree (`git status`)
+- All checks passing
+- Branch is `feat/rust-migration`
+
+**Command:**
+```bash
+git push origin feat/rust-migration
+```
+
+**Expected Result:**
+- Branch updates are available on `origin/feat/rust-migration`
+- Pull request creation is deferred until all requested work is complete
+
+### Step 3: Achieve 100% Rust Coverage (Deferred)
+
+**Status:** Deferred by request. Execute later.
+
+**Current Baseline:**
+- ~89.68% regions (excluding FFI glue in `rust/src/lib.rs` and `rust/src/error.rs`)
+
+**Future Goal:**
+- 100% line/region/function coverage on Rust parser modules
+
+**Performance Guardrail:**
+- Acceptable regression threshold: <=5%
+- Preferred regression threshold: <=2% where possible
+
+## Phase 4 Detailed Breakdown
+
+### Phase 4.1: Research & Proof of Concept
+**Duration:** 2-4 hours
+
+**Tasks:**
+- Validate `pyo3-asyncio` integration patterns
+- Build async `reqwest` PoC callable from Python
+- Verify Rust async error propagation to Python exceptions
+
+**Deliverable:**
+- Working async PoC with documented learnings and constraints
+
+### Phase 4.2: Core HTTP Module Structure
+**Duration:** 4-6 hours
+
+**Tasks:**
+- Create `rust/src/http/` module skeleton (`mod.rs`, `client.rs`, `errors.rs`, `types.rs`)
+- Add `reqwest`, `tokio`, and `pyo3-asyncio` dependencies
+- Implement `HttpClient` wrapper for async GET/POST
+
+**Deliverable:**
+- Compilable core async HTTP layer with unit tests
+
+### Phase 4.3: Session & Cookie Management
+**Duration:** 3-4 hours
+
+**Tasks:**
+- Implement `SiaSession` as Rust `#[pyclass]`
+- Add cookie jar persistence and request state handling
+- Integrate ViewState extraction and synchronization
+
+**Deliverable:**
+- Rust-backed stateful session object exposed to Python
+
+### Phase 4.4: Retry Logic & Error Handling
+**Duration:** 2-3 hours
+
+**Tasks:**
+- Port retry behavior from `tenacity` to Rust backoff strategy
+- Map `reqwest` failures to project-specific errors
+- Ensure retry rules distinguish transient vs non-transient failures
+
+**Deliverable:**
+- Deterministic retry and robust error mapping for async requests
+
+### Phase 4.5: Python API Integration
+**Duration:** 3-5 hours
+
+**Tasks:**
+- Update `src/sia_scraper/session.py` and `src/sia_scraper/scraper.py` to async usage
+- Expose async public methods with maintained type hints
+- Keep parser orchestration stable while swapping transport layer
+
+**Deliverable:**
+- Async-first Python API backed by Rust HTTP/session internals
+
+### Phase 4.6: Testing, Benchmarking & Documentation
+**Duration:** 5-9 hours
+
+**Tasks:**
+- Add async integration tests (Rust + Python)
+- Add HTTP throughput benchmarks against prior sync baseline
+- Keep performance regressions <=5% (target <=2%)
+- Update docs and publish migration guide
+
+**Deliverables:**
+- Updated `README.md`, `CHANGELOG.md`, and `AGENTS.md`
+- New migration guide: `docs/MIGRATION_v2.md`
+
+### Pull Request Timing
+- PR creation happens after Step 1 and Step 2 are complete, and after deferred items are either completed or explicitly scoped out.
 
 ## Development Guidelines
 
@@ -190,7 +394,7 @@ ruff check .                        # Linting
 - [ ] 100% Rust test coverage
 - [x] Documentation updates
 
-### Phase 4 (HTTP Client - Future)
+### Phase 4 (HTTP Client Migration)
 - [ ] `reqwest` integration (async)
 - [ ] Retry logic port
 - [ ] `SiaSession` as `#[pyclass]`
@@ -205,7 +409,7 @@ ruff check .                        # Linting
 | Phase 1 | HTML parsers | ✅ Complete |
 | Phase 2 | Oracle ADF logic | ✅ Complete |
 | Phase 3 | Parser completion + fuzzing | ✅ Complete |
-| Phase 4 | HTTP client (async) | 🔮 Future |
+| Phase 4 | HTTP client (async) | 🚀 Planned |
 | Phase 5 | Async + production polish | 🔮 Future |
 
 ## Breaking Changes
