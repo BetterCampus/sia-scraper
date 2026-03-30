@@ -311,7 +311,7 @@ class TestCourseIndexHandling:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         index = scraper.get_course_index("2016489")
         assert index == 2
@@ -325,7 +325,7 @@ class TestCourseIndexHandling:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.get_course_index("9999999")
@@ -343,7 +343,7 @@ class TestCourseIndexHandling:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         index_0 = scraper.get_course_index("1000001")
         assert index_0 == 0
@@ -362,7 +362,7 @@ class TestCourseIndexHandling:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         with pytest.raises(SiaSessionException.InvalidStatus):
             scraper.get_course_index("1000001")
@@ -401,7 +401,7 @@ class TestCourseInfoScraping:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         course_info = scraper.get_course_info(course_code="2016489")
 
@@ -438,7 +438,7 @@ class TestCoursePrereqsScraping:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         prereqs = scraper.get_course_prereqs(course_code="1000001")
 
@@ -873,7 +873,7 @@ class TestScrapeCourses:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         result = scraper.scrape_courses(courses_codes=["1000001", "1000007"])
 
@@ -890,7 +890,7 @@ class TestScrapeCourses:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.scrape_courses(courses_codes=["1000001", "9999999"])
@@ -917,7 +917,7 @@ class TestScrapeCourses:
         mock_session_class.return_value = mock_session
 
         scraper = SiaScraper(init_session=False)
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         result = scraper.scrape_courses(
             courses_indices=[3, 1, 2], courses_codes=["QUIMICA", "ALGEBRA", "FISICA"]
@@ -1007,7 +1007,7 @@ class TestComplexScenarios:
         mock_session.course_list = ["1000001"]
 
         scraper.set_career("0-2-8-3")
-        scraper._SiaScraper__sia_session = mock_session  # type: ignore[attr-defined]
+        scraper._sia_session = mock_session  # type: ignore[attr-defined]
 
         course_info = scraper.get_course_info(course_code="1000001")
         scraper.close_session()

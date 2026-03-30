@@ -260,8 +260,11 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
 
     credits = _extract_credits(parser)
 
-    match = re.search(r"\((\d+)\)$", course_name.strip())
-    course_code = match.group(1) if match else ""
+    if not isinstance(course_name, str):
+        course_code = ""
+    else:
+        match = re.search(r"\((\d+)\)$", course_name.strip())
+        course_code = match.group(1) if match else ""
 
     tipology_elements = parser.find_all("span", class_="detass-tipologia")
     if tipology_elements:

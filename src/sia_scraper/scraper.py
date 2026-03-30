@@ -66,32 +66,32 @@ class SiaScraper:
         if session_data is None:
             session_data = {}
 
-        self.__sia_session = SiaSession(
+        self._sia_session = SiaSession(
             timeout=timeout, session_data=session_data, init_session=init_session
         )
 
     @property
     def career_name(self) -> str:
         """Human-readable name of the current academic program."""
-        value = self.__sia_session.career_name
+        value = self._sia_session.career_name
         return value if isinstance(value, str) else "N/A"
 
     @property
     def career_code(self) -> str:
         """Search code identifier for the current career (e.g., "0-2-8-3")."""
-        value = self.__sia_session.career_code
+        value = self._sia_session.career_code
         return value if isinstance(value, str) else ""
 
     @property
     def course_list(self) -> list[dict[str, str]]:
         """List of course codes available in the current career."""
-        value = self.__sia_session.course_list
+        value = self._sia_session.course_list
         return value if isinstance(value, list) else []
 
     @property
     def sia_session(self) -> SiaSession:
         """Underlying SiaSession instance for direct access to session operations."""
-        return self.__sia_session
+        return self._sia_session
 
     ##################### PUBLIC METHODS #####################
 
@@ -104,7 +104,7 @@ class SiaScraper:
         ## Raises
             SiaSessionException.TimeoutError: If SIA server is unreachable.
         """
-        self.__sia_session.init_session()
+        self._sia_session.init_session()
         return self
 
     def load_session(self, session_data: dict[str, Any]) -> "SiaScraper":
@@ -118,7 +118,7 @@ class SiaScraper:
             Self for method chaining.
 
         """
-        self.__sia_session.load_session(session_data)
+        self._sia_session.load_session(session_data)
         return self
 
     def get_session_data(self) -> dict:
@@ -131,7 +131,7 @@ class SiaScraper:
         ## Note
             Useful for persisting sessions across requests (e.g., in Flask session storage).
         """
-        return self.__sia_session.get_session_data()
+        return self._sia_session.get_session_data()
 
     def close_session(self) -> "SiaScraper":
         """Close the HTTP session and release resources.
@@ -139,7 +139,7 @@ class SiaScraper:
         ## Returns
             Self for method chaining.
         """
-        self.__sia_session.close_session()
+        self._sia_session.close_session()
         return self
 
     def valid_session(self) -> bool:
@@ -149,7 +149,7 @@ class SiaScraper:
             True if session has valid Oracle ADF tokens and is in a navigable state.
             False if session needs to be reinitialized.
         """
-        return self.__sia_session.valid_session()
+        return self._sia_session.valid_session()
 
     def set_career(self, search_code: str, electives: bool = False) -> "SiaScraper":
         """Navigate to a specific academic program and load its course list.
@@ -167,7 +167,7 @@ class SiaScraper:
             SiaSessionException.TimeoutError: If SIA server doesn't respond.
 
         """
-        self.__sia_session.set_career(search_code, electives=electives)
+        self._sia_session.set_career(search_code, electives=electives)
         return self
 
     def get_course_info(self, course_index: int = 0, course_code: str = "") -> CourseInfo:
@@ -197,7 +197,7 @@ class SiaScraper:
             ValueError: If course code is not found in the current course list.
         """
         course_index = self.get_course_index(course_code) if course_code != "" else course_index
-        xml = self.__sia_session.get_course_xml(course_index)
+        xml = self._sia_session.get_course_xml(course_index)
         return scrape_info(xml)
 
     def get_course_index(self, course_code: str) -> int:
@@ -217,7 +217,7 @@ class SiaScraper:
             The historical 0/1 swap workaround was removed after ViewState auto-sync.
             Validate behavior against live SIA if index mismatches are observed.
         """
-        if self.__sia_session.STATUS not in (
+        if self._sia_session.STATUS not in (
             status.SiaSessionStatus.ON_CAREER_PAGE,
             status.SiaSessionStatus.ON_COURSE_PAGE,
         ):
@@ -253,7 +253,7 @@ class SiaScraper:
             ValueError: If course code is not found in the current course list.
         """
         course_index = self.get_course_index(course_code) if course_code != "" else course_index
-        xml = self.__sia_session.get_course_xml(course_index)
+        xml = self._sia_session.get_course_xml(course_index)
         return scrape_prereqs(xml)
 
     def scrape_courses(
@@ -282,7 +282,7 @@ class SiaScraper:
         if courses_indices == []:
             courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
-        paired = list(zip(courses_indices, courses_codes))
+        paired = list(zip(courses_indices, courses_codes, strict=True))
         paired.sort(key=lambda x: x[0])
 
         courses: list[CourseInfo] = []
