@@ -170,6 +170,24 @@ src/sia_scraper/
 pytest
 ruff check .
 pyright
+cargo clippy --manifest-path Cargo.toml
+```
+
+### Rust Fuzzing (Optional)
+
+This repository includes `cargo-fuzz` targets for core Rust parsers:
+
+- `fuzz_get_course_list`
+- `fuzz_get_plain_text`
+- `fuzz_extract_view_state`
+
+Run them with:
+
+```bash
+cargo install cargo-fuzz
+cargo fuzz run --manifest-path fuzz/Cargo.toml fuzz_get_course_list
+cargo fuzz run --manifest-path fuzz/Cargo.toml fuzz_get_plain_text
+cargo fuzz run --manifest-path fuzz/Cargo.toml fuzz_extract_view_state
 ```
 
 Useful variants:

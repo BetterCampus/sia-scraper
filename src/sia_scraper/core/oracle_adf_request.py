@@ -8,30 +8,12 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from sia_scraper.constants import (
-    BTTN_EVENT_VALUE,
-    CAMPUS_DD_ID,
     CAMPUS_ELECTIVES_DD,
     CAMPUS_ELECTIVES_DD_ID,
-    CAREER_DD_ID,
-    COURSE_PAGE_LINK,
     DATA_MAP,
-    DROPDOWN_EVENT_VALUE,
     ELECTIVES_CAMPUS_INCREMENT,
     FACULTY_CAREER_DD,
     FACULTY_CAREER_DD_ID,
-    FACULTY_CAREER_DEFAULT_INDEX,
-    FACULTY_DD_ID,
-    ORACLE_ADF_REGION_ID,
-    ORACLE_ADF_RENDER_TARGET,
-    ORACLE_ADF_UNKNOWN_COMPONENT_1,
-    ORACLE_ADF_UNKNOWN_COMPONENT_2,
-    ORACLE_ADF_UNKNOWN_COMPONENT_3,
-    ORACLE_ADF_UNKNOWN_COMPONENT_4,
-    SELECT_ROW,
-    SELECT_ROW_EVENT_VALUE,
-    SHOW_COURSES_BTTN_ID,
-    STUDY_LEVEL_DD_ID,
-    TIPOLOGY_DD_ID,
 )
 
 
@@ -78,23 +60,15 @@ class OracleAdfRequestBuilder:
         Returns
             Complete request dictionary with Oracle ADF form fields and state tokens.
         """
-        tipology_index = self.session._tipology_index
-        self.request_dict = {
-            STUDY_LEVEL_DD_ID: "",
-            CAMPUS_DD_ID: "",
-            FACULTY_DD_ID: "",
-            CAREER_DD_ID: "",
-            TIPOLOGY_DD_ID: tipology_index,
-            SHOW_COURSES_BTTN_ID: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_1: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_2: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_3: "",
-            ORACLE_ADF_UNKNOWN_COMPONENT_4: "",
-            "org.apache.myfaces.trinidad.faces.FORM": "f1",
-            "Adf-Window-Id": self.session._window_id or "",
-            "Adf-Page-Id": self.session._page_id or "",
-            "javax.faces.ViewState": self.session._view_state or "",
-        }
+        from sia_scraper_rust import init_oracle_adf_request_dict
+
+        request_dict = init_oracle_adf_request_dict(
+            self.session._tipology_index,
+            self.session._window_id,
+            self.session._page_id,
+            self.session._view_state,
+        )
+        self.request_dict = dict(request_dict)
         return self.request_dict
 
     def build_request_body(self, data_name: str, idx: int = -1) -> dict[str, str]:
@@ -110,30 +84,27 @@ class OracleAdfRequestBuilder:
         Raises:
             KeyError: If data_name not found in DATA_MAP.
         """
+        from sia_scraper_rust import build_oracle_adf_request_body
+
         if data_name not in DATA_MAP:
             raise KeyError(f"Unknown data_name in DATA_MAP: {data_name}")
 
-        id, event_value = DATA_MAP[data_name]
-
         if data_name == FACULTY_CAREER_DD:
-            self.request_dict[FACULTY_CAREER_DD_ID] = FACULTY_CAREER_DEFAULT_INDEX
+            self.request_dict[FACULTY_CAREER_DD_ID] = "0"
         elif data_name == CAMPUS_ELECTIVES_DD:
-            career_indices = self.session.career_indices
             self.request_dict[CAMPUS_ELECTIVES_DD_ID] = str(
-                int(career_indices[1]) + ELECTIVES_CAMPUS_INCREMENT
+                int(self.session.career_indices[1]) + ELECTIVES_CAMPUS_INCREMENT
             )
 
-        specific_request_dict = self._generate_specific_request_dict(id, event_value, idx)
+        specific_request_dict = build_oracle_adf_request_body(
+            self.request_dict,
+            data_name,
+            idx,
+            self.session.career_indices,
+            len(self.session.course_list),
+        )
 
-        if data_name == SELECT_ROW:
-            course_list = self.session.course_list
-            specific_request_dict["oracle.adf.view.rich.DELTAS"] = (
-                f"{{pt1:r1:0:t4={{viewportSize={len(course_list) + 1},rows={len(course_list)},selectedRowKeys={idx}}}}}"
-            )
-        elif data_name == COURSE_PAGE_LINK:
-            specific_request_dict["oracle.adf.view.rich.RENDER"] = ORACLE_ADF_RENDER_TARGET
-
-        return specific_request_dict
+        return dict(specific_request_dict)
 
     def _generate_specific_request_dict(
         self, id: str, event_type: str, idx: int = -1
@@ -167,17 +138,7 @@ class OracleAdfRequestBuilder:
         Returns:
             Dictionary with Oracle ADF event fields.
         """
-        if idx >= 0:
-            id = f"{id}:{idx}:cl2"
+        from sia_scraper_rust import get_oracle_adf_event_dict
 
-        process_value = id
-        if event_type == DROPDOWN_EVENT_VALUE or event_type == SELECT_ROW_EVENT_VALUE:
-            process_value = id
-        elif event_type == BTTN_EVENT_VALUE:
-            process_value = f"{ORACLE_ADF_REGION_ID},{id}"
-
-        return {
-            "event": id,
-            f"event.{id}": event_type,
-            "oracle.adf.view.rich.PROCESS": process_value,
-        }
+        event_dict = get_oracle_adf_event_dict(id, event_type, idx)
+        return dict(event_dict)

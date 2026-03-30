@@ -21,3 +21,6 @@ AGENTS.md
 .obsidian/
 
 logs/
+target/
+fuzz/artifacts/
+fuzz/corpus/

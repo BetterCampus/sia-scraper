@@ -6,7 +6,7 @@ description = "Rust extensions for sia-scraper"
 
 [lib]
 name = "sia_scraper_rust"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 path = "rust/src/lib.rs"
 
 [features]
@@ -14,11 +14,12 @@ default = ["extension-module"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-pyo3 = { version = "0.20", features = ["extension-module"] }
+pyo3 = { version = "0.20", features = ["auto-initialize"] }
 scraper = "0.20"
 quick-xml = "0.31"
 thiserror = "1.0"
 log = "0.4"
+regex = "1.10"
 
 [profile.release]
 opt-level = 3

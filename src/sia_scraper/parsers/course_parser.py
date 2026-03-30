@@ -40,8 +40,9 @@ def get_plain_text(xml: str) -> str:
     ## Returns
         Plain text content before the first triple non-breaking space separator.
     """
-    parser = HtmlParser(xml)
-    return parser.text_content().split("\xa0\xa0\xa0")[0]
+    from sia_scraper_rust import get_plain_text as rust_get_plain_text
+
+    return rust_get_plain_text(xml)
 
 
 def _extract_credits(parser: HtmlParser) -> int:

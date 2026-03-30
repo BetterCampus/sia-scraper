@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Console output when `SIA_DEBUG=1`
   - New logging functions: `debug_log()`, `info_log()`, `error_log()`
 - **lxml 5.x**: Upgraded from lxml 4.9 to 5.2 for improved parsing performance
+- **Rust migration completed for parser/request internals**:
+  - `get_course_list()` now runs in Rust (direct call path)
+  - `get_plain_text()` now runs in Rust (direct call path)
+  - `OracleAdfRequestBuilder` now delegates request/event payload generation to Rust
+- **Fuzz testing scaffold for Rust parsers**:
+  - Added `cargo-fuzz` crate at `fuzz/`
+  - Added targets: `fuzz_get_course_list`, `fuzz_get_plain_text`, `fuzz_extract_view_state`
 
 ### Refactored
 
@@ -30,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `CoursePrereqs`: Added code extraction from course_name and typology cleaning
   - Parser now passes raw values, models handle all cleaning/defaults
   - Single Responsibility: Parser extracts HTML, models validate and transform
+- **Malformed-row compatibility in Rust course list parser**:
+  - Added fallback path to handle edge-case HTML where `<span>` nodes appear directly under `<tr>`
+  - Maintains parity with existing Python/XPath behavior for legacy test fixtures
+
+### Performance
+
+- Updated benchmark snapshot (`benchmarks/benchmark_rust_vs_python.py`) shows:
+  - `get_plain_text`: ~1.37x faster in Rust baseline
+  - `get_course_list`: ~1.62x faster in Rust baseline
 
 ## [1.0.0] - 2026-03-30
 
