@@ -39,7 +39,12 @@ from .core import (
 )
 from .parsers.html_parser import HtmlParser, get_course_list
 from .parsers.models import SessionState
-from .utils import check_session, check_status, debug_log, handle_timeout_error
+from .utils import (
+    check_session,
+    check_status,
+    debug_log,
+    handle_timeout_with_retry,
+)
 
 
 class SiaSession:
@@ -354,7 +359,7 @@ class SiaSession:
         return self.post_request(data={})
 
     @check_session
-    @handle_timeout_error
+    @handle_timeout_with_retry
     def post_request(self, data: dict[str, str]) -> Any:
         """Make a POST request to SIA with Oracle ADF headers and parameters.
 
@@ -377,7 +382,7 @@ class SiaSession:
         self.sync_view_state_from_response(response)
         return response
 
-    @handle_timeout_error
+    @handle_timeout_with_retry
     def get_request(self, url: str, params: dict[str, str] | None = None) -> Any:
         """Make a GET request to SIA (or any URL).
 
