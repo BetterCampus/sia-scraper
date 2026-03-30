@@ -49,6 +49,31 @@ class TestCourseParserEdgeCases:
         result = scrape_prereqs(xml)
         assert result.code == ""
 
+    def test_scrape_prereqs_extracts_code_from_rightmost_parentheses(self):
+        """Test that course code is extracted from the last set of parentheses.
+
+        Course names with multiple parenthetical expressions (e.g., advanced courses)
+        must extract the code from the rightmost parentheses, not the first.
+        """
+        xml = """
+        <h2>ELECTROMAGNETISMO (AVANZADO) (2016489)</h2>
+        <span class="detass-creditos"><span>4</span></span>
+        <span class="detass-tipologia">Tipología: OBLIGATORIA</span>
+        """
+        result = scrape_prereqs(xml)
+        assert result.code == "2016489"
+        assert result.course_name == "ELECTROMAGNETISMO (AVANZADO) (2016489)"
+
+    def test_scrape_prereqs_extracts_code_with_intermediate_parentheses(self):
+        """Test extraction when course name has various parenthetical patterns."""
+        xml = """
+        <h2>PROYECTO DE INVESTIGACION (II) (2023567)</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia">Tipología: OPTATIVA</span>
+        """
+        result = scrape_prereqs(xml)
+        assert result.code == "2023567"
+
     def test_scrape_prereqs_condition_without_prereq_code_is_skipped(self):
         xml = """
         <h2>CURSO X (1000)</h2>
