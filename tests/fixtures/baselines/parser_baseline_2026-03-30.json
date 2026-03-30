@@ -1,0 +1,39 @@
+{
+  "course_info": {
+    "available_spots": 94,
+    "course_name": "\u00c1lgebra Lineal (1000003-B)",
+    "credits": 4,
+    "first_group": {
+      "group_name": "(1) Grupo 1",
+      "schedules_count": 0,
+      "spots": 4,
+      "teacher": "EDGAR SANTIAGO OCHOA QUIROGA."
+    },
+    "groups_count": 20,
+    "typology": "FUND. OPTATIVA"
+  },
+  "course_list_regular": {
+    "count": 102,
+    "first": {
+      "1000003-B": "\u00c1lgebra Lineal"
+    }
+  },
+  "course_prereqs": {
+    "code": "2015555",
+    "conditions_count": 1,
+    "course_name": "\u00c1lgebra lineal b\u00e1sica (2015555)",
+    "credits": 4,
+    "first_condition": {
+      "all_required": "",
+      "condition": "",
+      "number_of_courses": "",
+      "prerequisites_count": 2,
+      "type": ""
+    },
+    "first_prerequisite": {
+      "course_code": "1000004-B",
+      "course_name": "C\u00e1lculo diferencial"
+    },
+    "typology": "FUND. OPTATIVA"
+  }
+}
