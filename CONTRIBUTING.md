@@ -96,15 +96,15 @@ The repository includes sanitized snapshots of live SIA responses under `tests/f
 These fixtures back contract and regression tests designed to detect Oracle ADF structure
 changes early.
 
-- Fixture validity: `pytest tests/test_fixtures_validity.py`
-- Structure contracts: `pytest tests/test_contracts.py`
-- Parser regression baselines: `pytest tests/test_regression.py`
+- Fixture validity: `pytest tests/fixtures/test_fixtures_validity.py`
+- Structure contracts: `pytest tests/fixtures/test_contracts.py`
+- Parser regression baselines: `pytest tests/fixtures/test_regression.py`
 
 Refresh fixtures when SIA markup or parser behavior changes:
 
 ```bash
 python scripts/capture_sia_fixtures.py
-pytest tests/test_fixtures_validity.py tests/test_contracts.py tests/test_regression.py
+pytest tests/fixtures/test_fixtures_validity.py tests/fixtures/test_contracts.py tests/fixtures/test_regression.py
 ```
 
 Notes:

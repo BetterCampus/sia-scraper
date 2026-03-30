@@ -36,7 +36,7 @@ jobs:
         run: python scripts/capture_sia_fixtures.py
 
       - name: Validate fixture integrity
-        run: pytest tests/test_fixtures_validity.py tests/test_contracts.py tests/test_regression.py
+        run: pytest tests/fixtures/test_fixtures_validity.py tests/fixtures/test_contracts.py tests/fixtures/test_regression.py
 
       - name: Push fixture updates to branch
         run: |
