@@ -179,8 +179,8 @@ pytest --cov=src/sia_scraper
 pytest tests/utils/test_date_formatter.py
 pytest -m "not integration"
 pytest -m "not integration and not network"
-pytest tests/test_fixtures_validity.py
-pytest tests/test_contracts.py tests/test_regression.py
+pytest tests/fixtures/test_fixtures_validity.py
+pytest tests/fixtures/test_contracts.py tests/fixtures/test_regression.py
 ```
 
 ### CI behavior for live tests
