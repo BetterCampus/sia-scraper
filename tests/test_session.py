@@ -475,7 +475,7 @@ class TestHttpRequests:
         mock_session_class.return_value = mock_session_instance
 
         session = SiaSession(init_session=False)
-        session._SiaSession__session = mock_session_instance  # type: ignore[attr-defined]
+        session._session = mock_session_instance  # type: ignore[attr-defined]
 
         response = session.get_request("https://example.com")
 
@@ -501,7 +501,7 @@ class TestHttpRequests:
         mock_session_class.return_value = mock_session_instance
 
         session = SiaSession(init_session=False)
-        session._SiaSession__session = mock_session_instance  # type: ignore[attr-defined]
+        session._session = mock_session_instance  # type: ignore[attr-defined]
 
         result = session.keep_alive()
 
@@ -521,7 +521,7 @@ class TestTimeoutHandling:
         mock_session_class.return_value = mock_session_instance
 
         session = SiaSession(init_session=False)
-        session._SiaSession__session = mock_session_instance  # type: ignore[attr-defined]
+        session._session = mock_session_instance  # type: ignore[attr-defined]
 
         with pytest.raises(SiaSessionException.TimeoutError):
             session.get_request("https://example.com")
@@ -534,7 +534,7 @@ class TestTimeoutHandling:
         mock_session_class.return_value = mock_session_instance
 
         session = SiaSession(init_session=False)
-        session._SiaSession__session = mock_session_instance  # type: ignore[attr-defined]
+        session._session = mock_session_instance  # type: ignore[attr-defined]
 
         with pytest.raises(SiaSessionException.TimeoutError):
             session.get_request("https://example.com")
@@ -547,7 +547,7 @@ class TestTimeoutHandling:
         mock_session_class.return_value = mock_session_instance
 
         session = SiaSession(init_session=False)
-        session._SiaSession__session = mock_session_instance  # type: ignore[attr-defined]
+        session._session = mock_session_instance  # type: ignore[attr-defined]
 
         with pytest.raises(SiaSessionException.TimeoutError):
             session.get_request("https://example.com")
@@ -562,12 +562,12 @@ class TestCareerNavigation:
         """Test setting a career and loading course list."""
         mock_get_courses.return_value = ["1000001 - Calculo", "2016489 - Estructuras"]
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
-        session._SiaSession__javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
-        session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
+        session._javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
+        session._Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
+        session._Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
+        session._params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
 
         response = MagicMock()
@@ -610,12 +610,12 @@ class TestCoursePageNavigation:
         """Test entering a course detail page."""
         mock_get_courses.return_value = ["1000001", "1000007"]
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
-        session._SiaSession__javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
-        session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
+        session._javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
+        session._Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
+        session._Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
+        session._params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
         response = MagicMock()
         response.text = '<select id="pt1:r1:0:soc3::content"><option>--</option><option>A</option><option>B</option><option>C</option><option>Ingenieria de Sistemas</option></select>'
@@ -643,12 +643,12 @@ class TestCoursePageNavigation:
         """Test exiting a course detail page back to career page."""
         mock_get_courses.return_value = ["1000001", "1000007"]
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
-        session._SiaSession__javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
-        session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
+        session._javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
+        session._Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
+        session._Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
+        session._params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
         response = MagicMock()
         response.text = '<select id="pt1:r1:0:soc3::content"><option>--</option><option>A</option><option>B</option><option>C</option><option>Ingenieria de Sistemas</option></select>'
@@ -770,12 +770,12 @@ class TestRequestBodyGeneration:
 
     def test_generate_request_body_unknown_data_name_raises(self):
         session = SiaSession(init_session=False)
-        session._SiaSession__career_code = "0-2-8-3"  # type: ignore[attr-defined]
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Window_Id = "window"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Page_Id = "0"  # type: ignore[attr-defined]
-        session._SiaSession__javax_faces_ViewState = "vs"  # type: ignore[attr-defined]
-        session._SiaSession__init_request_dict()  # type: ignore[attr-defined]
+        session._career_code = "0-2-8-3"  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._Adf_Window_Id = "window"  # type: ignore[attr-defined]
+        session._Adf_Page_Id = "0"  # type: ignore[attr-defined]
+        session._javax_faces_ViewState = "vs"  # type: ignore[attr-defined]
+        session._init_request_dict()  # type: ignore[attr-defined]
         with pytest.raises(KeyError, match="Unknown data_name"):
             session._generate_request_body("UNKNOWN_DATA_NAME")
 
@@ -797,7 +797,7 @@ class TestDecoratorValidation:
 
         # Even if we have a session, career operations should fail
         with patch("sia_scraper.session.EnhancedSession"):
-            session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
+            session._session = MagicMock()  # type: ignore[attr-defined]
 
             with pytest.raises(SiaSessionException.InvalidStatus):
                 session.get_course_xml(0)
@@ -819,12 +819,12 @@ class TestElectivesHandling:
         """Test setting career for electives courses."""
         mock_get_courses.return_value = ["3000001 - Electiva I"]
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
-        session._SiaSession__javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
-        session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
+        session._javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
+        session._Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
+        session._Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
+        session._params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
         response = MagicMock()
         response.text = '<select id="pt1:r1:0:soc3::content"><option>--</option><option>A</option><option>B</option><option>C</option><option>Ingenieria de Sistemas</option></select>'
@@ -889,9 +889,9 @@ class TestSessionPersistence:
 
     def test_get_current_xml_calls_get_request(self):
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__url = "http://x"  # type: ignore[attr-defined]
-        session._SiaSession__params = {"a": "b"}  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._url = "http://x"  # type: ignore[attr-defined]
+        session._params = {"a": "b"}  # type: ignore[attr-defined]
         response = MagicMock()
         response.text = "<xml/>"
         session.get_request = MagicMock(return_value=response)
@@ -899,8 +899,8 @@ class TestSessionPersistence:
 
     def test_get_course_xml_calls_enter_and_exit(self):
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__STATUS = SiaSessionStatus.ON_CAREER_PAGE  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._STATUS = SiaSessionStatus.ON_CAREER_PAGE  # type: ignore[attr-defined]
         enter_resp = MagicMock()
         enter_resp.text = "<course/>"
         session.enter_course_page = MagicMock(return_value=enter_resp)
@@ -928,12 +928,12 @@ class TestSessionPersistence:
     def test_set_career_raises_when_dropdown_not_found(self, mock_get_courses):
         mock_get_courses.return_value = []
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
-        session._SiaSession__javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
-        session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
+        session._javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
+        session._Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
+        session._Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
+        session._params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
 
         resp1, resp2, resp3, resp4, resp5, resp6 = (MagicMock() for _ in range(6))
@@ -955,12 +955,12 @@ class TestSessionPersistence:
         """Exercise error handling when post_request returns None (broken connection)."""
         mock_get_courses.return_value = []
         session = SiaSession(init_session=False)
-        session._SiaSession__session = MagicMock()  # type: ignore[attr-defined]
-        session._SiaSession__STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
-        session._SiaSession__javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
-        session._SiaSession__Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
-        session._SiaSession__params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
+        session._session = MagicMock()  # type: ignore[attr-defined]
+        session._STATUS = SiaSessionStatus.CAREER_NOT_SET  # type: ignore[attr-defined]
+        session._javax_faces_ViewState = "view_state"  # type: ignore[attr-defined]
+        session._Adf_Window_Id = "window_id"  # type: ignore[attr-defined]
+        session._Adf_Page_Id = "page_id"  # type: ignore[attr-defined]
+        session._params = {"Adf-Window-Id": "window_id", "Adf-Page-Id": "page_id"}  # type: ignore[attr-defined]
         session.request_dict = {"javax.faces.ViewState": "view_state"}
 
         # post_request returns None → accessing .text on FACULTY_DD response raises
