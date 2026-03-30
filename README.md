@@ -178,8 +178,24 @@ Useful variants:
 pytest --cov=src/sia_scraper
 pytest tests/utils/test_date_formatter.py
 pytest -m "not integration"
+pytest -m "not integration and not network"
 pytest tests/test_fixtures_validity.py
 pytest tests/test_contracts.py tests/test_regression.py
+```
+
+### CI behavior for live tests
+
+- The default CI workflow (`.github/workflows/test.yml`) skips live SIA tests using:
+  - `pytest -m "not integration and not network"`
+- This keeps pull request checks deterministic and avoids failures caused by temporary
+  SIA outages or Oracle ADF response changes.
+- Live SIA tests run separately in `.github/workflows/integration-live.yml`
+  (manual trigger and nightly schedule).
+
+Run live integration tests locally with:
+
+```bash
+pytest -m "integration and network" -v
 ```
 
 Captured fixture snapshots used by these tests live in `tests/fixtures/` and are refreshed
