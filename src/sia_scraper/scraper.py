@@ -333,6 +333,7 @@ def init_sia_scraper(
     sc = SiaScraper(timeout=timeout, session_data=session_data)
 
     if not sc.valid_session():
+        sc.close_session()
         return create_career_session(search_code, is_electives, timeout=timeout)
 
     if sc.career_code != search_code or sc.sia_session.is_electives != is_electives:
