@@ -22,12 +22,32 @@ from sia_scraper.core.oracle_adf_request import OracleAdfRequestBuilder
 
 class _FakeSession:
     def __init__(self) -> None:
-        self._tipology_index = "2"
-        self._window_id = "window-123"
-        self._page_id = "page-456"
-        self._view_state = "viewstate-789"
+        self.__tipology_index = "2"
+        self.__window_id = "window-123"
+        self.__page_id = "page-456"
+        self.__view_state = "viewstate-789"
         self.career_indices = ["0", "5"]
-        self.course_list = [{"1000001": "CALCULO"}, {"1000002": "ALGEBRA"}]
+        self.__course_list = [{"1000001": "CALCULO"}, {"1000002": "ALGEBRA"}]
+
+    @property
+    def _tipology_index(self) -> str:
+        return self.__tipology_index
+
+    @property
+    def _window_id(self) -> str | None:
+        return self.__window_id
+
+    @property
+    def _page_id(self) -> str | None:
+        return self.__page_id
+
+    @property
+    def _view_state(self) -> str | None:
+        return self.__view_state
+
+    @property
+    def course_list(self) -> list[dict[str, str]]:
+        return self.__course_list
 
 
 @pytest.mark.unit

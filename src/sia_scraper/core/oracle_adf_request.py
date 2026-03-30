@@ -5,11 +5,12 @@ with proper event formatting and state management.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 from sia_scraper.constants import (
     BTTN_EVENT_VALUE,
     CAMPUS_DD_ID,
+    CAMPUS_ELECTIVES_DD,
     CAMPUS_ELECTIVES_DD_ID,
     CAREER_DD_ID,
     COURSE_PAGE_LINK,
@@ -33,8 +34,26 @@ from sia_scraper.constants import (
     TIPOLOGY_DD_ID,
 )
 
-if TYPE_CHECKING:
-    from sia_scraper.session import SiaSession
+
+class OracleAdfSession(Protocol):
+    """Structural contract for session attributes used by request builder."""
+
+    @property
+    def _tipology_index(self) -> str: ...
+
+    @property
+    def _window_id(self) -> str | None: ...
+
+    @property
+    def _page_id(self) -> str | None: ...
+
+    @property
+    def _view_state(self) -> str | None: ...
+
+    @property
+    def course_list(self) -> list[dict[str, str]]: ...
+
+    career_indices: list[str]
 
 
 @dataclass
@@ -46,11 +65,11 @@ class OracleAdfRequestBuilder:
     and component-specific metadata.
 
     ## Attributes
-        session: Reference to the parent SiaSession instance.
+        session: Reference to a session-like object with ADF state attributes.
         request_dict: Current request dictionary template.
     """
 
-    session: "SiaSession"
+    session: OracleAdfSession
     request_dict: dict[str, str] = field(default_factory=dict)
 
     def init_request_dict(self) -> dict[str, str]:
@@ -59,7 +78,7 @@ class OracleAdfRequestBuilder:
         Returns
             Complete request dictionary with Oracle ADF form fields and state tokens.
         """
-        tipology_index = self.session._tipology_index  # type: ignore[attr-defined]
+        tipology_index = self.session._tipology_index
         self.request_dict = {
             STUDY_LEVEL_DD_ID: "",
             CAMPUS_DD_ID: "",
@@ -72,9 +91,9 @@ class OracleAdfRequestBuilder:
             ORACLE_ADF_UNKNOWN_COMPONENT_3: "",
             ORACLE_ADF_UNKNOWN_COMPONENT_4: "",
             "org.apache.myfaces.trinidad.faces.FORM": "f1",
-            "Adf-Window-Id": self.session._window_id or "",  # type: ignore[attr-defined]
-            "Adf-Page-Id": self.session._page_id or "",  # type: ignore[attr-defined]
-            "javax.faces.ViewState": self.session._view_state or "",  # type: ignore[attr-defined]
+            "Adf-Window-Id": self.session._window_id or "",
+            "Adf-Page-Id": self.session._page_id or "",
+            "javax.faces.ViewState": self.session._view_state or "",
         }
         return self.request_dict
 
@@ -98,8 +117,8 @@ class OracleAdfRequestBuilder:
 
         if data_name == FACULTY_CAREER_DD:
             self.request_dict[FACULTY_CAREER_DD_ID] = FACULTY_CAREER_DEFAULT_INDEX
-        elif data_name == "CAMPUS_ELECTIVES_DD":
-            career_indices = self.session.career_indices  # type: ignore[attr-defined]
+        elif data_name == CAMPUS_ELECTIVES_DD:
+            career_indices = self.session.career_indices
             self.request_dict[CAMPUS_ELECTIVES_DD_ID] = str(
                 int(career_indices[1]) + ELECTIVES_CAMPUS_INCREMENT
             )
