@@ -215,6 +215,540 @@ git push origin feat/rust-migration
 - Acceptable regression threshold: <=5%
 - Preferred regression threshold: <=2% where possible
 
+### Step 4: Code Quality Improvements (Next Execution Steps)
+
+**Status:** Planned (execute in order below)
+
+**Objective:** Implement every improvement identified in the code quality review before major Phase 4 transport-layer changes.
+
+**Execution Rule:** Complete all high-priority items first, then medium-priority items, then low-priority cleanup.
+
+**Estimated Effort:** 49-64 hours total
+
+#### Step 4.0: Program-Level Exit Criteria
+- No `.unwrap()`/`.expect()` in non-test Rust code paths
+- `session.py` reduced in responsibility (coordinator role only)
+- Batch scraping supports `skip`/`retry`/`abort` error strategies
+- Type-checking remains clean (`pyright`)
+- Linting remains clean (`ruff`, `clippy`)
+- Test suite expanded for edge cases and failure-recovery scenarios
+
+---
+
+#### High Priority Improvements (Execute First)
+
+##### CQ-H1: Refactor `SiaSession` into focused components
+**Category:** Refactoring  
+**Severity:** High  
+**Estimate:** 6-8 hours
+
+**Goal:** Decompose `src/sia_scraper/session.py` (large multi-responsibility class) into small cohesive units.
+
+**Implementation Plan:**
+1. Create `src/sia_scraper/core/adf_state_manager.py` to own ViewState/Window-Id/Page-Id synchronization and validation.
+2. Create `src/sia_scraper/core/navigation_controller.py` to own workflow transitions (career selection, course page navigation, list navigation).
+3. Keep `SiaSession` as orchestration/coordinator class that delegates to state manager + navigator.
+4. Update `src/sia_scraper/scraper.py` and request-builder integration points to use delegation, not direct state mutation.
+5. Preserve backward compatibility by keeping stable public methods and forwarding internally.
+
+**Verification:**
+- `pytest tests/test_session.py -v`
+- `pytest tests/core -v`
+- `pyright`
+
+**Exit Criteria:**
+- `SiaSession` handles orchestration only.
+- New components have dedicated tests.
+
+##### CQ-H2: Add resilient batch scraping error handling
+**Category:** Robustness  
+**Severity:** High  
+**Estimate:** 3-4 hours
+
+**Goal:** Prevent one course failure from aborting full batch operations.
+
+**Implementation Plan:**
+1. Refactor `scrape_courses()` to support `on_error` modes: `skip`, `retry`, `abort`.
+2. Add `ScrapeResult` return model with `successes`, `failures`, `total`, `success_rate`.
+3. Add retry controls (`max_retries`, `retry_delay`) for transient errors.
+4. Add optional progress callback for long-running batch jobs.
+5. Keep compatibility path for consumers expecting previous behavior.
+
+**Verification:**
+- `pytest tests/test_scraper.py -k "scrape_courses" -v`
+- Failure scenario integration tests for partial-success behavior.
+
+**Exit Criteria:**
+- Partial results are returned for `skip` and `retry` modes.
+- `abort` mode preserves strict fail-fast behavior.
+
+##### CQ-H3: Eliminate Rust panics in production paths
+**Category:** Rust Safety  
+**Severity:** High  
+**Estimate:** 4-5 hours
+
+**Goal:** Replace panic-prone `.unwrap()`/`.expect()` usage in production Rust with typed error propagation.
+
+**Implementation Plan:**
+1. Audit all non-test `.unwrap()`/`.expect()` uses in `rust/src/**`.
+2. Replace with `ok_or_else(...)`/`map_err(...)` and `?` propagation.
+3. Ensure parser helper functions return `Result<T, SiaScraperError>` where fallible.
+4. Improve selector/data-access errors with structured variants (`MissingElement`, `ParseFieldError`, etc.).
+5. Add tests for invalid selectors, missing nodes, and malformed numeric fields.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+- `cargo clippy --manifest-path Cargo.toml`
+- `rg "\.unwrap\(\)|\.expect\(" rust/src --type rust` (non-test review)
+
+**Exit Criteria:**
+- No panic-based extraction in production Rust modules.
+- All failures are explicit `Result` errors.
+
+---
+
+#### Medium Priority Improvements (Execute After High)
+
+##### CQ-M1: Replace imprecise `Any` return types with concrete types
+**Category:** Type Safety  
+**Severity:** Medium  
+**Estimate:** 2-3 hours
+
+**Implementation Plan:**
+1. Audit `-> Any` signatures in `src/sia_scraper/session.py`, `src/sia_scraper/scraper.py`, and `src/sia_scraper/core/*.py`.
+2. Replace with concrete types (`requests.Response`, `CourseInfo`, `list[CourseInfo]`, etc.).
+3. Where dynamic return is unavoidable, add inline justification comments.
+
+**Verification:**
+- `pyright`
+- `rg "-> Any" src/sia_scraper --type py`
+
+##### CQ-M2: Remove unnecessary Rust cloning in request builder hot paths
+**Category:** Performance  
+**Severity:** Medium  
+**Estimate:** 2-3 hours
+
+**Implementation Plan:**
+1. Refactor `rust/src/parsers/adf_request.rs` to mutate builder state in place.
+2. Return references where possible (`&HashMap`) and clone only at FFI boundaries when required.
+3. Re-run request payload parity tests to guarantee no behavioral change.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+- `pytest tests/test_rust_parity.py -v`
+
+##### CQ-M3: Add property-based tests to prevent parser panic regressions
+**Category:** Testing  
+**Severity:** Medium  
+**Estimate:** 3-4 hours
+
+**Implementation Plan:**
+1. Add `proptest` to Rust dev dependencies.
+2. Create property tests for `parse_course_info`, `parse_prereqs`, `get_course_list`, `extract_view_state`, and ADF body builders.
+3. Assert behavior is always `Ok` or structured `Err`, never panic.
+4. Add CI-friendly case count defaults + optional high-case stress profile.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml property`
+- `PROPTEST_CASES=10000 cargo test --manifest-path Cargo.toml`
+
+##### CQ-M4: Introduce `AdfContext` value object to reduce coupling
+**Category:** Architecture  
+**Severity:** Medium  
+**Estimate:** 2-3 hours
+
+**Implementation Plan:**
+1. Add immutable `AdfContext` dataclass in `src/sia_scraper/core/adf_context.py`.
+2. Update `OracleAdfRequestBuilder` to consume context object rather than session internals.
+3. Add conversion helper (`AdfContext.from_session(...)`) and validation method.
+
+**Verification:**
+- `pytest tests/core -k adf_context -v`
+- `pyright`
+
+##### CQ-M5: Standardize error handling patterns across Python and Rust
+**Category:** Error Handling  
+**Severity:** Medium  
+**Estimate:** 2-3 hours
+
+**Implementation Plan:**
+1. Replace broad Python `except Exception` usage with specific exception classes.
+2. Align Rust fallible helpers to `Result<T, SiaScraperError>` where failures are meaningful.
+3. Document error taxonomy and propagation policy in module docstrings.
+
+**Verification:**
+- `rg "except Exception" src tests --type py`
+- `cargo clippy --manifest-path Cargo.toml`
+
+##### CQ-M6: Expand integration tests for failure and recovery flows
+**Category:** Testing  
+**Severity:** Medium  
+**Estimate:** 3-4 hours
+
+**Implementation Plan:**
+1. Add tests for session timeout recovery, intermittent network failure, and ADF state drift.
+2. Add assertions for ViewState synchronization after partial failures.
+3. Add long-batch scenarios validating resilience behavior and metrics.
+
+**Verification:**
+- `pytest tests/test_integration.py -v`
+- `pytest tests -k "timeout or retry or viewstate" -v`
+
+##### CQ-M7: Cache Rust CSS selectors for repeated parser queries
+**Category:** Performance  
+**Severity:** Medium  
+**Estimate:** 1-2 hours
+
+**Implementation Plan:**
+1. Introduce static selector cache (`once_cell`/`LazyLock`) for hot selectors.
+2. Replace repeated `Selector::parse(...)` in parser loops.
+3. Benchmark parser throughput before/after.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+- `python benchmarks/benchmark_parsing.py`
+
+---
+
+#### Low Priority Improvements (Execute After Medium)
+
+##### CQ-L1: Centralize default literals (e.g., `"Unknown"`)
+**Category:** Code Quality  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Create `src/sia_scraper/constants/defaults.py`.
+2. Replace repeated literals with shared constants.
+3. Update parsers/models to import constants.
+
+**Verification:**
+- `rg '"Unknown"' src/sia_scraper --type py`
+
+##### CQ-L2: Align Python/Rust index constants to avoid divergence
+**Category:** Consistency  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Document source-of-truth for group/index constants.
+2. Add parity test that validates Rust and Python constant values match.
+
+**Verification:**
+- New parity test in `tests/test_rust_parity.py`
+
+##### CQ-L3: Remove duplicated text-extraction helpers in Rust
+**Category:** Refactoring  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Create shared helper module under `rust/src/parsers/utils.rs` (or equivalent).
+2. Replace duplicate `extract_text_from_elem` implementations.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+
+##### CQ-L4: Decompose deeply nested `extract_group` logic
+**Category:** Refactoring  
+**Severity:** Low  
+**Estimate:** 2 hours
+
+**Implementation Plan:**
+1. Split group-name extraction, field extraction, and output construction into separate functions.
+2. Keep each function focused and independently testable.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml test_course_parser`
+
+##### CQ-L5: Replace long parameter lists with context structs
+**Category:** Refactoring  
+**Severity:** Low  
+**Estimate:** 1.5 hours
+
+**Implementation Plan:**
+1. Introduce request context structs in Rust and Python where 4+ correlated parameters repeat.
+2. Update call sites and tests.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+- `pyright`
+
+##### CQ-L6: Add `#[inline]` to tiny hot-path Rust helpers
+**Category:** Performance  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Identify short, frequently called parser helpers.
+2. Add `#[inline]` where beneficial and non-noisy.
+
+**Verification:**
+- `cargo clippy --manifest-path Cargo.toml`
+
+##### CQ-L7: Introduce safe helper for repetitive `PyDict` construction
+**Category:** Rust Interop  
+**Severity:** Low  
+**Estimate:** 1.5 hours
+
+**Implementation Plan:**
+1. Add helper function/macro that inserts keys with checked `set_item` calls.
+2. Replace ad hoc patterns ignoring insertion results.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+
+##### CQ-L8: Preserve source error context in Rust conversions
+**Category:** Error Handling  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Prefer `#[from]` variants where appropriate in `SiaScraperError`.
+2. Keep root-cause context instead of flattening to string-only messages.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+- Error mapping tests pass
+
+##### CQ-L9: Simplify explicit lifetimes where elision is clearer
+**Category:** Readability  
+**Severity:** Low  
+**Estimate:** 30 minutes
+
+**Implementation Plan:**
+1. Review parser helpers for redundant explicit lifetimes.
+2. Apply elision where readability improves without ambiguity.
+
+**Verification:**
+- `cargo clippy --manifest-path Cargo.toml`
+
+##### CQ-L10: Evaluate `const fn` opportunities in Rust initialization paths
+**Category:** Performance  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Audit constant initialization in parser/request modules.
+2. Convert applicable runtime-initialized helpers to compile-time where practical.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+
+##### CQ-L11: Reduce redundant string allocations in Rust text extraction
+**Category:** Performance  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Review trim/collect/to_string chains in parser helpers.
+2. Use allocation-minimizing extraction patterns while preserving output parity.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+- benchmark comparison in `benchmarks/benchmark_parsing.py`
+
+##### CQ-L12: Precompile and standardize ViewState regex usage
+**Category:** Performance  
+**Severity:** Low  
+**Estimate:** 30 minutes
+
+**Implementation Plan:**
+1. Ensure regex is compiled once and reused in all Python extraction paths.
+2. Keep fallback behavior unchanged.
+
+**Verification:**
+- `pytest tests -k view_state -v`
+
+##### CQ-L13: Apply `frozen=True`/`slots=True` selectively to dataclasses
+**Category:** Python Quality  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Review data-holder dataclasses for immutability suitability.
+2. Add `frozen=True` and `slots=True` where mutation is not required.
+
+**Verification:**
+- `pyright`
+- dataclass-focused unit tests
+
+##### CQ-L14: Add context-manager support for scraper/session lifecycle
+**Category:** API Ergonomics  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Implement `__enter__`/`__exit__` on high-level scraper/session objects.
+2. Guarantee deterministic `close_session()` behavior.
+
+**Verification:**
+- new tests validating cleanup on success and exception
+
+##### CQ-L15: Convert simple list-building loops to comprehensions
+**Category:** Python Readability  
+**Severity:** Low  
+**Estimate:** 30 minutes
+
+**Implementation Plan:**
+1. Refactor straightforward accumulation loops in `scraper.py` and parsers.
+2. Keep side-effect-heavy loops unchanged.
+
+**Verification:**
+- `ruff check .`
+- `pytest tests/test_scraper.py -v`
+
+##### CQ-L16: Reduce brittle index-based test assumptions
+**Category:** Testing  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Replace hard-coded index assumptions with fixture-driven lookups by course code/name where possible.
+2. Keep index tests only where index semantics are the explicit subject.
+
+**Verification:**
+- `pytest tests/test_scraper.py tests/test_session.py -v`
+
+##### CQ-L17: Add reusable fixture factories
+**Category:** Testing  
+**Severity:** Low  
+**Estimate:** 2 hours
+
+**Implementation Plan:**
+1. Add `tests/fixtures/factories.py` for session/course payload builders.
+2. Migrate repetitive fixture setup from individual tests.
+
+**Verification:**
+- `pytest tests -v`
+
+##### CQ-L18: Add additional malformed-input edge-case tests
+**Category:** Testing  
+**Severity:** Low  
+**Estimate:** 1.5 hours
+
+**Implementation Plan:**
+1. Add malformed schedule, missing-attribute, empty-node, and unicode-heavy parser tests.
+2. Cover both Rust and Python wrappers for parity.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml`
+- `pytest tests/test_rust_parity.py -v`
+
+##### CQ-L19: Improve ViewState synchronization observability
+**Category:** Debuggability  
+**Severity:** Low  
+**Estimate:** 30 minutes
+
+**Implementation Plan:**
+1. Add explicit debug events for ViewState updated/unchanged states.
+2. Ensure logs are gated by debug mode to avoid noise.
+
+**Verification:**
+- debug log tests or manual debug run
+
+##### CQ-L20: Add Rust module-level examples in rustdoc
+**Category:** Documentation  
+**Severity:** Low  
+**Estimate:** 2 hours
+
+**Implementation Plan:**
+1. Add `//!` module examples for parser modules.
+2. Keep examples concise and aligned with exposed API.
+
+**Verification:**
+- `cargo test --manifest-path Cargo.toml --doc`
+
+##### CQ-L21: Add migration status matrix document
+**Category:** Documentation  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Create `docs/migration_status.md` with Python vs Rust coverage table.
+2. Include parity status and performance notes.
+
+**Verification:**
+- markdown lint/manual review
+
+##### CQ-L22: Replace residual generic exception catches in tests where meaningful
+**Category:** Testing Hygiene  
+**Severity:** Low  
+**Estimate:** 45 minutes
+
+**Implementation Plan:**
+1. Replace broad catches with targeted exceptions where test intent allows.
+2. Keep broad catches only where explicitly validating unknown failure boundaries.
+
+**Verification:**
+- `rg "except Exception" tests --type py`
+
+##### CQ-L23: Formalize mutable-default-argument guardrail
+**Category:** Preventive Quality  
+**Severity:** Low  
+**Estimate:** 30 minutes
+
+**Implementation Plan:**
+1. Add guideline in `AGENTS.md` and test-style docs to keep using `default_factory`/`None` patterns.
+2. Add review checklist item in migration execution notes.
+
+**Verification:**
+- doc review
+
+##### CQ-L24: Automate hygiene checks for imports/dead code
+**Category:** Tooling  
+**Severity:** Low  
+**Estimate:** 30 minutes
+
+**Implementation Plan:**
+1. Ensure `ruff check --fix . && ruff format . && ruff check .` is documented and used in pre-merge flow.
+2. Add local verification block in migration plan and PR template if applicable.
+
+**Verification:**
+- `ruff check .`
+
+##### CQ-L25: Update release-facing docs after structural changes
+**Category:** Documentation  
+**Severity:** Low  
+**Estimate:** 1 hour
+
+**Implementation Plan:**
+1. Update `README.md`, `CHANGELOG.md`, and `AGENTS.md` to reflect architecture/refactor outcomes.
+2. Reference new batch-resilience behavior and session component split.
+
+**Verification:**
+- manual docs consistency pass
+
+---
+
+#### Step 4 Suggested Execution Batches
+
+##### Batch A (High Priority, blocking)
+- CQ-H1, CQ-H2, CQ-H3
+
+##### Batch B (Medium Priority, strongly recommended before Phase 4)
+- CQ-M1, CQ-M2, CQ-M3, CQ-M4, CQ-M5, CQ-M6, CQ-M7
+
+##### Batch C (Low Priority, cleanup and hardening)
+- CQ-L1 through CQ-L25
+
+#### Step 4 Global Verification Gate
+Run after each batch and before starting Phase 4:
+
+```bash
+ruff check . && ruff format . && ruff check .
+pyright
+pytest
+cargo test --manifest-path Cargo.toml
+cargo clippy --manifest-path Cargo.toml
+```
+
+#### Step 4 Completion Criteria
+- All CQ-H and CQ-M items completed
+- At least 80% of CQ-L items completed (or explicitly deferred with rationale)
+- No critical regressions in parser correctness or performance
+- Migration plan and status docs updated to reflect completion
+
 ## Phase 4 Detailed Breakdown
 
 ### Phase 4.1: Research & Proof of Concept
