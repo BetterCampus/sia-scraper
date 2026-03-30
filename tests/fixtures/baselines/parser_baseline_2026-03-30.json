@@ -24,11 +24,11 @@
     "course_name": "\u00c1lgebra lineal b\u00e1sica (2015555)",
     "credits": 4,
     "first_condition": {
-      "all_required": "",
-      "condition": "",
-      "number_of_courses": "",
+      "all_required": "[N]",
+      "condition": "1",
+      "number_of_courses": "[1]",
       "prerequisites_count": 2,
-      "type": ""
+      "type": "M"
     },
     "first_prerequisite": {
       "course_code": "1000004-B",

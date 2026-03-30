@@ -38,6 +38,7 @@ from .core import (
     extract_view_state_from_response,
 )
 from .parsers.html_parser import HtmlParser, get_course_list
+from .parsers.models import SessionState
 from .utils import check_session, check_status, debug_log, handle_timeout_error
 
 
@@ -68,7 +69,7 @@ class SiaSession:
     def __init__(
         self,
         timeout: int = http.DEFAULT_TIMEOUT,
-        session_data: dict[str, Any] | None = None,
+        session_data: dict[str, Any] | SessionState | None = None,
         init_session: bool = False,
     ) -> None:
         """Initialize a SiaSession instance.
@@ -238,11 +239,11 @@ class SiaSession:
         self._STATUS = status.SiaSessionStatus.CAREER_NOT_SET
 
     @check_session
-    def get_session_data(self) -> dict[str, Any]:
+    def get_session_data(self) -> SessionState:
         """Serialize current session state for persistence/restoration.
 
         ## Returns
-            Dictionary containing all session state (cookies, tokens, career info, STATUS)
+            SessionState model containing all session state (cookies, tokens, career info, STATUS)
 
         ## Raises
             SiaSessionException.SessionNotSet: If no session exists
@@ -252,22 +253,22 @@ class SiaSession:
             to avoid repeated authentication and career navigation.
         """
         session = self._session
-        return {
-            "session_headers": dict(session.headers),  # type: ignore[OptionalMemberAccess]
-            "session_cookies": session.cookies.get_dict(),  # type: ignore[OptionalMemberAccess]
-            "params": self._params,
-            "javax_faces_ViewState": self._javax_faces_ViewState,
-            "career_code": self._career_code,
-            "career_name": self._career_name,
-            "is_electives": self._is_electives,
-            "STATUS": self._STATUS.name,
-        }
+        return SessionState(
+            session_headers=dict(session.headers),  # type: ignore[OptionalMemberAccess]
+            session_cookies=session.cookies.get_dict(),  # type: ignore[OptionalMemberAccess]
+            params=self._params,
+            javax_faces_ViewState=self._javax_faces_ViewState,
+            career_code=self._career_code,
+            career_name=self._career_name,
+            is_electives=self._is_electives,
+            STATUS=self._STATUS.name,
+        )
 
-    def load_session(self, session_data: dict[str, Any]) -> "SiaSession":
+    def load_session(self, session_data: SessionState | dict[str, Any]) -> "SiaSession":
         """Restore a previously serialized session state.
 
         ## Args
-            session_data: Dictionary from get_session_data() containing session state
+            session_data: SessionState model or dict from get_session_data() containing session state
 
         ## Returns
             self (for method chaining)
@@ -278,25 +279,28 @@ class SiaSession:
             3. Restore career context (code, name, course list)
             4. Re-fetch course list from SIA to ensure data freshness
         """
+        if isinstance(session_data, dict):
+            session_data = SessionState.model_validate(session_data)
+
         self._session = EnhancedSession(timeout=self.timeout)  # requests.session()
 
-        self._session.headers = session_data["session_headers"]
-        self._session.cookies.update(session_data["session_cookies"])
+        self._session.headers = session_data.session_headers  # type: ignore[assignment]
+        self._session.cookies.update(session_data.session_cookies)
 
-        self._params = session_data["params"]
+        self._params = session_data.params
         self._Adf_Page_Id = str(self._params["Adf-Page-Id"])
         self._Adf_Window_Id = str(self._params["Adf-Window-Id"])
 
-        self._javax_faces_ViewState = session_data["javax_faces_ViewState"]
+        self._javax_faces_ViewState = session_data.javax_faces_ViewState
 
-        self._career_code = session_data["career_code"]
-        self._career_name = session_data["career_name"]
+        self._career_code = session_data.career_code
+        self._career_name = session_data.career_name
         self.career_indices = self._career_code.split(
             "-"
         )  # Split into [level, campus, faculty, career]
 
-        self._is_electives = session_data["is_electives"]
-        self._STATUS = status.SiaSessionStatus[session_data["STATUS"]]
+        self._is_electives = session_data.is_electives
+        self._STATUS = status.SiaSessionStatus[session_data.STATUS]
 
         # Re-fetch current page to get updated course list and fresh ViewState
         r = self.get_request(f"{self._url}?taskflowId=task-flow-AC_CatalogoAsignaturas")

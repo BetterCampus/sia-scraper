@@ -188,7 +188,10 @@ def extract_replacements(scraper: SiaScraper, config: CaptureConfig) -> dict[str
         replacements[session._page_id] = "SANITIZED_PAGE_ID_000"
 
     if config.sanitize_cookies:
-        cookies = session_data.get("session_cookies", {})
+        if isinstance(session_data, dict):
+            cookies = session_data.get("session_cookies", {})
+        else:
+            cookies = getattr(session_data, "session_cookies", {})
         if isinstance(cookies, dict):
             for cookie_name, cookie_value in cookies.items():
                 if isinstance(cookie_value, str) and cookie_value:
