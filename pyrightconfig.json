@@ -1,4 +1,5 @@
 {
     "venvPath": "/home/gguio/.pyenv/versions",
-    "venv": "sia-scraper"
+    "venv": "sia-scraper",
+    "exclude": ["benchmarks", "tests/test_rust_parity.py"]
 }
