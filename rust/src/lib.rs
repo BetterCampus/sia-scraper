@@ -9,6 +9,7 @@ use pyo3::PyTypeInfo;
 
 mod error;
 mod parsers;
+mod testing;
 #[cfg(test)]
 mod tests;
 
@@ -191,23 +192,14 @@ fn build_oracle_adf_request_body(
     use parsers::adf_request::OracleAdfRequestBuilderState;
 
     let mut state = OracleAdfRequestBuilderState::new();
-    let mut rust_request_dict = std::collections::HashMap::new();
 
     for (k, v) in request_dict {
         let key: String = k.extract().map_err(error::SiaScraperError::from)?;
         let value: String = v.extract().map_err(error::SiaScraperError::from)?;
-        rust_request_dict.insert(key, value);
+        state.request_dict.insert(key, value);
     }
 
-    state.request_dict = rust_request_dict;
-    let request_dict = std::mem::take(&mut state.request_dict);
-    let built = state.build_request_body(
-        request_dict,
-        data_name,
-        idx,
-        &career_indices,
-        course_list_len,
-    )?;
+    let built = state.build_request_body(data_name, idx, &career_indices, course_list_len)?;
 
     Python::with_gil(|py| {
         let dict = pyo3::types::PyDict::new(py);

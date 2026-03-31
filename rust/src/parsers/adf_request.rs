@@ -121,8 +121,7 @@ impl OracleAdfRequestBuilderState {
 
     /// Builds request body for one data map action.
     pub fn build_request_body(
-        &self,
-        mut request_dict: HashMap<String, String>,
+        mut self,
         data_name: &str,
         idx: i32,
         career_indices: &[String],
@@ -133,7 +132,7 @@ impl OracleAdfRequestBuilderState {
         })?;
 
         if data_name == FACULTY_CAREER_DD {
-            request_dict.insert(
+            self.request_dict.insert(
                 FACULTY_CAREER_DD_ID.to_string(),
                 FACULTY_CAREER_DEFAULT_INDEX.to_string(),
             );
@@ -151,17 +150,17 @@ impl OracleAdfRequestBuilderState {
                         "career_indices[1] must be an integer string".to_string(),
                     )
                 })?;
-            request_dict.insert(
+            self.request_dict.insert(
                 CAMPUS_ELECTIVES_DD_ID.to_string(),
                 (second_index + ELECTIVES_CAMPUS_INCREMENT).to_string(),
             );
         }
 
         let event_dict = get_event_dict(component_id, event_value, idx);
-        request_dict.extend(event_dict);
+        self.request_dict.extend(event_dict);
 
         if data_name == SELECT_ROW {
-            request_dict.insert(
+            self.request_dict.insert(
                 "oracle.adf.view.rich.DELTAS".to_string(),
                 format!(
                     "{{pt1:r1:0:t4={{viewportSize={},rows={},selectedRowKeys={}}}}}",
@@ -171,13 +170,13 @@ impl OracleAdfRequestBuilderState {
                 ),
             );
         } else if data_name == COURSE_PAGE_LINK {
-            request_dict.insert(
+            self.request_dict.insert(
                 "oracle.adf.view.rich.RENDER".to_string(),
                 ORACLE_ADF_RENDER_TARGET.to_string(),
             );
         }
 
-        Ok(request_dict)
+        Ok(std::mem::take(&mut self.request_dict))
     }
 }
 
@@ -235,13 +234,7 @@ mod tests {
         let mut builder = OracleAdfRequestBuilderState::new();
         let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
-        let result = builder.build_request_body(
-            std::mem::take(&mut builder.request_dict),
-            "UNKNOWN_ACTION",
-            -1,
-            &["0".to_string()],
-            2,
-        );
+        let result = builder.build_request_body("UNKNOWN_ACTION", -1, &["0".to_string()], 2);
         assert!(result.is_err());
     }
 
@@ -252,7 +245,6 @@ mod tests {
 
         let request_body = builder
             .build_request_body(
-                std::mem::take(&mut builder.request_dict),
                 FACULTY_CAREER_DD,
                 -1,
                 &["0".to_string(), "5".to_string()],
@@ -273,7 +265,6 @@ mod tests {
 
         let request_body = builder
             .build_request_body(
-                std::mem::take(&mut builder.request_dict),
                 CAMPUS_ELECTIVES_DD,
                 -1,
                 &["0".to_string(), "5".to_string()],
@@ -293,13 +284,7 @@ mod tests {
         let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
         let request_body = builder
-            .build_request_body(
-                std::mem::take(&mut builder.request_dict),
-                SELECT_ROW,
-                1,
-                &["0".to_string(), "5".to_string()],
-                2,
-            )
+            .build_request_body(SELECT_ROW, 1, &["0".to_string(), "5".to_string()], 2)
             .unwrap();
 
         let deltas = request_body.get("oracle.adf.view.rich.DELTAS").unwrap();
@@ -314,13 +299,7 @@ mod tests {
         let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
         let request_body = builder
-            .build_request_body(
-                std::mem::take(&mut builder.request_dict),
-                COURSE_PAGE_LINK,
-                -1,
-                &["0".to_string(), "5".to_string()],
-                2,
-            )
+            .build_request_body(COURSE_PAGE_LINK, -1, &["0".to_string(), "5".to_string()], 2)
             .unwrap();
 
         assert_eq!(
