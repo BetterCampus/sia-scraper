@@ -4,6 +4,7 @@
 //! from Oracle ADF XML/HTML responses returned by SIA's web interface.
 
 use crate::error::SiaScraperError;
+use crate::parsers::utils::extract_text_from_elem;
 use pyo3::prelude::*;
 use pyo3::Py;
 use regex::Regex;
@@ -31,10 +32,6 @@ fn css_select_elem<'a>(root: &'a ElementRef<'a>, selector_str: &str) -> Vec<Elem
     Selector::parse(selector_str)
         .map(|selector| root.select(&selector).collect())
         .unwrap_or_default()
-}
-
-fn extract_text_from_elem(elem: &ElementRef<'_>) -> String {
-    elem.text().collect::<String>().trim().to_string()
 }
 
 /// Extract human-readable plain text from Oracle ADF XML/HTML response.

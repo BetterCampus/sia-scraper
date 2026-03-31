@@ -10,6 +10,7 @@ use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 
 use crate::error::SiaScraperError;
+use crate::parsers::utils::extract_text_from_elem;
 
 const COURSE_CODE_COL: usize = 0;
 const COURSE_NAME_COL: usize = 1;
@@ -37,10 +38,6 @@ static ROW_SELECTOR: LazyLock<Selector> =
 static SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.af_column_data-container").expect("span selector must parse")
 });
-
-fn extract_text_from_elem(elem: &ElementRef) -> String {
-    elem.text().collect::<String>().trim().to_string()
-}
 
 fn strip_tags(content: &str) -> String {
     TAG_REGEX.replace_all(content, "").trim().to_string()
