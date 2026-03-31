@@ -144,6 +144,24 @@ class SiaScraper:
         self._sia_session.close_session()
         return self
 
+    def __enter__(self) -> "SiaScraper":
+        """Enter context manager for deterministic cleanup.
+
+        ## Returns
+            Self for use in `with` block.
+        """
+        return self
+
+    def __exit__(self, exc_type: type, exc_val: Exception, exc_tb: object) -> None:
+        """Exit context manager and ensure session cleanup.
+
+        ## Args
+            exc_type: Exception type if exception raised in `with` block.
+            exc_val: Exception instance if exception raised.
+            exc_tb: Traceback if exception raised.
+        """
+        self._sia_session.close_session()
+
     def valid_session(self) -> bool:
         """Check if the current session is still valid for SIA operations.
 

@@ -344,6 +344,14 @@ class SiaSession:
         self._init_request_dict()
         self._STATUS = status.SiaSessionStatus.NO_SESSION
 
+    def __enter__(self) -> "SiaSession":
+        """Enter context manager for deterministic cleanup."""
+        return self
+
+    def __exit__(self, exc_type: type, exc_val: Exception, exc_tb: object) -> None:
+        """Exit context manager and ensure session cleanup."""
+        self.close_session()
+
     @check_session
     def keep_alive(self) -> Response:
         """Reset SIA session timeout by making a lightweight request.
