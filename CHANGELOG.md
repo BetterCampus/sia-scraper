@@ -52,6 +52,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New async factory helpers: `init_sia_scraper_async()` and `create_career_session_async()`
   - New async scraper unit tests in `tests/test_scraper_async.py`
   - `sia_scraper.__init__` now conditionally exports async API when Rust extension is available
+- **Rust quality CI workflow**:
+  - Added `.github/workflows/rust.yml`
+  - Runs `cargo clippy` and `cargo test --lib --no-default-features`
+  - Added `rust-toolchain.toml` for consistent Rust toolchain pinning
+- **Cross-platform wheel CI builds**:
+  - Added `.github/workflows/build-wheels.yml`
+  - Builds maturin wheels for Linux/macOS/Windows and produces sdist artifacts
+  - Includes wheel smoke-import verification job
+- **Fuzz smoke CI workflow**:
+  - Added `.github/workflows/fuzz.yml`
+  - Runs short `cargo fuzz` smoke executions on schedule and manual dispatch
 
 ### Refactored
 
@@ -65,6 +76,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Malformed-row compatibility in Rust course list parser**:
   - Added fallback path to handle edge-case HTML where `<span>` nodes appear directly under `<tr>`
   - Maintains parity with existing Python/XPath behavior for legacy test fixtures
+- **Rust-backed async career navigation + XML retrieval**:
+  - Implemented Rust-side `set_career` workflow returning course list + updated ViewState data
+  - Implemented Rust-side `get_course_xml` retrieval workflow
+  - Updated Python async wrapper integration to use Rust results and electives input
+- **Async session test stabilization**:
+  - Reworked `tests/test_session_async.py` to avoid live-network dependence
+  - Converted to deterministic mocked unit tests for CI reliability
 - **Typed prerequisite condition fields (breaking)**:
   - `PrereqCondition.condition`: `str` -> `int`
   - `PrereqCondition.type`: `str` -> `PrereqType` enum (`M`, `O`, `E`, `A`, `UNKNOWN`)

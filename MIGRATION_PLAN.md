@@ -99,13 +99,19 @@ See [Phase 3/4 Execution Plan](#phase-34-execution-plan) below for detailed exec
 
 See [Phase 4 Detailed Breakdown](#phase-4-detailed-breakdown) for implementation details.
 
-### Phase 5: Async & Production Polish 🔮 FUTURE
-**Status:** Planned
+### Phase 5: Async & Production Polish 🚧 IN PROGRESS
+**Status:** Substantially complete (PyPI publishing intentionally deferred)
 
-- Full async support with `tokio` + `reqwest`
-- Fuzz testing integration (`cargo fuzz`)
-- GitHub Actions with maturin wheel building
-- PyPI publishing
+**Completed in this phase:**
+- ✅ Full async support with `tokio` + `reqwest`
+- ✅ Rust quality workflow in GitHub Actions (`.github/workflows/rust.yml`)
+- ✅ Cross-platform wheel + sdist CI builds via maturin (`.github/workflows/build-wheels.yml`)
+- ✅ Fuzz smoke CI workflow (`.github/workflows/fuzz.yml`)
+- ✅ Rust extension build integration in test workflows
+- ✅ Async session behavior stabilized with non-network unit tests
+
+**Deferred by scope:**
+- ⏸️ PyPI publishing
 
 ---
 
@@ -882,7 +888,7 @@ pub fn parse(html: &str) -> Data {
 
 ## CI/CD: GitHub Actions + Maturin
 
-**Status:** Deferred to Phase 4
+**Status:** Implemented in Phase 5 (PyPI publishing deferred)
 
 ### Planned Wheel Building
 ```yaml
@@ -892,13 +898,14 @@ pub fn parse(html: &str) -> Data {
     manylinux: auto
 ```
 
-### Supported Platforms (Future)
+### Supported Platforms
 - ✅ Linux: x86_64, aarch64
 - ✅ macOS: x86_64, arm64 (M1/M2)
 - ✅ Windows: x86_64
 
-### Distribution (Future)
-- **PyPI:** Precompiled wheels
+### Distribution
+- **CI artifacts:** Precompiled wheels + source distribution generated on GitHub Actions
+- **PyPI:** Deferred
 - **Fallback:** Source distribution (requires Rust toolchain)
 
 ## Testing Strategy
@@ -950,7 +957,14 @@ ruff check .                        # Linting
 - [x] `reqwest` integration (async)
 - [x] Retry logic port
 - [x] `SiaSession` async Python integration (`SiaSessionAsync`)
-- [ ] CI/CD with maturin-action
+- [x] CI/CD with maturin-action
+- [ ] PyPI publishing
+
+### Phase 5 (Async & Production Polish)
+- [x] Rust CI quality workflow (`cargo clippy` + Rust lib tests)
+- [x] Cross-platform wheel and sdist builds in CI
+- [x] Fuzz smoke CI workflow (`cargo fuzz` quick runs)
+- [x] Async workflow hardening + test stabilization
 - [ ] PyPI publishing
 
 ## Timeline
@@ -962,7 +976,7 @@ ruff check .                        # Linting
 | Phase 2 | Oracle ADF logic | ✅ Complete |
 | Phase 3 | Parser completion + fuzzing | ✅ Complete |
 | Phase 4 | HTTP client (async) | ✅ Complete |
-| Phase 5 | Async + production polish | 🔮 Future |
+| Phase 5 | Async + production polish | 🚧 In Progress (PyPI deferred) |
 
 ## Breaking Changes
 
