@@ -2,6 +2,18 @@
 //!
 //! This module defines the error hierarchy used throughout the Rust parsing
 //! code, providing specific error variants for different failure modes.
+//!
+//! # Error Taxonomy
+//! - `InvalidInput`: caller-provided action/input is invalid for the requested operation.
+//! - `ExtractionError`: required ADF/token data cannot be extracted from markup.
+//! - `MissingElement`: required HTML node is missing for a known selector.
+//! - `ParseFieldError`: a specific field value cannot be parsed into the expected type.
+//! - `ParseError` / `XmlError`: generic parsing failures where field-level context is unavailable.
+//!
+//! # Propagation Policy
+//! All fallible parser and request-builder operations return `Result<T, SiaScraperError>`.
+//! At the Python FFI boundary, errors are mapped into `SiaScraperException` while preserving
+//! detailed context in the error message.
 
 use pyo3::create_exception;
 use thiserror::Error;

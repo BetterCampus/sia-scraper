@@ -18,6 +18,17 @@ Architecture:
     parsers - Course info and prerequisites extraction with dataclasses
         ↓ uses
     constants - Oracle ADF component IDs, request templates, status enums
+
+Error Taxonomy:
+    - Session lifecycle and navigation errors raise `SiaSessionException` variants.
+    - Parser/model validation issues bubble up as `ValueError` from typed models.
+    - Network failures from the transport layer (`requests`) propagate unchanged.
+
+Error Propagation Policy:
+    - Single-course methods fail fast and propagate the originating exception.
+    - Batch scraping in `SKIP`/`RETRY` mode captures unknown exception boundaries
+      intentionally and reports failures in `ScrapeResult` while continuing work.
+    - Batch scraping in `ABORT` mode preserves strict fail-fast behavior.
 """
 
 from collections.abc import Callable

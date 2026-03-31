@@ -10,6 +10,7 @@ import pytest
 from requests.exceptions import ConnectionError, Timeout
 
 from sia_scraper.constants import SiaSessionStatus
+from sia_scraper.core import SiaSessionException
 from sia_scraper.parsers import CourseInfo
 from sia_scraper.parsers.models import ErrorMode, ScrapeResult
 from sia_scraper.scraper import SiaScraper
@@ -251,7 +252,7 @@ class TestRecoveryFlowEdgeCases:
 
         try:
             scraper.set_career("0-2-8-3")
-        except Exception:
+        except (SiaSessionException, ConnectionError, Timeout, ValueError):
             pass
 
         assert scraper.valid_session()
