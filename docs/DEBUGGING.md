@@ -70,13 +70,20 @@ Checks:
 Example:
 
 ```python
+import asyncio
+
 from sia_scraper import SiaScraper
 
-scraper = SiaScraper(init_session=False)
-scraper.create_session()
-print(scraper.sia_session.STATUS)
-scraper.set_career("0-2-8-3")
-print(scraper.sia_session.STATUS)
+
+async def main() -> None:
+    scraper = SiaScraper(init_session=False)
+    await scraper.create_session()
+    print(scraper.sia_session.STATUS)
+    await scraper.set_career("0-2-8-3")
+    print(scraper.sia_session.STATUS)
+
+
+asyncio.run(main())
 ```
 
 ## 2) Wrong course details for a selected index
@@ -114,13 +121,20 @@ Checks:
 Example fallback pattern:
 
 ```python
-course_info = None
-for idx in range(min(5, len(scraper.course_list))):
-    try:
-        course_info = scraper.get_course_info(course_index=idx)
-        break
-    except ValueError:
-        continue
+import asyncio
+
+
+async def main() -> None:
+    course_info = None
+    for idx in range(min(5, len(scraper.course_list))):
+        try:
+            course_info = await scraper.get_course_info(course_index=idx)
+            break
+        except ValueError:
+            continue
+
+
+asyncio.run(main())
 ```
 
 ## 4) Career loads but course list is empty
@@ -143,24 +157,16 @@ ruff check --fix . && ruff format . && ruff check .
 pyright
 ```
 
-Run only integration tests:
-
-```bash
-pytest tests/test_integration.py -v
-```
-
 ## Useful files for troubleshooting
 
 - `src/sia_scraper/session.py`
-- `src/sia_scraper/core/oracle_adf_request.py`
+- `src/sia_scraper/scraper.py`
 - `src/sia_scraper/core/adf_state.py`
+- `src/sia_scraper/core/exceptions.py`
 - `src/sia_scraper/parsers/course_parser.py`
-- `tests/test_integration.py`
+- `docs/SYNC_API_REFERENCE.md` (historical sync implementation reference)
 
-## Project structure (v0.2.1+)
-
-Since version `0.2.1`, infrastructure and utility modules were grouped into
-dedicated packages:
+## Project structure (v2.0+)
 
 ```text
 src/sia_scraper/
@@ -168,12 +174,9 @@ src/sia_scraper/
 ├── session.py
 ├── core/
 │   ├── adf_state.py
-│   ├── enhanced_session.py
-│   ├── exceptions.py
-│   └── oracle_adf_request.py
+│   └── exceptions.py
 ├── utils/
 │   ├── date_formatter.py
-│   ├── decorators.py
 │   └── debug.py
 ├── constants/
 └── parsers/

@@ -102,6 +102,8 @@ See [Phase 4 Detailed Breakdown](#phase-4-detailed-breakdown) for implementation
 ### Phase 5: Async & Production Polish 🚧 IN PROGRESS
 **Status:** Substantially complete (PyPI publishing intentionally deferred)
 
+**Phase 5.6 Async Cutover:** ✅ Complete
+
 **Completed in this phase:**
 - ✅ Full async support with `tokio` + `reqwest`
 - ✅ Rust quality workflow in GitHub Actions (`.github/workflows/rust.yml`)
@@ -109,6 +111,7 @@ See [Phase 4 Detailed Breakdown](#phase-4-detailed-breakdown) for implementation
 - ✅ Fuzz smoke CI workflow (`.github/workflows/fuzz.yml`)
 - ✅ Rust extension build integration in test workflows
 - ✅ Async session behavior stabilized with non-network unit tests
+- ✅ Removed sync Python API remnants and promoted async API names as primary
 
 **Deferred by scope:**
 - ⏸️ PyPI publishing
@@ -832,14 +835,14 @@ cargo clippy --manifest-path Cargo.toml
 **Purpose:** Migrate the high-level `SiaScraper` facade to async API.
 
 **Completed:**
-- Added `src/sia_scraper/scraper_async.py` with `SiaScraperAsync` async facade
+- Added async facade in `src/sia_scraper/scraper.py`
 - Added async public methods for course info, prereqs, career setup, and batch scraping
-- Added async factory helpers: `init_sia_scraper_async()` and `create_career_session_async()`
-- Added dedicated async scraper tests in `tests/test_scraper_async.py`
-- Kept sync `SiaScraper` API intact for backward compatibility during migration
+- Added async factory helpers: `init_sia_scraper()` and `create_career_session()`
+- Added dedicated async scraper tests in `tests/test_scraper.py`
+- Removed sync API remnants in Phase 5.6
 
 **Deliverables:**
-- Full async public API via `SiaScraperAsync`
+- Full async public API via `SiaScraper`
 - Async factory helpers exported from package root
 - Updated async test coverage for scraper facade
 
@@ -956,7 +959,7 @@ ruff check .                        # Linting
 ### Phase 4 (HTTP Client Migration)
 - [x] `reqwest` integration (async)
 - [x] Retry logic port
-- [x] `SiaSession` async Python integration (`SiaSessionAsync`)
+- [x] `SiaSession` async Python integration
 - [x] CI/CD with maturin-action
 - [ ] PyPI publishing
 
@@ -965,6 +968,7 @@ ruff check .                        # Linting
 - [x] Cross-platform wheel and sdist builds in CI
 - [x] Fuzz smoke CI workflow (`cargo fuzz` quick runs)
 - [x] Async workflow hardening + test stabilization
+- [x] Phase 5.6 async-only API cutover (remove sync remnants)
 - [ ] PyPI publishing
 
 ## Timeline

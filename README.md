@@ -4,8 +4,8 @@
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bettercampus.github.io/sia-scraper)
 
 A Python library for extracting course information from Universidad Nacional de Colombia's SIA
-(Sistema de Informacion Academica). It handles Oracle ADF session/state complexity so you can
-work with structured, typed course data.
+(Sistema de Informacion Academica). It uses a Rust-backed async HTTP/session layer and returns
+structured, typed course data.
 
 ## What is SIA?
 
@@ -14,7 +14,7 @@ contains course metadata such as schedules, groups, prerequisites, and enrollmen
 
 SIA is built on Oracle Application Development Framework (ADF), which requires strict
 stateful navigation (ViewState, window/page IDs, event ordering). `sia-scraper` abstracts
-that workflow behind a clean Python API.
+that workflow behind an async Python API.
 
 ## Important Notice
 
@@ -50,51 +50,44 @@ If you update Rust code later, run the sync command again to refresh the local e
 ### Minimal Example
 
 ```python
+import asyncio
+
 from sia_scraper import SiaScraper
 
-scraper = SiaScraper()
-scraper.set_career("0-2-8-3")
 
-course = scraper.get_course_info(course_code="2016489")
-print(f"{course.course_name} ({course.credits} credits)")
-
-scraper.close_session()
-```
-
-### Async API (v2.0+)
-
-For high-throughput scenarios, use the async API:
-
-```python
-import asyncio
-from sia_scraper import SiaSessionAsync
-
-async def main():
-    session = await SiaSessionAsync.create()
-    await session.set_career("0-2-8-3")
-    xml = await session.get_course_xml(0)
-    await session.close()
-
-asyncio.run(main())
-```
-
-You can also use the async scraper facade:
-
-```python
-import asyncio
-from sia_scraper import SiaScraperAsync
-
-async def main():
-    scraper = await SiaScraperAsync.create()
+async def main() -> None:
+    scraper = await SiaScraper.create()
     await scraper.set_career("0-2-8-3")
+
     course = await scraper.get_course_info(course_code="2016489")
     print(f"{course.course_name} ({course.credits} credits)")
+
     await scraper.close_session()
+
 
 asyncio.run(main())
 ```
 
-See [docs/MIGRATION_v2.md](docs/MIGRATION_v2.md) for complete migration guide.
+### Direct Session API
+
+```python
+import asyncio
+
+from sia_scraper import SiaSession
+
+
+async def main() -> None:
+    session = await SiaSession.create()
+    await session.set_career("0-2-8-3")
+    xml = await session.get_course_xml(0)
+    print(len(xml))
+    await session.close()
+
+
+asyncio.run(main())
+```
+
+See [docs/MIGRATION_v2.md](docs/MIGRATION_v2.md) for complete migration guidance.
 
 Career codes use the format `{level}-{campus}-{faculty}-{career}`.
 
@@ -103,28 +96,35 @@ Career codes use the format `{level}-{campus}-{faculty}-{career}`.
 ### Course Details and Groups
 
 ```python
+import asyncio
+
 from sia_scraper import SiaScraper
 
-scraper = SiaScraper()
-scraper.set_career("0-2-8-3")
 
-course = scraper.get_course_info(course_code="2016489")
-print(course.course_name)
-print(course.typology)
-print(course.available_spots)
+async def main() -> None:
+    scraper = await SiaScraper.create()
+    await scraper.set_career("0-2-8-3")
 
-for group in course.groups:
-    print(group.group_name, group.teacher, group.spots)
-    for sch in group.schedules:
-        print(sch.day, sch.start_time, sch.end_time, sch.classroom)
+    course = await scraper.get_course_info(course_code="2016489")
+    print(course.course_name)
+    print(course.typology)
+    print(course.available_spots)
 
-scraper.close_session()
+    for group in course.groups:
+        print(group.group_name, group.teacher, group.spots)
+        for sch in group.schedules:
+            print(sch.day, sch.start_time, sch.end_time, sch.classroom)
+
+    await scraper.close_session()
+
+
+asyncio.run(main())
 ```
 
 ### Prerequisites
 
 ```python
-prereqs = scraper.get_course_prereqs(course_code="2016489")
+prereqs = await scraper.get_course_prereqs(course_code="2016489")
 
 for condition in prereqs.conditions:
     print(condition.condition_type)
@@ -135,35 +135,41 @@ for condition in prereqs.conditions:
 ### Session Persistence
 
 ```python
-from sia_scraper import SiaScraper
+import asyncio
 
-scraper = SiaScraper()
-scraper.set_career("0-2-8-3")
-saved = scraper.get_session_data()
-scraper.close_session()
+from sia_scraper import SiaScraper, init_sia_scraper
 
-scraper = SiaScraper(session_data=saved)
-course = scraper.get_course_info(course_code="2016489")
-print(course.course_name)
-scraper.close_session()
+
+async def main() -> None:
+    scraper = await SiaScraper.create()
+    await scraper.set_career("0-2-8-3")
+    saved = scraper.get_session_data()
+    await scraper.close_session()
+
+    restored = await init_sia_scraper("0-2-8-3", False, session_data=saved)
+    course = await restored.get_course_info(course_code="2016489")
+    print(course.course_name)
+    await restored.close_session()
+
+
+asyncio.run(main())
 ```
 
 ### Error Handling
 
 ```python
-from sia_scraper import SiaScraper, SiaSessionException
+from sia_scraper import SiaSessionException
 
-scraper = SiaScraper()
 try:
-    scraper.set_career("0-2-8-3")
-    course = scraper.get_course_info(course_code="2016489")
+    await scraper.set_career("0-2-8-3")
+    course = await scraper.get_course_info(course_code="2016489")
     print(course.course_name)
 except SiaSessionException.TimeoutError:
     print("SIA timeout. Retry later.")
 except SiaSessionException.CareerNotSet:
     print("Career not set.")
 finally:
-    scraper.close_session()
+    await scraper.close_session()
 ```
 
 ## Documentation
@@ -179,46 +185,40 @@ Current version: `0.2.1`.
 
 - Python `>=3.10`
 - Runtime dependencies:
-  - `requests~=2.32.3`
-  - `lxml~=4.9.2`
+  - `lxml~=5.2.0`
   - `cssselect~=1.2.0`
+  - `pydantic>=2.0,<3.0`
+  - `loguru~=0.7.0`
 
 ## Project Structure
 
 ```text
 src/sia_scraper/
-├── scraper.py              # Main facade with context manager support
-├── session.py             # Session management with context manager support
+├── scraper.py              # Async facade (Rust-backed session)
+├── session.py              # Async Rust-backed session wrapper
 ├── core/
-│   ├── adf_state.py       # ViewState extraction utilities
-│   ├── adf_state_manager.py  # Extracted ADF state manager component
-│   ├── enhanced_session.py   # HTTP session wrapper
-│   ├── exceptions.py      # Exception hierarchy
-│   ├── navigation_controller.py  # Workflow navigation
-│   └── oracle_adf_request.py  # Request builder (Rust-backed)
+│   ├── adf_state.py        # ViewState extraction utilities
+│   └── exceptions.py       # Exception hierarchy
 ├── utils/
 │   ├── date_formatter.py
-│   ├── decorators.py
 │   └── debug.py
 ├── constants/
-└── parsers/               # HTML/XML parsing (Rust-backed)
+└── parsers/                # HTML/XML parsing
 ```
 
 ## Architecture Highlights
 
-### Session Component Split
-The session layer has been refactored into isolated components for better maintainability:
-- **AdfStateManager**: Handles ViewState synchronization and lifecycle
-- **NavigationController**: Orchestrates ADF workflow navigation
-- **AdfContext**: Value object carrying request context (ViewState, window IDs, event)
+### Async-Only API
+The public API is async-first and Rust-backed. Network/session workflow is handled by Rust
+(`reqwest` + `tokio`) through the `sia_scraper_rust` extension.
 
 ### Batch Resilience
 The `scrape_courses()` method includes resilient batch processing:
 - **SKIP**: Skip rows that fail to parse
-- **RETRY**: Retry failed rows up to 3 times with exponential backoff
-- **ABORT**: Abort on first failure (default behavior preserved)
+- **RETRY**: Retry failed rows up to 3 times with configurable delay
+- **ABORT**: Abort on first failure
 
-Configure via `scrape_courses(mode="retry")` or `scrape_courses(max_retries=5)`.
+Configure via `scrape_courses(error_mode="retry")`.
 
 ## Testing and Quality Checks
 
@@ -252,28 +252,9 @@ Useful variants:
 pytest --cov=src/sia_scraper
 pytest tests/utils/test_date_formatter.py
 pytest -m "not integration"
-pytest -m "not integration and not network"
 pytest tests/fixtures/test_fixtures_validity.py
 pytest tests/fixtures/test_contracts.py tests/fixtures/test_regression.py
 ```
-
-### CI behavior for live tests
-
-- The default CI workflow (`.github/workflows/test.yml`) skips live SIA tests using:
-  - `pytest -m "not integration and not network"`
-- This keeps pull request checks deterministic and avoids failures caused by temporary
-  SIA outages or Oracle ADF response changes.
-- Live SIA tests run separately in `.github/workflows/integration-live.yml`
-  (manual trigger and nightly schedule).
-
-Run live integration tests locally with:
-
-```bash
-pytest -m "integration and network" -v
-```
-
-Captured fixture snapshots used by these tests live in `tests/fixtures/` and are refreshed
-with `python scripts/capture_sia_fixtures.py`.
 
 ## Contributing
 

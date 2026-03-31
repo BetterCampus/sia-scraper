@@ -33,8 +33,9 @@ from sia_scraper import SiaScraper
 
 
 async def main() -> None:
-    scraper = SiaScraper(username="user", password="pass")
-    history = await scraper.scrape_history()
+    scraper = await SiaScraper.create()
+    await scraper.set_career("0-2-8-3")
+    history = await scraper.get_course_info(course_index=0)
     print(history)
 
 
@@ -91,8 +92,9 @@ import asyncio
 
 
 async def run() -> None:
-    scraper = SiaScraper(username="user", password="pass")
-    data = await scraper.scrape_history()
+    scraper = await SiaScraper.create()
+    await scraper.set_career("0-2-8-3")
+    data = await scraper.get_course_info(course_index=0)
     print(data)
 
 
@@ -109,8 +111,9 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_scrape_history_returns_data() -> None:
-    scraper = SiaScraper(username="user", password="pass")
-    data = await scraper.scrape_history()
+    scraper = await SiaScraper.create()
+    await scraper.set_career("0-2-8-3")
+    data = await scraper.get_course_info(course_index=0)
     assert data is not None
 ```
 
@@ -151,8 +154,9 @@ import asyncio
 
 
 async def scrape_one(creds: dict[str, str]):
-    scraper = SiaScraper(**creds)
-    return await scraper.scrape_history()
+    scraper = await SiaScraper.create()
+    await scraper.set_career("0-2-8-3")
+    return await scraper.get_course_info(course_index=0)
 
 
 async def scrape_many(users: list[dict[str, str]]):
@@ -200,6 +204,17 @@ pip install target/wheels/sia_scraper-*.whl --force-reinstall
 - [ ] Add/update async pytest tests
 - [ ] Run `ruff`, `pyright`, `clippy`, and `pytest`
 - [ ] Run benchmark comparison and capture baseline
+
+## API Naming Note
+
+During Phase 5.6, async classes and factories were promoted to primary names:
+
+- `SiaSessionAsync` -> `SiaSession`
+- `SiaScraperAsync` -> `SiaScraper`
+- `init_sia_scraper_async()` -> `init_sia_scraper()`
+- `create_career_session_async()` -> `create_career_session()`
+
+All examples in this guide use the current primary names.
 
 ## Additional Resources
 
