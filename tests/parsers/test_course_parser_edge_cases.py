@@ -156,3 +156,120 @@ class TestCourseParserEdgeCases:
         assert group is not None
         result = _extract_group(group, "CURSO X")
         assert result is None
+
+
+@pytest.mark.unit
+class TestMalformedInputEdgeCases:
+    """Test parser behavior with malformed/malicious inputs."""
+
+    def test_scrape_info_with_unicode_heavy_content(self) -> None:
+        """Verify parser handles unicode-heavy content without crashing."""
+        xml = """
+        <h2>基础日本語العربيةΕλληνικά</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+        """
+        result = scrape_info(xml)
+        assert result is not None
+        assert result.course_name == "基础日本語العربيةΕλληνικά"
+
+    def test_scrape_info_with_empty_spans(self) -> None:
+        """Verify parser handles empty span elements."""
+        xml = """
+        <h2>Test Course</h2>
+        <span class="detass-creditos"><span></span></span>
+        <span class="detass-tipologia"><span>   </span></span>
+        """
+        with pytest.raises(ValueError):
+            scrape_info(xml)
+
+    def test_scrape_info_with_nested_empty_tags(self) -> None:
+        """Verify parser handles nested empty tags."""
+        xml = """
+        <h2>Test Course</h2>
+        <span class="detass-creditos"><span><span><span>3</span></span></span></span>
+        <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+        """
+        result = scrape_info(xml)
+        assert result is not None
+
+    def test_scrape_prereqs_with_malformed_schedule(self) -> None:
+        """Verify parser handles malformed schedule data."""
+        xml = """
+        <h2>Test Course</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+        <div class="af_panelTabbed_body">
+          <div>
+            <div>
+              <div class="af_showDetailHeader">
+                <span>PRERREQUISITE</span>
+              </div>
+              <div>
+                <div>
+                  <table>
+                    <tr>
+                      <td><span>Prerrequisito</span></td>
+                      <td><span>Tipo</span></td>
+                      <td><span>Todos</span></td>
+                      <td><span>2</span></td>
+                    </tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        """
+        result = scrape_prereqs(xml)
+        assert result is not None
+
+    def test_scrape_prereqs_with_unicode_in_conditions(self) -> None:
+        """Verify parser handles unicode in prerequisite conditions."""
+        xml = """
+        <h2>Test Course 中文 العربية</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+        <div class="af_panelTabbed_body">
+          <div>
+            <div>
+              <div class="af_showDetailHeader">
+                <span>Prerrequisito</span>
+              </div>
+              <div>
+                <div>
+                  <table>
+                    <tr>
+                      <td><span>Curso 基础</span></td>
+                      <td><span>Curso 中文</span></td>
+                    </tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        """
+        result = scrape_prereqs(xml)
+        assert result is not None
+
+    def test_scrape_info_with_extremely_long_course_name(self) -> None:
+        """Verify parser handles extremely long course names."""
+        long_name = "A" * 10000
+        xml = f"""
+        <h2>{long_name}</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+        """
+        result = scrape_info(xml)
+        assert result is not None
+
+    def test_scrape_info_with_special_characters_in_course_name(self) -> None:
+        """Verify parser handles special characters in course names."""
+        xml = r"""
+        <h2>Course &amp; More &lt;test&gt;</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+        """
+        result = scrape_info(xml)
+        assert result is not None
