@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Malformed-row compatibility in Rust course list parser**:
   - Added fallback path to handle edge-case HTML where `<span>` nodes appear directly under `<tr>`
   - Maintains parity with existing Python/XPath behavior for legacy test fixtures
+- **Typed prerequisite condition fields (breaking)**:
+  - `PrereqCondition.condition`: `str` -> `int`
+  - `PrereqCondition.type`: `str` -> `PrereqType` enum (`M`, `O`, `E`, `A`, `UNKNOWN`)
+  - `PrereqCondition.all_required`: `str` -> `bool`
+  - `PrereqCondition.number_of_courses`: `str` -> `int`
+  - Added model validators that normalize bracketed values (e.g., `[N]`, `[1]`) into typed fields
+  - Added robust Rust extraction support for both nested and sibling prerequisite header value layouts
 
 ### Performance
 

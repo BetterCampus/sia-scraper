@@ -47,9 +47,12 @@ static PREREQ_CONDITION_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout")
         .expect("prereq condition selector must parse")
 });
-static PREREQ_VALUE_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+static PREREQ_STRONG_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.strong.af_panelGroupLayout").expect("prereq strong selector must parse")
+});
+static PREREQ_VALUE_SIBLING_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.strong.af_panelGroupLayout + span")
-        .expect("prereq value selector must parse")
+        .expect("prereq sibling value selector must parse")
 });
 static PREREQ_HEADER_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.strong.af_panelGroupLayout > span.margin-l")
@@ -366,13 +369,29 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
         }
 
         let info_div = &sub_divs[0];
-        let all_spans = css_select_elem(info_div, &PREREQ_VALUE_SELECTOR);
+        let strong_spans = css_select_elem(info_div, &PREREQ_STRONG_SELECTOR);
+        let mut all_spans: Vec<ElementRef<'_>> = Vec::new();
+        if let Some(strong_span) = strong_spans.first() {
+            for nested_span in css_select_elem(strong_span, &GENERIC_SPAN_SELECTOR) {
+                let is_header = nested_span
+                    .value()
+                    .classes()
+                    .any(|class_name| class_name == "margin-l");
+                if !is_header {
+                    all_spans.push(nested_span);
+                }
+            }
+        }
 
         let header_spans = css_select_elem(info_div, &PREREQ_HEADER_SELECTOR);
         let header_count = header_spans.len();
 
         if header_count < 4 {
             continue;
+        }
+
+        if all_spans.len() < header_count {
+            all_spans = css_select_elem(info_div, &PREREQ_VALUE_SIBLING_SELECTOR);
         }
 
         let mut header_values: Vec<String> = Vec::new();

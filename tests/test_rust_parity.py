@@ -86,6 +86,26 @@ class TestParsePrereqsParity:
 
         assert len(rust_result["conditions"]) == len(python_result.conditions)
 
+    def test_condition_header_fields_parity(self, sia_course_prereqs_xml):
+        rust_result = rust_parse_prereqs(sia_course_prereqs_xml)
+        python_result = python_scrape_prereqs(sia_course_prereqs_xml)
+
+        assert rust_result["conditions"]
+        assert python_result.conditions
+
+        rust_condition = rust_result["conditions"][0]
+        python_condition = python_result.conditions[0]
+
+        assert int(rust_condition["condition"].strip("[]")) == python_condition.condition
+        assert rust_condition["type"].strip("[]") == python_condition.type.value
+        assert rust_condition["all_required"].strip("[]").upper() == (
+            "S" if python_condition.all_required else "N"
+        )
+        assert (
+            int(rust_condition["number_of_courses"].strip("[]"))
+            == python_condition.number_of_courses
+        )
+
 
 class TestGetCourseListParity:
     """Compare Rust and Python get_course_list outputs."""

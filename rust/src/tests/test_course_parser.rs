@@ -475,6 +475,138 @@ fn test_parse_prereqs_xml_complete() {
 }
 
 #[test]
+fn test_parse_prereqs_xml_extracts_nested_header_values() {
+    let xml = r#"
+        <html>
+            <body>
+                <h2>ALGEBRA LINEAL BASICA</h2>
+                <span class="detass-creditos"><span>4</span></span>
+                <span class="detass-tipologia"><span>FUND. OPTATIVA</span></span>
+                <span class="borde salto af_panelGroupLayout">
+                    <div class="margin-t af_panelGroupLayout">
+                        <div>
+                            <span class="strong af_panelGroupLayout">
+                                <span class="margin-l">Condición</span>
+                                <span>1</span>
+                                <span class="margin-l">Tipo</span>
+                                <span>M</span>
+                                <span class="margin-l">¿Todas?</span>
+                                <span>[N]</span>
+                                <span class="margin-l">Número asignaturas</span>
+                                <span>[1]</span>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="af_panelGroupLayout"><span>1000004-B</span><span>Cálculo diferencial</span></span>
+                        </div>
+                    </div>
+                </span>
+            </body>
+        </html>
+    "#;
+
+    Python::with_gil(|py| {
+        let result = parse_prereqs(xml).unwrap();
+        let dict = result.as_ref(py);
+        let conditions = dict.get_item("conditions").unwrap();
+        let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
+        assert_eq!(conditions_list.len(), 1);
+
+        let cond = conditions_list[0].as_ref(py);
+        assert_eq!(
+            cond.get_item("condition")
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "1"
+        );
+        assert_eq!(
+            cond.get_item("type").unwrap().extract::<String>().unwrap(),
+            "M"
+        );
+        assert_eq!(
+            cond.get_item("all_required")
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "[N]"
+        );
+        assert_eq!(
+            cond.get_item("number_of_courses")
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "[1]"
+        );
+    });
+}
+
+#[test]
+fn test_parse_prereqs_xml_extracts_sibling_header_values() {
+    let xml = r#"
+        <html>
+            <body>
+                <h2>CALCULO AVANZADO</h2>
+                <span class="detass-creditos"><span>4</span></span>
+                <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+                <span class="borde salto af_panelGroupLayout">
+                    <div class="margin-t af_panelGroupLayout">
+                        <div>
+                            <span class="strong af_panelGroupLayout"><span class="margin-l">Condición</span></span>
+                            <span>2</span>
+                            <span class="strong af_panelGroupLayout"><span class="margin-l">Tipo</span></span>
+                            <span>O</span>
+                            <span class="strong af_panelGroupLayout"><span class="margin-l">¿Todas?</span></span>
+                            <span>S</span>
+                            <span class="strong af_panelGroupLayout"><span class="margin-l">Número asignaturas</span></span>
+                            <span>3</span>
+                        </div>
+                        <div>
+                            <span class="af_panelGroupLayout"><span>MATE1001</span><span>Calculo I</span></span>
+                        </div>
+                    </div>
+                </span>
+            </body>
+        </html>
+    "#;
+
+    Python::with_gil(|py| {
+        let result = parse_prereqs(xml).unwrap();
+        let dict = result.as_ref(py);
+        let conditions = dict.get_item("conditions").unwrap();
+        let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
+        assert_eq!(conditions_list.len(), 1);
+
+        let cond = conditions_list[0].as_ref(py);
+        assert_eq!(
+            cond.get_item("condition")
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "2"
+        );
+        assert_eq!(
+            cond.get_item("type").unwrap().extract::<String>().unwrap(),
+            "O"
+        );
+        assert_eq!(
+            cond.get_item("all_required")
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "S"
+        );
+        assert_eq!(
+            cond.get_item("number_of_courses")
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "3"
+        );
+    });
+}
+
+#[test]
 fn test_parse_prereqs_xml_no_conditions() {
     let xml = r#"
         <html>
