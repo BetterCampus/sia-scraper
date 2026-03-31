@@ -877,6 +877,7 @@ class TestScrapeCourses:
 
         result = scraper.scrape_courses(courses_codes=["1000001", "1000007"])
 
+        assert isinstance(result, list)
         assert len(result) == 2
         assert all(isinstance(course, CourseInfo) for course in result)
 
@@ -923,10 +924,12 @@ class TestScrapeCourses:
             courses_indices=[3, 1, 2], courses_codes=["QUIMICA", "ALGEBRA", "FISICA"]
         )
 
-        assert len(result) == 3
-        assert result[0].code == "ALGEBRA"
-        assert result[1].code == "FISICA"
-        assert result[2].code == "QUIMICA"
+        assert isinstance(result, list)
+        result_list: list[CourseInfo] = result  # type: ignore[assignment]
+        assert len(result_list) == 3
+        assert result_list[0].code == "ALGEBRA"
+        assert result_list[1].code == "FISICA"
+        assert result_list[2].code == "QUIMICA"
 
 
 @pytest.mark.unit

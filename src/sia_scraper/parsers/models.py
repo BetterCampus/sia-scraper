@@ -319,3 +319,52 @@ class SessionState(BaseModel):
         if missing:
             raise ValueError(f"Missing required ADF parameters: {missing}")
         return v
+
+
+class ScrapeResult(BaseModel):
+    """Result from batch scraping operation.
+
+    This model encapsulates the outcome of a batch scrape operation,
+    including success/failure counts and detailed results.
+
+    Attributes:
+        successes: List of successfully scraped courses
+        failures: List of (index, error_message) tuples for failed scrapes
+        total: Total number of courses attempted
+        success_rate: Percentage of successful scrapes (0-100)
+    """
+
+    model_config = {"frozen": True, "populate_by_name": True}
+
+    successes: list[CourseInfo] = Field(
+        default_factory=list, description="Successfully scraped courses"
+    )
+    failures: list[tuple[int, str]] = Field(
+        default_factory=list, description="Failed scrape attempts as (index, error)"
+    )
+    total: int = Field(ge=0, description="Total courses attempted")
+    success_rate: float = Field(ge=0, le=100, description="Success rate as percentage")
+
+    @classmethod
+    def create(
+        cls,
+        successes: list[CourseInfo],
+        failures: list[tuple[int, str]],
+    ) -> "ScrapeResult":
+        """Create a ScrapeResult with calculated success rate."""
+        total = len(successes) + len(failures)
+        success_rate = (len(successes) / total * 100) if total > 0 else 0.0
+        return cls(
+            successes=successes,
+            failures=failures,
+            total=total,
+            success_rate=round(success_rate, 2),
+        )
+
+
+class ErrorMode(str):
+    """Error handling mode for batch scraping operations."""
+
+    SKIP = "skip"
+    RETRY = "retry"
+    ABORT = "abort"

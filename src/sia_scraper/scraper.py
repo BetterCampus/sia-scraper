@@ -20,12 +20,13 @@ Architecture:
     constants - Oracle ADF component IDs, request templates, status enums
 """
 
+from collections.abc import Callable
 from typing import Any
 
 from .constants import http, status
 from .core import SiaSessionException
 from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
-from .parsers.models import SessionState
+from .parsers.models import ErrorMode, ScrapeResult, SessionState
 from .session import SiaSession
 
 
@@ -258,8 +259,14 @@ class SiaScraper:
         return scrape_prereqs(xml)
 
     def scrape_courses(
-        self, courses_indices: list[int] | None = None, courses_codes: list[str] | None = None
-    ) -> list[CourseInfo]:
+        self,
+        courses_indices: list[int] | None = None,
+        courses_codes: list[str] | None = None,
+        error_mode: str = ErrorMode.ABORT,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+        progress_callback: Callable[[int, int, int, int], None] | None = None,
+    ) -> ScrapeResult | list[CourseInfo]:
         """Batch scrape multiple courses by index or code.
 
         ## Args
@@ -267,9 +274,17 @@ class SiaScraper:
                 If empty, derives from courses_codes.
             courses_codes: List of course codes to scrape.
                 Used to populate courses_indices if that is empty.
+            error_mode: How to handle errors:
+                - SKIP: Continue on error, add to failures list
+                - RETRY: Retry failed requests up to max_retries times
+                - ABORT: Stop on first error (default, preserves old behavior)
+            max_retries: Maximum retry attempts for RETRY mode (default: 3)
+            retry_delay: Delay between retries in seconds (default: 1.0)
+            progress_callback: Optional callback(completed, total, result) for progress updates
 
         ## Returns
-            List of CourseInfo dataclasses with code field populated.
+            If error_mode is ABORT: List of CourseInfo (old behavior, raises on error)
+            If error_mode is SKIP or RETRY: ScrapeResult with successes, failures, totals
 
         ## Note
             Sorts indices before scraping for more efficient sequential access.
@@ -286,13 +301,40 @@ class SiaScraper:
         paired = list(zip(courses_indices, courses_codes, strict=True))
         paired.sort(key=lambda x: x[0])
 
-        courses: list[CourseInfo] = []
-        for index, code in paired:
-            course = self.get_course_info(index)
-            course = course.model_copy(update={"code": code})
-            courses.append(course)
+        if error_mode == str(ErrorMode.ABORT):
+            courses: list[CourseInfo] = []
+            for index, code in paired:
+                course = self.get_course_info(index)
+                course = course.model_copy(update={"code": code})
+                courses.append(course)
+            return courses
 
-        return courses
+        successes: list[CourseInfo] = []
+        failures: list[tuple[int, str]] = []
+
+        for i, (index, code) in enumerate(paired):
+            last_error = ""
+            for attempt in range(max_retries if error_mode == str(ErrorMode.RETRY) else 1):
+                try:
+                    course = self.get_course_info(index)
+                    course = course.model_copy(update={"code": code})
+                    successes.append(course)
+                    last_error = ""
+                    break
+                except Exception as e:  # noqa: BLE001
+                    last_error = str(e)
+                    if error_mode == ErrorMode.RETRY and attempt < max_retries - 1:
+                        import time
+
+                        time.sleep(retry_delay)
+
+            if last_error and error_mode == ErrorMode.SKIP:
+                failures.append((index, last_error))
+
+            if progress_callback:
+                progress_callback(i + 1, len(paired), len(successes), len(failures))
+
+        return ScrapeResult.create(successes, failures)
 
 
 def init_sia_scraper(
