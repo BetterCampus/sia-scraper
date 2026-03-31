@@ -22,13 +22,15 @@ const GROUP_SPOTS_INDEX: usize = 5;
 const MIN_GROUP_DATA_LENGTH_WITH_SPOTS: usize = 6;
 
 fn css_select_html<'a>(root: &'a Html, selector_str: &str) -> Vec<ElementRef<'a>> {
-    let selector = Selector::parse(selector_str).expect("selector must parse");
-    root.select(&selector).collect()
+    Selector::parse(selector_str)
+        .map(|selector| root.select(&selector).collect())
+        .unwrap_or_default()
 }
 
 fn css_select_elem<'a>(root: &'a ElementRef<'a>, selector_str: &str) -> Vec<ElementRef<'a>> {
-    let selector = Selector::parse(selector_str).expect("selector must parse");
-    root.select(&selector).collect()
+    Selector::parse(selector_str)
+        .map(|selector| root.select(&selector).collect())
+        .unwrap_or_default()
 }
 
 fn extract_text_from_elem(elem: &ElementRef<'_>) -> String {
@@ -133,7 +135,8 @@ fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
     if spans.is_empty() {
         return None;
     }
-    let text = extract_text_from_elem(spans.last().unwrap());
+    let last_span = spans.last()?;
+    let text = extract_text_from_elem(last_span);
     text.trim().parse::<i64>().ok()
 }
 

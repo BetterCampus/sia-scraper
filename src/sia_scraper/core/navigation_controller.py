@@ -14,6 +14,8 @@ to improve separation of concerns and testability.
 
 from typing import Any
 
+from requests import Response
+
 from ..constants import actions, adf_events, adf_ids, business, data_map
 from ..parsers.html_parser import HtmlParser
 from ..utils.debug import debug_log
@@ -161,7 +163,7 @@ class NavigationController:
         debug_log(f"SELECT_ROW: Sending request for index {course_index}")
         session.post_request(request_body)
 
-    def enter_course_page(self, course_index: int, session: Any) -> Any:
+    def enter_course_page(self, course_index: int, session: Any) -> Response:
         """Navigate to course detail page.
 
         ## Args

@@ -29,6 +29,8 @@ investigation. This logs ViewState, DELTAS, and state transitions.
 
 from typing import Any
 
+from requests import Response
+
 from .constants import actions, adf_events, adf_ids, business, data_map, http, status
 from .core import (
     EnhancedSession,
@@ -343,7 +345,7 @@ class SiaSession:
         self._STATUS = status.SiaSessionStatus.NO_SESSION
 
     @check_session
-    def keep_alive(self) -> Any:
+    def keep_alive(self) -> Response:
         """Reset SIA session timeout by making a lightweight request.
 
         ## Returns
@@ -360,7 +362,7 @@ class SiaSession:
 
     @check_session
     @handle_timeout_with_retry
-    def post_request(self, data: dict[str, str]) -> Any:
+    def post_request(self, data: dict[str, str]) -> Response:
         """Make a POST request to SIA with Oracle ADF headers and parameters.
 
         After each POST, the ViewState is automatically synced from the response
@@ -383,7 +385,7 @@ class SiaSession:
         return response
 
     @handle_timeout_with_retry
-    def get_request(self, url: str, params: dict[str, str] | None = None) -> Any:
+    def get_request(self, url: str, params: dict[str, str] | None = None) -> Response:
         """Make a GET request to SIA (or any URL).
 
         ## Args
@@ -624,7 +626,7 @@ class SiaSession:
         # ViewState auto-synced by post_request
 
     @check_status(status.SiaSessionStatus.ON_CAREER_PAGE)
-    def enter_course_page(self, course_index: int) -> Any:
+    def enter_course_page(self, course_index: int) -> Response:
         """Navigate to course detail page for a specific course.
 
         ## Args
