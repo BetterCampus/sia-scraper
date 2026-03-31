@@ -88,9 +88,29 @@ from .utils import (
     handle_timeout_with_retry,
 )
 
+# SiaSessionAsync and SiaScraperAsync require sia_scraper_rust (Rust/PyO3).
+# Make them optional so the package remains importable without the Rust build.
+try:
+    from .session_async import SiaSessionAsync
+except ImportError:
+    SiaSessionAsync = None  # type: ignore[assignment, misc]
+
+try:
+    from .scraper_async import (
+        SiaScraperAsync,
+        create_career_session_async,
+        init_sia_scraper_async,
+    )
+except ImportError:
+    SiaScraperAsync = None  # type: ignore[assignment, misc]
+    create_career_session_async = None  # type: ignore[assignment, misc]
+    init_sia_scraper_async = None  # type: ignore[assignment, misc]
+
 __all__ = [
     "SiaScraper",
+    "SiaScraperAsync",
     "SiaSession",
+    "SiaSessionAsync",
     "SiaSessionException",
     "SiaSessionStatus",
     "EnhancedSession",
@@ -100,5 +120,7 @@ __all__ = [
     "handle_timeout_error",
     "handle_timeout_with_retry",
     "init_sia_scraper",
+    "init_sia_scraper_async",
     "create_career_session",
+    "create_career_session_async",
 ]
