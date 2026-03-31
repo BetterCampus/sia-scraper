@@ -1,0 +1,31 @@
+name: Rust Quality
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  rust-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+
+      - name: Cache Cargo build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo check
+        run: cargo check
+
+      - name: Cargo clippy (warnings are errors)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Cargo test (library, no extension-module)
+        run: cargo test --lib --no-default-features
