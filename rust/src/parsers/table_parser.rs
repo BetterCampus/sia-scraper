@@ -39,6 +39,7 @@ static SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.af_column_data-container").expect("span selector must parse")
 });
 
+#[inline]
 fn strip_tags(content: &str) -> String {
     TAG_REGEX.replace_all(content, "").trim().to_string()
 }

@@ -36,6 +36,7 @@ const CAMPUS_ELECTIVES_DD: &str = "CAMPUS_ELECTIVES_DD";
 const SELECT_ROW: &str = "SELECT_ROW";
 const COURSE_PAGE_LINK: &str = "COURSE_PAGE_LINK";
 
+#[inline]
 fn data_map_entry(action: &str) -> Option<(&'static str, &'static str)> {
     match action {
         "STUDY_LEVEL_DD" => Some((STUDY_LEVEL_DD_ID, DROPDOWN_EVENT_VALUE)),

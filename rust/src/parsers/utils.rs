@@ -11,6 +11,7 @@ use scraper::ElementRef;
 ///
 /// # Returns
 /// The trimmed text content of the element as a String
+#[inline]
 pub fn extract_text_from_elem(elem: &ElementRef<'_>) -> String {
     elem.text().collect::<String>().trim().to_string()
 }

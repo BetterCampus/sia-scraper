@@ -28,13 +28,14 @@ fn css_select_html<'a>(root: &'a Html, selector_str: &str) -> Vec<ElementRef<'a>
         .unwrap_or_default()
 }
 
+#[inline]
 fn css_select_elem<'a>(root: &'a ElementRef<'a>, selector_str: &str) -> Vec<ElementRef<'a>> {
     Selector::parse(selector_str)
         .map(|selector| root.select(&selector).collect())
         .unwrap_or_default()
 }
 
-/// Extract human-readable plain text from Oracle ADF XML/HTML response.
+#[inline]
 pub fn get_plain_text(xml: &str) -> String {
     let document = Html::parse_document(xml);
     let full_text = document.root_element().text().collect::<String>();
@@ -45,6 +46,7 @@ pub fn get_plain_text(xml: &str) -> String {
         .to_string()
 }
 
+#[inline]
 fn extract_credits(root: &Html) -> Result<i32, SiaScraperError> {
     let elems = css_select_html(root, "span.detass-creditos");
     let _elem = elems
@@ -61,6 +63,7 @@ fn extract_credits(root: &Html) -> Result<i32, SiaScraperError> {
         .map_err(|_| SiaScraperError::ParseError("Failed to parse credits".to_string()))
 }
 
+#[inline]
 fn extract_typology(root: &Html) -> String {
     let elems = css_select_html(root, "span.detass-tipologia");
     match elems.first() {
@@ -75,6 +78,7 @@ fn extract_typology(root: &Html) -> String {
     }
 }
 
+#[inline]
 fn extract_label_value(elem: &ElementRef<'_>) -> String {
     let spans = css_select_elem(elem, "span");
     match spans.last() {
@@ -127,6 +131,7 @@ fn extract_schedules(elem: &ElementRef<'_>) -> Vec<Py<pyo3::types::PyAny>> {
     schedules
 }
 
+#[inline]
 fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
     let spans = css_select_elem(elem, "span");
     if spans.is_empty() {
