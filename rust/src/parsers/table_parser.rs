@@ -48,10 +48,9 @@ fn extract_course_list_from_raw_html(html_content: &str) -> Vec<HashMap<String, 
     let mut course_list = Vec::new();
 
     for row_capture in ROW_REGEX.captures_iter(html_content) {
-        let row_inner_html = row_capture
-            .get(1)
-            .expect("row regex capture group must exist")
-            .as_str();
+        let Some(row_inner_html) = row_capture.get(1).map(|m| m.as_str()) else {
+            continue;
+        };
 
         let mut spans = SPAN_REGEX.captures_iter(row_inner_html);
         let first_span = spans

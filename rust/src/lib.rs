@@ -130,16 +130,16 @@ fn get_course_list(html: &PyAny) -> Result<Py<PyAny>, error::SiaScraperError> {
     };
     Python::with_gil(|py| {
         let courses = parsers::table_parser::get_course_list(&html_str)?;
-        let list: Vec<pyo3::PyObject> = courses
-            .into_iter()
-            .map(|course_map| {
-                let dict = pyo3::types::PyDict::new(py);
-                for (k, v) in course_map {
-                    dict.set_item(k, v).unwrap();
-                }
-                dict.into_py(py)
-            })
-            .collect();
+        let mut list: Vec<pyo3::PyObject> = Vec::with_capacity(courses.len());
+
+        for course_map in courses {
+            let dict = pyo3::types::PyDict::new(py);
+            for (k, v) in course_map {
+                dict.set_item(k, v)?;
+            }
+            list.push(dict.into_py(py));
+        }
+
         Ok(pyo3::types::PyList::new(py, &list).into_py(py))
     })
 }
