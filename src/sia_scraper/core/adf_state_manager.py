@@ -15,6 +15,8 @@ to improve separation of concerns and testability.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from loguru import logger
+
 from .adf_state import extract_view_state, extract_view_state_from_response
 from .exceptions import SiaSessionException
 
@@ -125,10 +127,15 @@ class AdfStateManager:
         ## Args
             response: Response object from a POST request.
         """
+        old_view_state = self._view_state
         try:
             self._view_state = extract_view_state_from_response(response)
+            if old_view_state != self._view_state:
+                logger.debug("ViewState updated from POST response")
+            else:
+                logger.debug("ViewState unchanged after POST response")
         except SiaSessionException.SessionNotSet:
-            pass
+            logger.debug("ViewState extraction failed, preserving current state")
 
     def sync_from_html(self, html_content: bytes) -> None:
         """Sync ViewState from HTML content (typically from GET requests).
@@ -139,8 +146,13 @@ class AdfStateManager:
         ## Raises
             SiaSessionException.SessionNotSet: If ViewState not found in HTML.
         """
+        old_view_state = self._view_state
         html_str = html_content.decode("utf-8", errors="ignore")
         self._view_state = extract_view_state(html_str)
+        if old_view_state != self._view_state:
+            logger.debug("ViewState updated from GET response")
+        else:
+            logger.debug("ViewState unchanged after GET response")
 
     def get_state_snapshot(self) -> AdfState:
         """Get immutable snapshot of current ADF state.
