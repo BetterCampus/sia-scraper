@@ -2,6 +2,8 @@
 //!
 //! This module provides common helper functions used across multiple parsers.
 
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use scraper::ElementRef;
 
 /// Extracts text content from an HTML element, trimming whitespace.
@@ -14,6 +16,25 @@ use scraper::ElementRef;
 #[inline]
 pub fn extract_text_from_elem(elem: &ElementRef<'_>) -> String {
     elem.text().collect::<String>().trim().to_string()
+}
+
+/// Inserts a key-value pair into a PyDict, ignoring the Result.
+///
+/// This is a convenience wrapper for the common pattern:
+/// `let _ = dict.set_item(key, value);`
+///
+/// # Arguments
+/// * `dict` - The Python dictionary to insert into
+/// * `key` - The key to insert
+/// * `value` - The value to insert
+#[inline]
+pub fn dict_set_item<'a, K, V>(dict: &'a PyDict, key: K, value: V) -> &'a PyDict
+where
+    K: ToPyObject,
+    V: ToPyObject,
+{
+    let _ = dict.set_item(key, value);
+    dict
 }
 
 #[cfg(test)]
