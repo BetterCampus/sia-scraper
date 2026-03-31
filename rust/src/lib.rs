@@ -352,6 +352,41 @@ fn async_get_with_config<'p>(
     })
 }
 
+/// Initialize SIA session and fetch initial ViewState.
+///
+/// # Arguments
+/// * `timeout` - Request timeout in seconds (default: 15)
+///
+/// # Returns
+/// PyResult containing a Python dict with session state
+#[pyfunction]
+fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p PyAny> {
+    use crate::http::sia_session::SiaSession;
+
+    let timeout = timeout.unwrap_or(15);
+    let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
+
+    future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
+        let session = SiaSession::new(timeout, base_url.clone())
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        session.init_session().await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        let state = session.get_state().await;
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("status", state.status)?;
+            dict.set_item("career_code", state.career_code)?;
+            dict.set_item("career_name", state.career_name)?;
+            dict.set_item("is_electives", state.is_electives)?;
+            dict.set_item("javax_faces_ViewState", state.javax_faces_ViewState.unwrap_or_default())?;
+            Ok(dict.into_py(py))
+        })
+    })
+}
+
 #[pymodule]
 fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_course_info, m)?)?;
@@ -365,6 +400,7 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(async_get, m)?)?;
     m.add_function(wrap_pyfunction!(async_post, m)?)?;
     m.add_function(wrap_pyfunction!(async_get_with_config, m)?)?;
+    m.add_function(wrap_pyfunction!(init_sia_session, m)?)?;
     m.add(
         "SiaScraperException",
         error::SiaScraperException::type_object(py),
