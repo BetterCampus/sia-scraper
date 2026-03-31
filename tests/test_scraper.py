@@ -779,8 +779,8 @@ class TestScrapePrereqs:
         condition_info_div = MagicMock()
         headers = []
         for key, val in [
-            ("Condición", "Debe aprobar"),
-            ("Tipo", "Materia"),
+            ("Condición", "1"),
+            ("Tipo", "M"),
             ("¿Todas?", "SI"),
             ("Número asignaturas", "2"),
         ]:
