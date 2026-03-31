@@ -1,4 +1,6 @@
-"""Async session integration tests."""
+"""Unit tests for async Rust-backed session wrapper."""
+
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -6,175 +8,100 @@ from sia_scraper.constants import SiaSessionStatus
 from sia_scraper.session_async import SiaSessionAsync
 
 
+@pytest.fixture
+def mock_rust_module():
+    """Patch Rust extension calls used by SiaSessionAsync."""
+    with patch("sia_scraper.session_async.sia_scraper_rust") as rust:
+        rust.init_sia_session = AsyncMock(return_value={"javax_faces_ViewState": "vs-1"})
+        rust.set_career = AsyncMock(
+            return_value={
+                "career_name": "Ingenieria de Sistemas",
+                "course_list": [{"2016489": "Estructuras de Datos"}],
+                "javax_faces_ViewState": "vs-2",
+            }
+        )
+        rust.get_course_xml = AsyncMock(return_value="<xml>course</xml>")
+        yield rust
+
+
 class TestSiaSessionAsyncCreation:
-    """Test SiaSessionAsync initialization."""
-
-    def test_create_class_method_exists(self):
-        assert hasattr(SiaSessionAsync, "create")
+    """Test SiaSessionAsync initialization and factory behavior."""
 
     @pytest.mark.asyncio
-    async def test_create_initializes_session(self):
+    async def test_create_initializes_session(self, mock_rust_module):
         session = await SiaSessionAsync.create(timeout=5)
         try:
-            assert session._STATUS == SiaSessionStatus.CAREER_NOT_SET
+            assert session.STATUS == SiaSessionStatus.CAREER_NOT_SET
+            assert session._session_state["javax_faces_ViewState"] == "vs-1"
+            mock_rust_module.init_sia_session.assert_awaited_once_with(5)
         finally:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_create_with_custom_timeout(self):
-        session = await SiaSessionAsync.create(timeout=10)
-        try:
-            assert session._timeout == 10
-        finally:
-            await session.close()
-
-    @pytest.mark.asyncio
-    async def test_default_timeout_value(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            assert session._timeout == 5
-        finally:
-            await session.close()
-
-
-class TestSiaSessionAsyncStateTransitions:
-    """Test session state transitions."""
-
-    @pytest.mark.asyncio
-    async def test_initial_state_is_no_session(self):
+    async def test_default_state_is_no_session(self, mock_rust_module):
         session = SiaSessionAsync()
         assert session.STATUS == SiaSessionStatus.NO_SESSION
 
-    @pytest.mark.asyncio
-    async def test_after_init_session_state(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            assert session.STATUS == SiaSessionStatus.CAREER_NOT_SET
-            assert session.career_code == ""
-            assert session.career_name == "N/A"
-        finally:
-            await session.close()
+
+class TestSiaSessionAsyncCareerFlow:
+    """Test async career setup and XML retrieval behavior."""
 
     @pytest.mark.asyncio
-    async def test_after_set_career_state(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            await session.set_career("0-2-8-3")
-            assert session.STATUS == SiaSessionStatus.ON_CAREER_PAGE
-            assert session.career_code == "0-2-8-3"
-        finally:
-            await session.close()
-
-    @pytest.mark.asyncio
-    async def test_after_close_state(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        await session.close()
-        assert session.STATUS == SiaSessionStatus.NO_SESSION
-
-
-class TestSiaSessionAsyncContextManager:
-    """Test context manager support."""
-
-    @pytest.mark.asyncio
-    async def test_context_manager_enters(self):
-        async with await SiaSessionAsync.create(timeout=5) as session:
-            assert session.STATUS == SiaSessionStatus.CAREER_NOT_SET
-
-    @pytest.mark.asyncio
-    async def test_context_manager_exits(self):
-        async with await SiaSessionAsync.create(timeout=5) as session:
-            pass
-        assert session.STATUS == SiaSessionStatus.NO_SESSION
-
-
-class TestSiaSessionAsyncProperties:
-    """Test property accessors."""
-
-    @pytest.mark.asyncio
-    async def test_career_name_property(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            assert session.career_name == "N/A"
-        finally:
-            await session.close()
-
-    @pytest.mark.asyncio
-    async def test_career_code_property(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            assert session.career_code == ""
-        finally:
-            await session.close()
-
-    @pytest.mark.asyncio
-    async def test_is_electives_property(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            assert session.is_electives is False
-        finally:
-            await session.close()
-
-    @pytest.mark.asyncio
-    async def test_course_list_property(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            assert session.course_list == []
-        finally:
-            await session.close()
-
-
-class TestSiaSessionAsyncSetCareer:
-    """Test set_career method."""
-
-    @pytest.mark.asyncio
-    async def test_set_career_with_valid_code(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            await session.set_career("0-2-8-3")
-            assert session.career_code == "0-2-8-3"
-            assert len(session.career_indices) == 4
-        finally:
-            await session.close()
-
-    @pytest.mark.asyncio
-    async def test_set_career_with_electives(self):
+    async def test_set_career_updates_state(self, mock_rust_module):
         session = await SiaSessionAsync.create(timeout=5)
         try:
             await session.set_career("0-2-8-3", electives=True)
+
+            assert session.STATUS == SiaSessionStatus.ON_CAREER_PAGE
+            assert session.career_code == "0-2-8-3"
+            assert session.career_indices == ["0", "2", "8", "3"]
             assert session.is_electives is True
+            assert session.career_name == "Ingenieria de Sistemas"
+            assert session.course_list == [{"2016489": "Estructuras de Datos"}]
+            assert session._session_state["javax_faces_ViewState"] == "vs-2"
+            mock_rust_module.set_career.assert_awaited_once_with(5, "0-2-8-3", True)
         finally:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_set_career_updates_career_indices(self):
+    async def test_get_course_xml_passes_electives_flag(self, mock_rust_module):
         session = await SiaSessionAsync.create(timeout=5)
         try:
-            await session.set_career("1-3-5-2345")
-            assert session.career_indices == ["1", "3", "5", "2345"]
+            await session.set_career("0-2-8-3", electives=True)
+            xml = await session.get_course_xml(2)
+
+            assert xml == "<xml>course</xml>"
+            mock_rust_module.get_course_xml.assert_awaited_once_with(
+                5,
+                2,
+                ["0", "2", "8", "3"],
+                True,
+            )
         finally:
             await session.close()
 
 
-class TestSiaSessionAsyncGetSessionData:
-    """Test session data serialization."""
+class TestSiaSessionAsyncLifecycle:
+    """Test context manager and serialization lifecycle."""
 
     @pytest.mark.asyncio
-    async def test_get_session_data_returns_session_state(self):
-        session = await SiaSessionAsync.create(timeout=5)
-        try:
-            data = session.get_session_data()
-            assert data is not None
-            assert hasattr(data, "career_code")
-            assert hasattr(data, "STATUS")
-        finally:
-            await session.close()
+    async def test_context_manager_closes_session(self, mock_rust_module):
+        async with await SiaSessionAsync.create(timeout=5) as session:
+            assert session.STATUS == SiaSessionStatus.CAREER_NOT_SET
+
+        assert session.STATUS == SiaSessionStatus.NO_SESSION
 
     @pytest.mark.asyncio
-    async def test_get_session_data_after_set_career(self):
+    async def test_get_session_data(self, mock_rust_module):
         session = await SiaSessionAsync.create(timeout=5)
         try:
             await session.set_career("0-2-8-3")
             data = session.get_session_data()
+
             assert data.career_code == "0-2-8-3"
+            assert data.career_name == "Ingenieria de Sistemas"
+            assert data.is_electives is False
+            assert data.STATUS == SiaSessionStatus.ON_CAREER_PAGE.value
+            assert data.javax_faces_ViewState == "vs-2"
         finally:
             await session.close()

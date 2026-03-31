@@ -29,6 +29,7 @@ fn test_parse_course_xml_complete() {
                 <h2>CALCULO AVANZADO</h2>
                 <span class="detass-creditos"><span>4</span></span>
                 <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+                <h2 class="af_showDetailHeader_title-text0">Grupo 01</h2>
                 <div class="af_showDetailHeader_content0">
                     <div class="af_panelGroupLayout">
                         <div><span>Prof. Juan Perez</span></div>
