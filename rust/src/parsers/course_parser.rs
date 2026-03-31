@@ -138,14 +138,40 @@ fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
 }
 
 fn extract_group(group: &ElementRef<'_>, course_name: &str) -> Option<Py<pyo3::types::PyAny>> {
+    let group_name = extract_group_name(group)?;
+    let fields = extract_group_fields(group)?;
+
+    Some(Python::with_gil(|py| {
+        let dict = pyo3::types::PyDict::new(py);
+        let _ = dict.set_item("group_name", &group_name);
+        let _ = dict.set_item("teacher", &fields.teacher);
+        let _ = dict.set_item("faculty", &fields.faculty);
+        let _ = dict.set_item("course_name", course_name);
+        let _ = dict.set_item("schedules", pyo3::types::PyList::new(py, &fields.schedules));
+        let _ = dict.set_item("duration", &fields.duration);
+        let _ = dict.set_item("schedule_type", &fields.schedule_type);
+        let _ = dict.set_item("spots", fields.spots);
+        let _ = dict.set_item("code", py.None());
+        dict.into_py(py)
+    }))
+}
+
+fn extract_group_name(group: &ElementRef<'_>) -> Option<String> {
     let parent_ref = group.parent().and_then(ElementRef::wrap).unwrap_or(*group);
-
     let h2_elems = css_select_elem(&parent_ref, "h2.af_showDetailHeader_title-text0");
-    let group_name = h2_elems
-        .first()
-        .map(|e| extract_text_from_elem(e))
-        .unwrap_or_default();
+    h2_elems.first().map(|e| extract_text_from_elem(e))
+}
 
+struct GroupFields {
+    teacher: String,
+    faculty: String,
+    schedules: Vec<Py<pyo3::types::PyAny>>,
+    duration: String,
+    schedule_type: String,
+    spots: i64,
+}
+
+fn extract_group_fields(group: &ElementRef<'_>) -> Option<GroupFields> {
     let panel_elems = css_select_elem(group, "div.af_panelGroupLayout");
     if panel_elems.is_empty() {
         return None;
@@ -194,19 +220,14 @@ fn extract_group(group: &ElementRef<'_>, course_name: &str) -> Option<Py<pyo3::t
         0
     };
 
-    Some(Python::with_gil(|py| {
-        let dict = pyo3::types::PyDict::new(py);
-        let _ = dict.set_item("group_name", &group_name);
-        let _ = dict.set_item("teacher", &teacher);
-        let _ = dict.set_item("faculty", &faculty);
-        let _ = dict.set_item("course_name", course_name);
-        let _ = dict.set_item("schedules", pyo3::types::PyList::new(py, &schedules));
-        let _ = dict.set_item("duration", &duration);
-        let _ = dict.set_item("schedule_type", &schedule_type);
-        let _ = dict.set_item("spots", spots);
-        let _ = dict.set_item("code", py.None());
-        dict.into_py(py)
-    }))
+    Some(GroupFields {
+        teacher,
+        faculty,
+        schedules,
+        duration,
+        schedule_type,
+        spots,
+    })
 }
 
 /// Parse comprehensive course information from Oracle ADF course detail page.
