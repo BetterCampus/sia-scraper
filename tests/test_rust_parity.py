@@ -1,7 +1,6 @@
 """Rust/Python parity tests - compare outputs from Rust extension vs Python implementation."""
 
 import pytest
-
 from sia_scraper_rust import extract_view_state as rust_extract_view_state
 from sia_scraper_rust import get_course_list as rust_get_course_list
 from sia_scraper_rust import parse_course_info as rust_parse_course_info

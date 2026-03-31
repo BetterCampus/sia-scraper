@@ -10,6 +10,7 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .pyrightcode/
+.hypothesis/
 
 dist/
 build/

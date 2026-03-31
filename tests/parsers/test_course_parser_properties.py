@@ -4,8 +4,8 @@ These tests use Hypothesis to generate random strings and verify that
 all parser functions handle them gracefully without raising exceptions.
 """
 
-from hypothesis import given, settings, assume, example, HealthCheck
 import hypothesis.strategies as st
+from hypothesis import example, given, settings
 
 from sia_scraper.parsers import (
     get_plain_text,

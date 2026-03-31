@@ -7,7 +7,7 @@ and can recover from error conditions.
 from unittest.mock import MagicMock, patch
 
 import pytest
-from requests.exceptions import ConnectionError, HTTPError, Timeout
+from requests.exceptions import ConnectionError, Timeout
 
 from sia_scraper.constants import SiaSessionStatus
 from sia_scraper.parsers import CourseInfo

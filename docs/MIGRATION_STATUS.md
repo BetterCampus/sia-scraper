@@ -67,6 +67,11 @@ This document tracks the progress of the Rust migration for sia-scraper, compari
 | CQ-L18 | Malformed input tests | ✅ Complete |
 | CQ-L19 | ViewState sync logging | ✅ Complete |
 | CQ-L20 | Rust module rustdoc | ✅ Complete |
+| CQ-L21 | Migration status matrix | ✅ Complete |
+| CQ-L22 | Property-based test verification | ✅ Complete |
+| CQ-L23 | Mutable defaults guideline | ✅ Complete |
+| CQ-L24 | Local verification section | ✅ Complete |
+| CQ-L25 | Release-facing docs update | ✅ Complete |
 
 ## Performance Notes
 

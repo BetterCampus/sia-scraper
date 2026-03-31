@@ -149,20 +149,38 @@ Current version: `0.2.1`.
 
 ```text
 src/sia_scraper/
-├── scraper.py
-├── session.py
+├── scraper.py              # Main facade with context manager support
+├── session.py             # Session management with context manager support
 ├── core/
-│   ├── adf_state.py
-│   ├── enhanced_session.py
-│   ├── exceptions.py
-│   └── oracle_adf_request.py
+│   ├── adf_state.py       # ViewState extraction utilities
+│   ├── adf_state_manager.py  # Extracted ADF state manager component
+│   ├── enhanced_session.py   # HTTP session wrapper
+│   ├── exceptions.py      # Exception hierarchy
+│   ├── navigation_controller.py  # Workflow navigation
+│   └── oracle_adf_request.py  # Request builder (Rust-backed)
 ├── utils/
 │   ├── date_formatter.py
 │   ├── decorators.py
 │   └── debug.py
 ├── constants/
-└── parsers/
+└── parsers/               # HTML/XML parsing (Rust-backed)
 ```
+
+## Architecture Highlights
+
+### Session Component Split
+The session layer has been refactored into isolated components for better maintainability:
+- **AdfStateManager**: Handles ViewState synchronization and lifecycle
+- **NavigationController**: Orchestrates ADF workflow navigation
+- **AdfContext**: Value object carrying request context (ViewState, window IDs, event)
+
+### Batch Resilience
+The `scrape_courses()` method includes resilient batch processing:
+- **SKIP**: Skip rows that fail to parse
+- **RETRY**: Retry failed rows up to 3 times with exponential backoff
+- **ABORT**: Abort on first failure (default behavior preserved)
+
+Configure via `scrape_courses(mode="retry")` or `scrape_courses(max_retries=5)`.
 
 ## Testing and Quality Checks
 

@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fuzz testing scaffold for Rust parsers**:
   - Added `cargo-fuzz` crate at `fuzz/`
   - Added targets: `fuzz_get_course_list`, `fuzz_get_plain_text`, `fuzz_extract_view_state`
+- **Context Manager Support**: `SiaScraper` and `SiaSession` now support `with` statement
+- **Session Component Split**: Refactored into isolated components
+  - `AdfStateManager`: ViewState synchronization and lifecycle
+  - `NavigationController`: ADF workflow orchestration
+  - `AdfContext`: Value object for request context
+- **Batch Resilience**: `scrape_courses()` supports SKIP/RETRY/ABORT modes
 
 ### Refactored
 
