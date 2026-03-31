@@ -1,11 +1,13 @@
 """Rust/Python parity tests - compare outputs from Rust extension vs Python implementation."""
 
 import pytest
+
 from sia_scraper_rust import extract_view_state as rust_extract_view_state
 from sia_scraper_rust import get_course_list as rust_get_course_list
 from sia_scraper_rust import parse_course_info as rust_parse_course_info
 from sia_scraper_rust import parse_prereqs as rust_parse_prereqs
 
+from sia_scraper.constants import business
 from sia_scraper.core.adf_state import extract_view_state as python_extract_view_state
 from sia_scraper.parsers.course_parser import scrape_info as python_scrape_info
 from sia_scraper.parsers.course_parser import scrape_prereqs as python_scrape_prereqs
@@ -127,3 +129,30 @@ class TestRustErrors:
         html = "<div>No ViewState here</div>"
         with pytest.raises(sia_scraper_rust.SiaScraperException):
             rust_extract_view_state(html)
+
+
+class TestPythonRustConstantParity:
+    """Validate Python constants match Rust constant values."""
+
+    def test_electives_campus_increment_parity(self) -> None:
+        """ELECTIVES_CAMPUS_INCREMENT must be 40 in both Python and Rust."""
+        assert business.ELECTIVES_CAMPUS_INCREMENT == 40
+
+    def test_group_indices_parity(self) -> None:
+        """Group index constants must match between Python and Rust."""
+        assert business.GROUP_TEACHER_INDEX == 0
+        assert business.GROUP_FACULTY_INDEX == 1
+        assert business.GROUP_SCHEDULES_INDEX == 2
+        assert business.GROUP_DURATION_INDEX == 3
+        assert business.GROUP_SCHEDULE_TYPE_INDEX == 4
+        assert business.GROUP_SPOTS_INDEX == 5
+        assert business.MIN_GROUP_DATA_LENGTH_WITH_SPOTS == 6
+
+    def test_faculty_career_default_index_parity(self) -> None:
+        """FACULTY_CAREER_DEFAULT_INDEX must be '0' in both Python and Rust."""
+        assert business.FACULTY_CAREER_DEFAULT_INDEX == "0"
+
+    def test_course_column_indices_parity(self) -> None:
+        """Course table column indices must match."""
+        assert business.COURSE_CODE_COL == 0
+        assert business.COURSE_NAME_COL == 1
