@@ -320,12 +320,14 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
             prereqs.append(Prerequisite(course_code=prereq_code, course_name=prereq_name))
 
         conditions.append(
-            PrereqCondition(
-                condition=prereq_values[0],
-                type=prereq_values[1],
-                all_required=prereq_values[2],
-                number_of_courses=prereq_values[3],
-                prerequisites=prereqs,
+            PrereqCondition.model_validate(
+                {
+                    "condition": prereq_values[0],
+                    "type": prereq_values[1],
+                    "all_required": prereq_values[2],
+                    "number_of_courses": prereq_values[3],
+                    "prerequisites": prereqs,
+                }
             )
         )
 

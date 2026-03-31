@@ -8,6 +8,7 @@ from sia_scraper.parsers.models import (
     CoursePrereqs,
     Group,
     PrereqCondition,
+    PrereqType,
     Prerequisite,
     Schedule,
     SessionState,
@@ -296,6 +297,111 @@ class TestPrerequisiteValidation:
 
 
 @pytest.mark.unit
+class TestPrereqConditionValidation:
+    """Test PrereqCondition validation and type conversion rules."""
+
+    @staticmethod
+    def _build(**payload) -> PrereqCondition:
+        return PrereqCondition.model_validate(payload)
+
+    def test_condition_parses_plain_number(self) -> None:
+        condition = self._build(condition="3")
+        assert condition.condition == 3
+
+    def test_condition_parses_bracketed_number(self) -> None:
+        condition = self._build(condition="[2]")
+        assert condition.condition == 2
+
+    def test_condition_empty_defaults_to_zero(self) -> None:
+        condition = self._build(condition="")
+        assert condition.condition == 0
+
+    def test_condition_invalid_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            self._build(condition="abc")
+
+    def test_type_m_valid(self) -> None:
+        condition = self._build(type="M")
+        assert condition.type == PrereqType.M
+
+    def test_type_o_valid(self) -> None:
+        condition = self._build(type="O")
+        assert condition.type == PrereqType.O
+
+    def test_type_e_valid(self) -> None:
+        condition = self._build(type="E")
+        assert condition.type == PrereqType.E
+
+    def test_type_a_valid(self) -> None:
+        condition = self._build(type="A")
+        assert condition.type == PrereqType.A
+
+    def test_type_bracketed(self) -> None:
+        condition = self._build(type="[M]")
+        assert condition.type == PrereqType.M
+
+    def test_type_lowercase(self) -> None:
+        condition = self._build(type="m")
+        assert condition.type == PrereqType.M
+
+    def test_type_unknown_maps_to_unknown(self) -> None:
+        condition = self._build(type="Z")
+        assert condition.type == PrereqType.UNKNOWN
+
+    def test_type_empty_defaults_unknown(self) -> None:
+        condition = self._build(type="")
+        assert condition.type == PrereqType.UNKNOWN
+
+    def test_all_required_s_is_true(self) -> None:
+        condition = self._build(all_required="S")
+        assert condition.all_required is True
+
+    def test_all_required_n_is_false(self) -> None:
+        condition = self._build(all_required="N")
+        assert condition.all_required is False
+
+    def test_all_required_bracketed_s(self) -> None:
+        condition = self._build(all_required="[S]")
+        assert condition.all_required is True
+
+    def test_all_required_bracketed_n(self) -> None:
+        condition = self._build(all_required="[N]")
+        assert condition.all_required is False
+
+    def test_all_required_si_is_true(self) -> None:
+        condition = self._build(all_required="SI")
+        assert condition.all_required is True
+
+    def test_all_required_no_is_false(self) -> None:
+        condition = self._build(all_required="NO")
+        assert condition.all_required is False
+
+    def test_all_required_empty_defaults_false(self) -> None:
+        condition = self._build(all_required="")
+        assert condition.all_required is False
+
+    def test_all_required_invalid_defaults_false(self) -> None:
+        condition = self._build(all_required="maybe")
+        assert condition.all_required is False
+
+    def test_number_of_courses_parses_plain(self) -> None:
+        condition = self._build(number_of_courses="5")
+        assert condition.number_of_courses == 5
+
+    def test_number_of_courses_parses_bracketed(self) -> None:
+        condition = self._build(number_of_courses="[3]")
+        assert condition.number_of_courses == 3
+
+    def test_number_of_courses_empty_defaults_zero(self) -> None:
+        condition = self._build(number_of_courses="")
+        assert condition.number_of_courses == 0
+
+    def test_number_of_courses_invalid_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            self._build(number_of_courses="xyz")
+
+
+@pytest.mark.unit
 class TestCoursePrereqsValidation:
     """Test CoursePrereqs validation rules."""
 
@@ -342,10 +448,10 @@ class TestCoursePrereqsValidation:
             typology="DISCIPLINAR",
             conditions=[
                 PrereqCondition(
-                    condition="Debe aprobar",
-                    type="Materia",
-                    all_required="SI",
-                    number_of_courses="1",
+                    condition=1,
+                    type=PrereqType.M,
+                    all_required=True,
+                    number_of_courses=1,
                     prerequisites=[Prerequisite(course_code="1000001", course_name="CALCULO")],
                 )
             ],

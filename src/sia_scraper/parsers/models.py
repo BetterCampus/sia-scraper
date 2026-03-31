@@ -6,6 +6,7 @@ type-safe Pydantic models for runtime validation.
 """
 
 import re
+from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -200,26 +201,119 @@ class Prerequisite(BaseModel):
     course_name: str = Field(default="", description="Course name")
 
 
+class PrereqType(str, Enum):
+    """SIA prerequisite condition type codes.
+
+    Attributes:
+        M: Cannot enroll without passing prerequisite.
+        O: Can enroll, but cannot be graded without passing prerequisite.
+        E: Must enroll simultaneously or have enrolled before.
+        A: Cancellation due to incompatibility.
+        UNKNOWN: Fallback for unrecognized future SIA type codes.
+    """
+
+    M = "M"
+    O = "O"  # noqa: E741
+    E = "E"
+    A = "A"
+    UNKNOWN = "UNKNOWN"
+
+
 class PrereqCondition(BaseModel):
     """Prerequisite condition with list of required courses.
 
     Attributes:
-        condition: Condition type from SIA (e.g., "Must pass ALL")
-        type: Condition type
-        all_required: Whether all courses are required ("Si" or "No")
-        number_of_courses: Number of required courses
+        condition: Condition number from SIA.
+        type: Prerequisite condition type code.
+        all_required: Whether all listed courses are required.
+        number_of_courses: Number of listed prerequisite courses.
         prerequisites: List of prerequisite courses
     """
 
     model_config = {"frozen": True, "populate_by_name": True}
 
-    condition: str = Field(default="", description="Condition description")
-    type: str = Field(default="", description="Condition type")
-    all_required: str = Field(default="", description="Whether all are required")
-    number_of_courses: str = Field(default="", description="Number of required courses")
+    condition: int = Field(default=0, ge=0, description="Condition number")
+    type: PrereqType = Field(
+        default=PrereqType.UNKNOWN,
+        description="Prerequisite type code (M/O/E/A/UNKNOWN)",
+    )
+    all_required: bool = Field(default=False, description="Whether all listed courses are required")
+    number_of_courses: int = Field(default=0, ge=0, description="Number of required courses")
     prerequisites: list[Prerequisite] = Field(
         default_factory=list, description="List of prerequisite courses"
     )
+
+    @staticmethod
+    def _normalize_token(value: object) -> str:
+        """Normalize input token by stripping whitespace and brackets."""
+        token = str(value).strip()
+        if token.startswith("[") and token.endswith("]"):
+            token = token[1:-1].strip()
+        return token
+
+    @field_validator("condition", mode="before")
+    @classmethod
+    def parse_condition(cls, v: object) -> int:
+        """Parse condition number from SIA value."""
+        if v is None:
+            return 0
+        token = cls._normalize_token(v)
+        if not token:
+            return 0
+
+        if token.isdigit():
+            return int(token)
+
+        match = re.search(r"(\d+)", token)
+        if match:
+            return int(match.group(1))
+
+        raise ValueError(f"Condition must contain a number, got '{v}'")
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def parse_type(cls, v: object) -> PrereqType:
+        """Map raw SIA prerequisite type to PrereqType enum."""
+        if isinstance(v, PrereqType):
+            return v
+        if v is None:
+            return PrereqType.UNKNOWN
+        token = cls._normalize_token(v).upper()
+        if not token:
+            return PrereqType.UNKNOWN
+
+        try:
+            return PrereqType(token)
+        except ValueError:
+            return PrereqType.UNKNOWN
+
+    @field_validator("all_required", mode="before")
+    @classmethod
+    def parse_all_required(cls, v: object) -> bool:
+        """Parse all_required flag from SIA values (S/N, SI/NO)."""
+        if isinstance(v, bool):
+            return v
+        if v is None:
+            return False
+        token = cls._normalize_token(v).upper()
+        if token in {"S", "SI"}:
+            return True
+        if token in {"N", "NO"}:
+            return False
+        return False
+
+    @field_validator("number_of_courses", mode="before")
+    @classmethod
+    def parse_number_of_courses(cls, v: object) -> int:
+        """Parse number of prerequisite courses from SIA value."""
+        if v is None:
+            return 0
+        token = cls._normalize_token(v)
+        if not token:
+            return 0
+        if token.isdigit():
+            return int(token)
+        raise ValueError(f"number_of_courses must be numeric, got '{v}'")
 
 
 class CoursePrereqs(BaseModel):

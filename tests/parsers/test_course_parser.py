@@ -8,6 +8,7 @@ from sia_scraper.parsers import (
     CourseInfo,
     CoursePrereqs,
     Group,
+    PrereqType,
     Schedule,
     get_plain_text,
     scrape_info,
@@ -282,6 +283,17 @@ class TestScrapePrereqs:
         assert prereqs.typology != ""
         assert hasattr(prereqs, "conditions")
 
+    def test_scrape_prereqs_condition_fields_are_typed(self, sample_prereqs_xml):
+        """Prerequisite condition fields should be normalized to typed values."""
+        prereqs = scrape_prereqs(sample_prereqs_xml)
+
+        assert prereqs.conditions
+        first = prereqs.conditions[0]
+        assert first.condition == 1
+        assert first.type == PrereqType.M
+        assert first.all_required is False
+        assert first.number_of_courses == 1
+
     def test_scrape_prereqs_empty_xml(self):
         """Test scraping prerequisites from empty XML."""
         empty_xml = "<div></div>"
@@ -344,8 +356,8 @@ class TestScrapePrereqs:
         condition_info_div = MagicMock()
         h1, h2, h3 = MagicMock(), MagicMock(), MagicMock()
         for h, key, val in [
-            (h1, "Condición", "Debe aprobar"),
-            (h2, "Tipo", "Materia"),
+            (h1, "Condición", "1"),
+            (h2, "Tipo", "M"),
             (h3, "¿Todas?", "SI"),
         ]:
             h.text_content.return_value = key
@@ -368,8 +380,8 @@ class TestScrapePrereqs:
         condition_info_div = MagicMock()
         headers = []
         for key, val in [
-            ("Condición", "Debe aprobar"),
-            ("Tipo", "Materia"),
+            ("Condición", "1"),
+            ("Tipo", "M"),
             ("¿Todas?", "SI"),
             ("Número asignaturas", "2"),
         ]:
@@ -417,10 +429,10 @@ class TestScrapePrereqs:
         condition_info_div = MagicMock()
         h1 = MagicMock()
         h1.text_content.return_value = "Condición"
-        h1.getnext.return_value = MagicMock(text_content=MagicMock(return_value="Debe aprobar"))
+        h1.getnext.return_value = MagicMock(text_content=MagicMock(return_value="1"))
         h2 = MagicMock()
         h2.text_content.return_value = "Tipo"
-        h2.getnext.return_value = MagicMock(text_content=MagicMock(return_value="Materia"))
+        h2.getnext.return_value = MagicMock(text_content=MagicMock(return_value="M"))
         h3 = MagicMock()
         h3.text_content.return_value = "¿Todas?"
         h3.getnext.return_value = MagicMock(text_content=MagicMock(return_value="SI"))
