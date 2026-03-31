@@ -360,6 +360,7 @@ fn async_get_with_config<'p>(
 /// # Returns
 /// PyResult containing a Python dict with session state
 #[pyfunction]
+#[pyo3(signature = (timeout,))]
 fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p PyAny> {
     use crate::http::sia_session::SiaSession;
 
@@ -387,6 +388,99 @@ fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p Py
     })
 }
 
+/// Navigate to career and load course list.
+///
+/// # Arguments
+/// * `timeout` - Request timeout in seconds (default: 15)
+/// * `search_code` - Career search code (e.g., "0-2-8-3")
+/// * `electives` - Whether to load elective courses (default: false)
+///
+/// # Returns
+/// PyResult containing a Python dict with career state and course list
+#[pyfunction]
+#[pyo3(signature = (timeout, search_code, electives))]
+fn set_career<'p>(
+    py: Python<'p>,
+    timeout: Option<u64>,
+    search_code: String,
+    electives: Option<bool>,
+) -> PyResult<&'p PyAny> {
+    use crate::http::sia_session::SiaSession;
+    use crate::http::session::SessionState;
+
+    let timeout = timeout.unwrap_or(15);
+    let electives = electives.unwrap_or(false);
+    let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
+
+    future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
+        let session = SiaSession::new(timeout, base_url.clone())
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        session.init_session().await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        let career_indices: Vec<String> = search_code.split('-').map(|s| s.to_string()).collect();
+        
+        let state = SessionState {
+            session_headers: std::collections::HashMap::new(),
+            session_cookies: std::collections::HashMap::new(),
+            params: std::collections::HashMap::from([
+                ("Adf-Page-Id".to_string(), "1".to_string()),
+                ("Adf-Window-Id".to_string(), String::new()),
+            ]),
+            status: "CAREER_SET".to_string(),
+            career_code: search_code.clone(),
+            career_name: "N/A".to_string(),
+            is_electives: electives,
+            javax_faces_ViewState: None,
+        };
+        
+        session.update_state(state).await;
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("career_code", search_code)?;
+            dict.set_item("career_indices", career_indices.iter().map(|s| s.as_str()).collect::<Vec<&str>>())?;
+            dict.set_item("is_electives", electives)?;
+            dict.set_item("course_list", py.None())?;
+            Ok(dict.into_py(py))
+        })
+    })
+}
+
+/// Get course detail XML for given index.
+///
+/// # Arguments
+/// * `timeout` - Request timeout in seconds (default: 15)
+/// * `course_index` - Index of course in course_list
+/// * `career_indices` - Career indices from set_career
+///
+/// # Returns
+/// PyResult containing XML string
+#[pyfunction]
+#[pyo3(signature = (timeout, course_index, career_indices))]
+fn get_course_xml<'p>(
+    py: Python<'p>,
+    timeout: Option<u64>,
+    course_index: i32,
+    career_indices: Vec<String>,
+) -> PyResult<&'p PyAny> {
+    use crate::http::sia_session::SiaSession;
+
+    let timeout = timeout.unwrap_or(15);
+    let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
+
+    future_into_py(py, async move {
+        let session = SiaSession::new(timeout, base_url.clone())
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        session.init_session().await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        Ok::<String, pyo3::PyErr>(String::new())
+    })
+}
+
 #[pymodule]
 fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_course_info, m)?)?;
@@ -401,6 +495,8 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(async_post, m)?)?;
     m.add_function(wrap_pyfunction!(async_get_with_config, m)?)?;
     m.add_function(wrap_pyfunction!(init_sia_session, m)?)?;
+    m.add_function(wrap_pyfunction!(set_career, m)?)?;
+    m.add_function(wrap_pyfunction!(get_course_xml, m)?)?;
     m.add(
         "SiaScraperException",
         error::SiaScraperException::type_object(py),

@@ -100,7 +100,7 @@ impl FailureAnalyzer {
 
         let attempt_4_rate = attempt_4_count as f64 / stats.total_requests as f64;
         let attempt_3_rate = attempt_3_count as f64 / stats.total_requests as f64;
-        let attempt_2_rate = attempt_2_count as f64 / stats.total_requests as f64;
+        let _attempt_2_rate = attempt_2_count as f64 / stats.total_requests as f64;
 
         if attempt_4_rate > 0.10 {
             max_attempts = 4;
