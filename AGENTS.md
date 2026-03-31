@@ -64,6 +64,17 @@ ruff check --fix . && ruff format . && ruff check .
 pyright
 ```
 
+### Local Verification (run before commit)
+```bash
+# Python: lint, format, type check
+ruff check --fix . && ruff format . && ruff check .
+pyright
+
+# Rust: clippy and check
+cargo clippy
+cargo check
+```
+
 ---
 
 ## Code Style Guidelines
@@ -166,6 +177,31 @@ def get_course(self, course_id: str) -> Course:
 - Maximum line length: 100 characters
 - Eliminate unused variables and imports automatically (ruff handles this)
 - No trailing whitespace
+
+#### Mutable Default Arguments
+
+**Never use mutable objects as default argument values.** This is a common Python pitfall that can lead to bugs that are difficult to reproduce.
+
+```python
+# BAD - mutable default argument
+def add_item(item, items=[]):
+    items.append(item)
+    return items
+
+# GOOD - use None and create new list inside
+def add_item(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+
+# GOOD - use default_factory for dataclass fields
+from dataclasses import dataclass, field
+
+@dataclass
+class Example:
+    items: list[str] = field(default_factory=list)
+```
 
 ---
 
