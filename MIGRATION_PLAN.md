@@ -95,6 +95,7 @@ See [Phase 3/4 Execution Plan](#phase-34-execution-plan) below for detailed exec
 - **Phase 4.4:** Retry Logic & Error Handling (2-3 hours)
 - **Phase 4.5:** Python API Integration (3-5 hours)
 - **Phase 4.6:** Testing, Benchmarking & Documentation (5-9 hours)
+- **Phase 4.7:** SiaScraper Async Migration ✅ COMPLETE
 
 See [Phase 4 Detailed Breakdown](#phase-4-detailed-breakdown) for implementation details.
 
@@ -819,6 +820,23 @@ cargo clippy --manifest-path Cargo.toml
 - Updated `README.md`, `CHANGELOG.md`, and `AGENTS.md`
 - New migration guide: `docs/MIGRATION_v2.md`
 
+### Phase 4.7: SiaScraper Async Migration
+**Status:** ✅ Complete
+
+**Purpose:** Migrate the high-level `SiaScraper` facade to async API.
+
+**Completed:**
+- Added `src/sia_scraper/scraper_async.py` with `SiaScraperAsync` async facade
+- Added async public methods for course info, prereqs, career setup, and batch scraping
+- Added async factory helpers: `init_sia_scraper_async()` and `create_career_session_async()`
+- Added dedicated async scraper tests in `tests/test_scraper_async.py`
+- Kept sync `SiaScraper` API intact for backward compatibility during migration
+
+**Deliverables:**
+- Full async public API via `SiaScraperAsync`
+- Async factory helpers exported from package root
+- Updated async test coverage for scraper facade
+
 ### Pull Request Timing
 - PR creation happens after Step 1 and Step 2 are complete, and after deferred items are either completed or explicitly scoped out.
 
@@ -929,9 +947,9 @@ ruff check .                        # Linting
 - [x] Documentation updates
 
 ### Phase 4 (HTTP Client Migration)
-- [ ] `reqwest` integration (async)
-- [ ] Retry logic port
-- [ ] `SiaSession` as `#[pyclass]`
+- [x] `reqwest` integration (async)
+- [x] Retry logic port
+- [x] `SiaSession` async Python integration (`SiaSessionAsync`)
 - [ ] CI/CD with maturin-action
 - [ ] PyPI publishing
 
@@ -943,7 +961,7 @@ ruff check .                        # Linting
 | Phase 1 | HTML parsers | ✅ Complete |
 | Phase 2 | Oracle ADF logic | ✅ Complete |
 | Phase 3 | Parser completion + fuzzing | ✅ Complete |
-| Phase 4 | HTTP client (async) | 🚀 Planned |
+| Phase 4 | HTTP client (async) | ✅ Complete |
 | Phase 5 | Async + production polish | 🔮 Future |
 
 ## Breaking Changes

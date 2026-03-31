@@ -42,7 +42,10 @@ For local development:
 git clone https://github.com/BetterCampus/sia-scraper.git
 cd sia-scraper
 pip install -e ".[dev]"
+python scripts/sync_rust_extension.py --build --release --verify
 ```
+
+If you update Rust code later, run the sync command again to refresh the local extension binary.
 
 ### Minimal Example
 
@@ -57,6 +60,41 @@ print(f"{course.course_name} ({course.credits} credits)")
 
 scraper.close_session()
 ```
+
+### Async API (v2.0+)
+
+For high-throughput scenarios, use the async API:
+
+```python
+import asyncio
+from sia_scraper import SiaSessionAsync
+
+async def main():
+    session = await SiaSessionAsync.create()
+    await session.set_career("0-2-8-3")
+    xml = await session.get_course_xml(0)
+    await session.close()
+
+asyncio.run(main())
+```
+
+You can also use the async scraper facade:
+
+```python
+import asyncio
+from sia_scraper import SiaScraperAsync
+
+async def main():
+    scraper = await SiaScraperAsync.create()
+    await scraper.set_career("0-2-8-3")
+    course = await scraper.get_course_info(course_code="2016489")
+    print(f"{course.course_name} ({course.credits} credits)")
+    await scraper.close_session()
+
+asyncio.run(main())
+```
+
+See [docs/MIGRATION_v2.md](docs/MIGRATION_v2.md) for complete migration guide.
 
 Career codes use the format `{level}-{campus}-{faculty}-{career}`.
 

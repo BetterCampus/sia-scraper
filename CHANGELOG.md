@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Async HTTP Client (Rust reqwest + tokio)**: Phase 4 complete - async HTTP transport layer
+  - New `SiaSessionAsync` class for async session management
+  - Connection pooling enabled by default
+  - Automatic ViewState synchronization after each request
+  - SIA-optimized retry with exponential backoff and jitter
+  - TLS: rustls with dual backend (native-certs + webpki-roots)
+- **pytest-asyncio**: Async test infrastructure added
+  - New `tests/test_session_async.py` with 19 async tests
+  - All tests passing
+- **HTTP Benchmarks**: `benchmarks/benchmark_http_async.py`
+  - Session creation: ~240ms (p50), ~272ms (p95)
+  - Set career: ~213ms (p50), ~287ms (p95)
+  - Concurrent sessions: 35+ sessions/second
+  - No baseline comparison (sync API metrics not collected)
 - **HTTP Resilience with tenacity**: Automatic retry logic for network failures
   - 3 retry attempts with exponential backoff (2s → 4s → 8s, max 10s)
   - Retries on: `Timeout`, `ReadTimeout`, `ConnectionError`
@@ -33,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `NavigationController`: ADF workflow orchestration
   - `AdfContext`: Value object for request context
 - **Batch Resilience**: `scrape_courses()` supports SKIP/RETRY/ABORT modes
+- **Async scraper facade (Phase 4.7)**:
+  - New `SiaScraperAsync` in `src/sia_scraper/scraper_async.py`
+  - New async factory helpers: `init_sia_scraper_async()` and `create_career_session_async()`
+  - New async scraper unit tests in `tests/test_scraper_async.py`
+  - `sia_scraper.__init__` now conditionally exports async API when Rust extension is available
 
 ### Refactored
 
