@@ -8,6 +8,7 @@ use pyo3::types::{PyBytes, PyString};
 use pyo3::PyTypeInfo;
 
 mod error;
+mod http;
 mod parsers;
 mod testing;
 #[cfg(test)]
@@ -243,6 +244,71 @@ pub fn fuzz_extract_view_state(input: &str) {
     let _ = parsers::adf::extract_view_state(input);
 }
 
+/// Async HTTP GET request - PoC for Phase 4.1
+///
+/// This demonstrates async reqwest with pyo3-asyncio integration.
+/// Returns a Python dict with status, body, and headers.
+///
+/// # Arguments
+/// * `url` - The URL to fetch
+///
+/// # Returns
+/// PyResult containing a Python dict with response data
+#[pyfunction]
+fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
+    use pyo3_asyncio::tokio::future_into_py;
+    use crate::http::AsyncHttpClient;
+
+    let url_clone = url.clone();
+    future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
+        let client = AsyncHttpClient::new(15, url_clone.clone())
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        let resp = client.get(&url_clone).await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("status", resp.status)?;
+            dict.set_item("body", resp.body)?;
+            dict.set_item("url", resp.url)?;
+            Ok(dict.into_py(py))
+        })
+    })
+}
+
+/// Async HTTP POST request - PoC for Phase 4.1
+///
+/// # Arguments
+/// * `url` - The URL to POST to
+/// * `body` - The request body
+///
+/// # Returns
+/// PyResult containing a Python dict with response data
+#[pyfunction]
+fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyAny> {
+    use pyo3_asyncio::tokio::future_into_py;
+    use crate::http::AsyncHttpClient;
+
+    let url_clone = url.clone();
+    let body_clone = body.clone();
+    future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
+        let client = AsyncHttpClient::new(15, url_clone.clone())
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        let resp = client.post(&url_clone, &body_clone).await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("status", resp.status)?;
+            dict.set_item("body", resp.body)?;
+            dict.set_item("url", resp.url)?;
+            Ok(dict.into_py(py))
+        })
+    })
+}
+
 #[pymodule]
 fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_course_info, m)?)?;
@@ -253,6 +319,8 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_oracle_adf_request_dict, m)?)?;
     m.add_function(wrap_pyfunction!(build_oracle_adf_request_body, m)?)?;
     m.add_function(wrap_pyfunction!(get_oracle_adf_event_dict, m)?)?;
+    m.add_function(wrap_pyfunction!(async_get, m)?)?;
+    m.add_function(wrap_pyfunction!(async_post, m)?)?;
     m.add(
         "SiaScraperException",
         error::SiaScraperException::type_object(py),
