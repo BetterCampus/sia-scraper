@@ -6,7 +6,8 @@ use crate::http::{config::HttpClientConfig, errors::HttpError, types::HttpRespon
 
 pub struct AsyncHttpClient {
     client: reqwest::Client,
-    config: HttpClientConfig,
+    #[cfg(test)]
+    timeout_secs: u64,
 }
 
 impl AsyncHttpClient {
@@ -33,11 +34,13 @@ impl AsyncHttpClient {
             }
         };
 
-        let client = builder
-            .build()
-            .map_err(|e: reqwest::Error| HttpError::from(e))?;
+        let client = builder.build().map_err(HttpError::from)?;
 
-        Ok(Self { client, config })
+        Ok(Self {
+            client,
+            #[cfg(test)]
+            timeout_secs: config.timeout_secs,
+        })
     }
 
     pub fn new(timeout_secs: u64, _base_url: String) -> Result<Self, HttpError> {
@@ -62,29 +65,9 @@ impl AsyncHttpClient {
         HttpResponse::from_reqwest(resp).await
     }
 
-    pub async fn post_with_headers(
-        &self,
-        url: &str,
-        body: &str,
-        headers: &[(&str, &str)],
-    ) -> Result<HttpResponse, HttpError> {
-        let mut req = self.client.post(url);
-        for (key, value) in headers {
-            req = req.header(*key, *value);
-        }
-        let resp = req
-            .body(body.to_string())
-            .send()
-            .await?;
-        HttpResponse::from_reqwest(resp).await
-    }
-
-    pub fn config(&self) -> &HttpClientConfig {
-        &self.config
-    }
-
+    #[cfg(test)]
     pub fn timeout(&self) -> u64 {
-        self.config.timeout_secs
+        self.timeout_secs
     }
 }
 
@@ -97,7 +80,29 @@ impl Default for AsyncHttpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::config::TlsBackend;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    fn spawn_single_response_server(status: &str, body: &str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local test server");
+        let addr = listener.local_addr().expect("resolve local addr");
+        let status = status.to_string();
+        let body = body.to_string();
+
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0_u8; 4096];
+                let _ = stream.read(&mut buffer);
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{body}",
+                    body.len(),
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+
+        format!("http://{}", addr)
+    }
 
     #[tokio::test]
     async fn test_client_with_default_config() {
@@ -122,19 +127,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_request() {
-        let client = AsyncHttpClient::new(15, "https://httpbin.org".to_string()).unwrap();
-        let resp = client.get("https://httpbin.org/get").await;
+        let server_url = spawn_single_response_server("200 OK", "mock-get-body");
+        let client = AsyncHttpClient::new(15, server_url.clone()).unwrap();
+        let resp = client.get(&server_url).await;
         assert!(resp.is_ok());
         let resp = resp.unwrap();
         assert_eq!(resp.status, 200);
+        assert_eq!(resp.body, "mock-get-body");
     }
 
     #[tokio::test]
     async fn test_post_request() {
-        let client = AsyncHttpClient::new(15, "https://httpbin.org".to_string()).unwrap();
-        let resp = client.post("https://httpbin.org/post", "test=value").await;
+        let server_url = spawn_single_response_server("200 OK", "mock-post-body");
+        let client = AsyncHttpClient::new(15, server_url.clone()).unwrap();
+        let resp = client.post(&server_url, "test=value").await;
         assert!(resp.is_ok());
         let resp = resp.unwrap();
         assert_eq!(resp.status, 200);
+        assert_eq!(resp.body, "mock-post-body");
     }
 }

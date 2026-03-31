@@ -9,7 +9,7 @@ use crate::http::config::HttpClientConfig;
 use crate::http::errors::HttpError;
 use crate::http::retry::{calculate_delay, should_retry, RetryConfig};
 use crate::http::session::SessionState;
-use crate::http::HttpResponse;
+use crate::http::types::HttpResponse;
 
 pub struct SiaSession {
     client: AsyncHttpClient,

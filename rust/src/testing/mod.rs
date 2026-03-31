@@ -8,6 +8,11 @@ mod config;
 mod server;
 mod types;
 
+pub use analysis::{AnalysisReport, FailureAnalyzer, RecommendedRetryConfig};
+pub use config::FailureConfig;
+pub use server::MockServer;
+pub use types::{FailureMode, RequestStats};
+
 #[cfg(test)]
 mod tests {
     use super::*;

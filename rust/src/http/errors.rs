@@ -13,12 +13,6 @@ pub enum HttpError {
     #[error("HTTP {status}: {url}")]
     HttpStatus { status: u16, url: String },
 
-    #[error("TLS error: {0}")]
-    TlsError(String),
-
-    #[error("Invalid request: {0}")]
-    InvalidRequest(String),
-
     #[error("Response parsing error: {0}")]
     ParseError(String),
 }
@@ -46,5 +40,3 @@ impl From<reqwest::Error> for HttpError {
         HttpError::ConnectionFailed(error_str)
     }
 }
-
-pub type HttpResult<T> = Result<T, HttpError>;

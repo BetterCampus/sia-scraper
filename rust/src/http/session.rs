@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[allow(non_snake_case)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
     pub session_headers: HashMap<String, String>,
@@ -34,15 +35,18 @@ impl Default for SessionState {
 }
 
 impl SessionState {
+    #[cfg(test)]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[cfg(test)]
     pub fn with_view_state(mut self, view_state: String) -> Self {
         self.javax_faces_ViewState = Some(view_state);
         self
     }
 
+    #[cfg(test)]
     pub fn with_career(mut self, code: String, name: String) -> Self {
         self.career_code = code;
         self.career_name = name;
@@ -53,10 +57,12 @@ impl SessionState {
         self.status = status.to_string();
     }
 
+    #[cfg(test)]
     pub fn is_view_state_set(&self) -> bool {
         self.javax_faces_ViewState.is_some()
     }
 
+    #[cfg(test)]
     pub fn view_state(&self) -> Option<&String> {
         self.javax_faces_ViewState.as_ref()
     }
@@ -65,6 +71,7 @@ impl SessionState {
         self.javax_faces_ViewState = Some(view_state);
     }
 
+    #[cfg(test)]
     pub fn update_params(&mut self, key: &str, value: String) {
         self.params.insert(key.to_string(), value);
     }

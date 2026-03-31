@@ -47,16 +47,19 @@ impl RetryConfig {
         self
     }
 
+    #[cfg(test)]
     pub fn with_initial_delay(mut self, delay_ms: u64) -> Self {
         self.initial_delay_ms = delay_ms;
         self
     }
 
+    #[cfg(test)]
     pub fn with_max_delay(mut self, delay_ms: u64) -> Self {
         self.max_delay_ms = delay_ms;
         self
     }
 
+    #[cfg(test)]
     pub fn with_jitter(mut self, factor: f64) -> Self {
         self.jitter_factor = factor;
         self
@@ -75,11 +78,11 @@ pub fn calculate_delay(attempt: u32, config: &RetryConfig) -> Duration {
     Duration::from_millis(final_delay)
 }
 
-pub fn should_retry(error: &crate::http::HttpError, config: &RetryConfig) -> bool {
+pub fn should_retry(error: &crate::http::errors::HttpError, config: &RetryConfig) -> bool {
     match error {
-        crate::http::HttpError::Timeout { .. } => config.retry_on_timeout,
-        crate::http::HttpError::ConnectionFailed(_) => config.retry_on_connection_error,
-        crate::http::HttpError::HttpStatus { status, .. } => {
+        crate::http::errors::HttpError::Timeout { .. } => config.retry_on_timeout,
+        crate::http::errors::HttpError::ConnectionFailed(_) => config.retry_on_connection_error,
+        crate::http::errors::HttpError::HttpStatus { status, .. } => {
             config.retry_on_status.contains(status)
         }
         _ => false,
@@ -106,14 +109,14 @@ mod tests {
     #[test]
     fn test_should_retry_timeout() {
         let config = RetryConfig::default();
-        let error = crate::http::HttpError::Timeout { timeout: 15 };
+        let error = crate::http::errors::HttpError::Timeout { timeout: 15 };
         assert!(should_retry(&error, &config));
     }
 
     #[test]
     fn test_should_retry_503() {
         let config = RetryConfig::default();
-        let error = crate::http::HttpError::HttpStatus {
+        let error = crate::http::errors::HttpError::HttpStatus {
             status: 503,
             url: "test".to_string(),
         };
@@ -123,7 +126,7 @@ mod tests {
     #[test]
     fn test_should_not_retry_400() {
         let config = RetryConfig::default();
-        let error = crate::http::HttpError::HttpStatus {
+        let error = crate::http::errors::HttpError::HttpStatus {
             status: 400,
             url: "test".to_string(),
         };
@@ -132,7 +135,10 @@ mod tests {
 
     #[test]
     fn test_calculate_delay() {
-        let config = RetryConfig::default();
+        let config = RetryConfig::default()
+            .with_initial_delay(1000)
+            .with_max_delay(8000)
+            .with_jitter(0.20);
         let delay = calculate_delay(1, &config);
         assert!(delay.as_millis() >= 800);
     }

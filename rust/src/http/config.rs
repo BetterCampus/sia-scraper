@@ -93,9 +93,11 @@ mod tests {
     fn test_config_builder() {
         let config = HttpClientConfig::default()
             .with_timeout(30)
+            .with_connect_timeout(10)
             .with_tls_backend(TlsBackend::WebPkiRoots);
 
         assert_eq!(config.timeout_secs, 30);
+        assert_eq!(config.connect_timeout_secs, 10);
         assert_eq!(config.tls_backend, TlsBackend::WebPkiRoots);
     }
 }

@@ -10,9 +10,9 @@ use pyo3::PyTypeInfo;
 use pyo3_asyncio::tokio::future_into_py;
 
 mod error;
-mod http;
+pub mod http;
 mod parsers;
-mod testing;
+pub mod testing;
 #[cfg(test)]
 mod tests;
 
@@ -258,7 +258,7 @@ pub fn fuzz_extract_view_state(input: &str) {
 /// PyResult containing a Python dict with response data
 #[pyfunction]
 fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
-    use crate::http::AsyncHttpClient;
+    use crate::http::client::AsyncHttpClient;
 
     let url_clone = url.clone();
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
@@ -288,7 +288,7 @@ fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
 /// PyResult containing a Python dict with response data
 #[pyfunction]
 fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyAny> {
-    use crate::http::AsyncHttpClient;
+    use crate::http::client::AsyncHttpClient;
 
     let url_clone = url.clone();
     let body_clone = body.clone();
@@ -325,7 +325,8 @@ fn async_get_with_config<'p>(
     timeout: Option<u64>,
     user_agent: Option<String>,
 ) -> PyResult<&'p PyAny> {
-    use crate::http::{config::HttpClientConfig, AsyncHttpClient};
+    use crate::http::client::AsyncHttpClient;
+    use crate::http::config::HttpClientConfig;
 
     let url_clone = url.clone();
     let timeout = timeout.unwrap_or(15);
@@ -469,6 +470,8 @@ fn get_course_xml<'p>(
 
     let timeout = timeout.unwrap_or(15);
     let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
+
+    let _ = (course_index, career_indices);
 
     future_into_py(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
