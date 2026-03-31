@@ -54,7 +54,7 @@ pub enum SiaScraperError {
 
 impl From<quick_xml::Error> for SiaScraperError {
     fn from(e: quick_xml::Error) -> Self {
-        SiaScraperError::XmlError(e.to_string())
+        SiaScraperError::XmlError(format!("XML parsing failed at: {}", e))
     }
 }
 
