@@ -76,42 +76,53 @@ impl OracleAdfRequestBuilderState {
         window_id: Option<&str>,
         page_id: Option<&str>,
         view_state: Option<&str>,
-    ) -> HashMap<String, String> {
-        let mut request_dict = HashMap::new();
+    ) -> &HashMap<String, String> {
+        self.request_dict.clear();
 
-        request_dict.insert(STUDY_LEVEL_DD_ID.to_string(), String::new());
-        request_dict.insert(CAMPUS_DD_ID.to_string(), String::new());
-        request_dict.insert(FACULTY_DD_ID.to_string(), String::new());
-        request_dict.insert(CAREER_DD_ID.to_string(), String::new());
-        request_dict.insert(TIPOLOGY_DD_ID.to_string(), tipology_index.to_string());
-        request_dict.insert(SHOW_COURSES_BTTN_ID.to_string(), String::new());
-        request_dict.insert(ORACLE_ADF_UNKNOWN_COMPONENT_1.to_string(), String::new());
-        request_dict.insert(ORACLE_ADF_UNKNOWN_COMPONENT_2.to_string(), String::new());
-        request_dict.insert(ORACLE_ADF_UNKNOWN_COMPONENT_3.to_string(), String::new());
-        request_dict.insert(ORACLE_ADF_UNKNOWN_COMPONENT_4.to_string(), String::new());
-        request_dict.insert(
+        self.request_dict
+            .insert(STUDY_LEVEL_DD_ID.to_string(), String::new());
+        self.request_dict
+            .insert(CAMPUS_DD_ID.to_string(), String::new());
+        self.request_dict
+            .insert(FACULTY_DD_ID.to_string(), String::new());
+        self.request_dict
+            .insert(CAREER_DD_ID.to_string(), String::new());
+        self.request_dict
+            .insert(TIPOLOGY_DD_ID.to_string(), tipology_index.to_string());
+        self.request_dict
+            .insert(SHOW_COURSES_BTTN_ID.to_string(), String::new());
+        self.request_dict
+            .insert(ORACLE_ADF_UNKNOWN_COMPONENT_1.to_string(), String::new());
+        self.request_dict
+            .insert(ORACLE_ADF_UNKNOWN_COMPONENT_2.to_string(), String::new());
+        self.request_dict
+            .insert(ORACLE_ADF_UNKNOWN_COMPONENT_3.to_string(), String::new());
+        self.request_dict
+            .insert(ORACLE_ADF_UNKNOWN_COMPONENT_4.to_string(), String::new());
+        self.request_dict.insert(
             "org.apache.myfaces.trinidad.faces.FORM".to_string(),
             "f1".to_string(),
         );
-        request_dict.insert(
+        self.request_dict.insert(
             "Adf-Window-Id".to_string(),
             window_id.unwrap_or_default().to_string(),
         );
-        request_dict.insert(
+        self.request_dict.insert(
             "Adf-Page-Id".to_string(),
             page_id.unwrap_or_default().to_string(),
         );
-        request_dict.insert(
+        self.request_dict.insert(
             "javax.faces.ViewState".to_string(),
             view_state.unwrap_or_default().to_string(),
         );
 
-        std::mem::take(&mut self.request_dict)
+        &self.request_dict
     }
 
     /// Builds request body for one data map action.
     pub fn build_request_body(
         &self,
+        mut request_dict: HashMap<String, String>,
         data_name: &str,
         idx: i32,
         career_indices: &[String],
@@ -120,8 +131,6 @@ impl OracleAdfRequestBuilderState {
         let (component_id, event_value) = data_map_entry(data_name).ok_or_else(|| {
             SiaScraperError::InvalidInput(format!("Unknown data_name in DATA_MAP: {}", data_name))
         })?;
-
-        let mut request_dict = self.request_dict.clone();
 
         if data_name == FACULTY_CAREER_DD {
             request_dict.insert(
@@ -226,7 +235,13 @@ mod tests {
         let mut builder = OracleAdfRequestBuilderState::new();
         let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
-        let result = builder.build_request_body("UNKNOWN_ACTION", -1, &["0".to_string()], 2);
+        let result = builder.build_request_body(
+            std::mem::take(&mut builder.request_dict),
+            "UNKNOWN_ACTION",
+            -1,
+            &["0".to_string()],
+            2,
+        );
         assert!(result.is_err());
     }
 
@@ -237,6 +252,7 @@ mod tests {
 
         let request_body = builder
             .build_request_body(
+                std::mem::take(&mut builder.request_dict),
                 FACULTY_CAREER_DD,
                 -1,
                 &["0".to_string(), "5".to_string()],
@@ -257,6 +273,7 @@ mod tests {
 
         let request_body = builder
             .build_request_body(
+                std::mem::take(&mut builder.request_dict),
                 CAMPUS_ELECTIVES_DD,
                 -1,
                 &["0".to_string(), "5".to_string()],
@@ -276,7 +293,13 @@ mod tests {
         let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
         let request_body = builder
-            .build_request_body(SELECT_ROW, 1, &["0".to_string(), "5".to_string()], 2)
+            .build_request_body(
+                std::mem::take(&mut builder.request_dict),
+                SELECT_ROW,
+                1,
+                &["0".to_string(), "5".to_string()],
+                2,
+            )
             .unwrap();
 
         let deltas = request_body.get("oracle.adf.view.rich.DELTAS").unwrap();
@@ -291,7 +314,13 @@ mod tests {
         let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
         let request_body = builder
-            .build_request_body(COURSE_PAGE_LINK, -1, &["0".to_string(), "5".to_string()], 2)
+            .build_request_body(
+                std::mem::take(&mut builder.request_dict),
+                COURSE_PAGE_LINK,
+                -1,
+                &["0".to_string(), "5".to_string()],
+                2,
+            )
             .unwrap();
 
         assert_eq!(

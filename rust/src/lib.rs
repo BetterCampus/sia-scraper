@@ -200,7 +200,14 @@ fn build_oracle_adf_request_body(
     }
 
     state.request_dict = rust_request_dict;
-    let built = state.build_request_body(data_name, idx, &career_indices, course_list_len)?;
+    let request_dict = std::mem::take(&mut state.request_dict);
+    let built = state.build_request_body(
+        request_dict,
+        data_name,
+        idx,
+        &career_indices,
+        course_list_len,
+    )?;
 
     Python::with_gil(|py| {
         let dict = pyo3::types::PyDict::new(py);

@@ -37,7 +37,13 @@ fn test_build_request_body_raises_for_unknown_action() {
     let mut builder = OracleAdfRequestBuilderState::new();
     let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
-    let result = builder.build_request_body("UNKNOWN_ACTION", -1, &["0".to_string()], 2);
+    let result = builder.build_request_body(
+        std::mem::take(&mut builder.request_dict),
+        "UNKNOWN_ACTION",
+        -1,
+        &["0".to_string()],
+        2,
+    );
     assert!(result.is_err());
 }
 
@@ -48,6 +54,7 @@ fn test_build_request_body_sets_faculty_career_default_index() {
 
     let request_body = builder
         .build_request_body(
+            std::mem::take(&mut builder.request_dict),
             "FACULTY_CAREER_DD",
             -1,
             &["0".to_string(), "5".to_string()],
@@ -65,6 +72,7 @@ fn test_build_request_body_sets_electives_campus_increment() {
 
     let request_body = builder
         .build_request_body(
+            std::mem::take(&mut builder.request_dict),
             "CAMPUS_ELECTIVES_DD",
             -1,
             &["0".to_string(), "5".to_string()],
@@ -81,7 +89,13 @@ fn test_build_request_body_select_row_adds_deltas() {
     let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
     let request_body = builder
-        .build_request_body("SELECT_ROW", 1, &["0".to_string(), "5".to_string()], 2)
+        .build_request_body(
+            std::mem::take(&mut builder.request_dict),
+            "SELECT_ROW",
+            1,
+            &["0".to_string(), "5".to_string()],
+            2,
+        )
         .expect("select row body should build");
 
     let deltas = request_body
@@ -99,6 +113,7 @@ fn test_build_request_body_course_page_link_sets_render_target() {
 
     let request_body = builder
         .build_request_body(
+            std::mem::take(&mut builder.request_dict),
             "COURSE_PAGE_LINK",
             -1,
             &["0".to_string(), "5".to_string()],
@@ -174,10 +189,18 @@ fn test_build_request_body_supports_all_dropdown_and_button_actions() {
 
     for action in actions {
         let body = builder
-            .build_request_body(action, -1, &["0".to_string(), "5".to_string()], 10)
+            .build_request_body(
+                std::mem::take(&mut builder.request_dict),
+                action,
+                -1,
+                &["0".to_string(), "5".to_string()],
+                10,
+            )
             .expect("action should build request body");
         assert!(body.contains_key("event"));
         assert!(body.contains_key("oracle.adf.view.rich.PROCESS"));
+
+        builder.request_dict = body;
     }
 }
 
@@ -186,7 +209,13 @@ fn test_build_request_body_electives_requires_second_career_index() {
     let mut builder = OracleAdfRequestBuilderState::new();
     let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
-    let result = builder.build_request_body("CAMPUS_ELECTIVES_DD", -1, &["0".to_string()], 2);
+    let result = builder.build_request_body(
+        std::mem::take(&mut builder.request_dict),
+        "CAMPUS_ELECTIVES_DD",
+        -1,
+        &["0".to_string()],
+        2,
+    );
     assert!(result.is_err());
 }
 
@@ -196,6 +225,7 @@ fn test_build_request_body_electives_requires_numeric_second_index() {
     let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
 
     let result = builder.build_request_body(
+        std::mem::take(&mut builder.request_dict),
         "CAMPUS_ELECTIVES_DD",
         -1,
         &["0".to_string(), "x".to_string()],
