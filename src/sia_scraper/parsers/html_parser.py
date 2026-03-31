@@ -255,7 +255,9 @@ def get_course_list(content: bytes | str) -> list[dict[str, str]]:
     ## Implementation
         Uses Rust extension for performance (sia_scraper_rust.get_course_list).
     """
-    from sia_scraper_rust import get_course_list as rust_get_course_list
+    from sia_scraper_rust import (
+        get_course_list as rust_get_course_list,  # type: ignore[attr-defined]
+    )
 
     if isinstance(content, bytes):
         content = content.decode("utf-8")

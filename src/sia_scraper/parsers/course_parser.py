@@ -40,7 +40,7 @@ def get_plain_text(xml: str) -> str:
     ## Returns
         Plain text content before the first triple non-breaking space separator.
     """
-    from sia_scraper_rust import get_plain_text as rust_get_plain_text
+    from sia_scraper_rust import get_plain_text as rust_get_plain_text  # type: ignore[attr-defined]
 
     return rust_get_plain_text(xml)
 

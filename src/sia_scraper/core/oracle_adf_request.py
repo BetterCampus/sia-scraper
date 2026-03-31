@@ -60,7 +60,7 @@ class OracleAdfRequestBuilder:
         Returns
             Complete request dictionary with Oracle ADF form fields and state tokens.
         """
-        from sia_scraper_rust import init_oracle_adf_request_dict
+        from sia_scraper_rust import init_oracle_adf_request_dict  # type: ignore[attr-defined]
 
         request_dict = init_oracle_adf_request_dict(
             self.session._tipology_index,
@@ -84,7 +84,7 @@ class OracleAdfRequestBuilder:
         Raises:
             KeyError: If data_name not found in DATA_MAP.
         """
-        from sia_scraper_rust import build_oracle_adf_request_body
+        from sia_scraper_rust import build_oracle_adf_request_body  # type: ignore[attr-defined]
 
         if data_name not in DATA_MAP:
             raise KeyError(f"Unknown data_name in DATA_MAP: {data_name}")
@@ -138,7 +138,7 @@ class OracleAdfRequestBuilder:
         Returns:
             Dictionary with Oracle ADF event fields.
         """
-        from sia_scraper_rust import get_oracle_adf_event_dict
+        from sia_scraper_rust import get_oracle_adf_event_dict  # type: ignore[attr-defined]
 
         event_dict = get_oracle_adf_event_dict(id, event_type, idx)
         return dict(event_dict)
