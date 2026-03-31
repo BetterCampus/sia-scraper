@@ -42,7 +42,7 @@ impl HttpClientConfig {
             timeout_secs: 15,
             connect_timeout_secs: 5,
             max_redirects: 10,
-            user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36".to_string(),
+            user_agent: "sia-scraper/2.0".to_string(),
             enable_cookies: true,
             pool_idle_timeout_secs: 90,
             pool_max_idle_per_host: 16,

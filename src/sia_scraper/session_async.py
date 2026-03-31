@@ -18,7 +18,10 @@ After (v2.0):
 
 from typing import Any
 
-import sia_scraper_rust
+try:
+    import sia_scraper_rust
+except ImportError:
+    sia_scraper_rust = None  # type: ignore[assignment]
 
 from .constants import status
 from .parsers.models import SessionState
@@ -85,6 +88,10 @@ class SiaSessionAsync:
 
     async def init_session(self) -> None:
         """Initialize HTTP session with SIA and fetch initial ViewState."""
+        if sia_scraper_rust is None:
+            raise ImportError(
+                "SiaSessionAsync requires the Rust extension module 'sia_scraper_rust'."
+            )
         result = await sia_scraper_rust.init_sia_session(self._timeout)  # type: ignore[attr-defined]
         self._STATUS = status.SiaSessionStatus.CAREER_NOT_SET
         self._session_state = dict(result)
@@ -96,10 +103,26 @@ class SiaSessionAsync:
             search_code: Career search code (e.g., "0-2-8-3")
             electives: Whether to load elective courses
         """
-        await sia_scraper_rust.set_career(self._timeout, search_code, electives)  # type: ignore[attr-defined]
+        if sia_scraper_rust is None:
+            raise ImportError(
+                "SiaSessionAsync requires the Rust extension module 'sia_scraper_rust'."
+            )
+        result = await sia_scraper_rust.set_career(  # type: ignore[attr-defined]
+            self._timeout,
+            search_code,
+            electives,
+        )
         self._career_code = search_code
         self._career_indices = search_code.split("-")
         self._is_electives = electives
+        if isinstance(result, dict):
+            self._career_name = str(result.get("career_name", self._career_name))
+            course_list = result.get("course_list", [])
+            if isinstance(course_list, list):
+                self._session_state["course_list"] = course_list
+            view_state = result.get("javax_faces_ViewState")
+            if isinstance(view_state, str):
+                self._session_state["javax_faces_ViewState"] = view_state
         self._STATUS = status.SiaSessionStatus.ON_CAREER_PAGE
 
     async def get_course_xml(self, course_index: int) -> str:
@@ -111,10 +134,15 @@ class SiaSessionAsync:
         Returns:
             Raw XML string from SIA course detail page
         """
+        if sia_scraper_rust is None:
+            raise ImportError(
+                "SiaSessionAsync requires the Rust extension module 'sia_scraper_rust'."
+            )
         result = await sia_scraper_rust.get_course_xml(  # type: ignore[attr-defined]
             self._timeout,
             course_index,
             self._career_indices,
+            self._is_electives,
         )
         return str(result)
 

@@ -407,7 +407,6 @@ fn set_career<'p>(
     electives: Option<bool>,
 ) -> PyResult<&'p PyAny> {
     use crate::http::sia_session::SiaSession;
-    use crate::http::session::SessionState;
 
     let timeout = timeout.unwrap_or(15);
     let electives = electives.unwrap_or(false);
@@ -420,30 +419,30 @@ fn set_career<'p>(
         session.init_session().await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         
+        let state = session
+            .set_career(&search_code, electives)
+            .await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         let career_indices: Vec<String> = search_code.split('-').map(|s| s.to_string()).collect();
-        
-        let state = SessionState {
-            session_headers: std::collections::HashMap::new(),
-            session_cookies: std::collections::HashMap::new(),
-            params: std::collections::HashMap::from([
-                ("Adf-Page-Id".to_string(), "1".to_string()),
-                ("Adf-Window-Id".to_string(), String::new()),
-            ]),
-            status: "CAREER_SET".to_string(),
-            career_code: search_code.clone(),
-            career_name: "N/A".to_string(),
-            is_electives: electives,
-            javax_faces_ViewState: None,
-        };
-        
-        session.update_state(state).await;
+        let course_list_json = state
+            .params
+            .get("course_list_json")
+            .cloned()
+            .unwrap_or_default();
+        let course_list: Vec<std::collections::HashMap<String, String>> =
+            serde_json::from_str(&course_list_json).unwrap_or_default();
         
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("career_code", search_code)?;
             dict.set_item("career_indices", career_indices.iter().map(|s| s.as_str()).collect::<Vec<&str>>())?;
             dict.set_item("is_electives", electives)?;
-            dict.set_item("course_list", py.None())?;
+            dict.set_item("career_name", state.career_name)?;
+            dict.set_item(
+                "javax_faces_ViewState",
+                state.javax_faces_ViewState.unwrap_or_default(),
+            )?;
+            dict.set_item("course_list", course_list)?;
             Ok(dict.into_py(py))
         })
     })
@@ -459,19 +458,20 @@ fn set_career<'p>(
 /// # Returns
 /// PyResult containing XML string
 #[pyfunction]
-#[pyo3(signature = (timeout, course_index, career_indices))]
+#[pyo3(signature = (timeout, course_index, career_indices, electives=None))]
 fn get_course_xml<'p>(
     py: Python<'p>,
     timeout: Option<u64>,
     course_index: i32,
     career_indices: Vec<String>,
+    electives: Option<bool>,
 ) -> PyResult<&'p PyAny> {
     use crate::http::sia_session::SiaSession;
 
     let timeout = timeout.unwrap_or(15);
+    let electives = electives.unwrap_or(false);
     let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
-
-    let _ = (course_index, career_indices);
+    let search_code = career_indices.join("-");
 
     future_into_py(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
@@ -479,8 +479,13 @@ fn get_course_xml<'p>(
         
         session.init_session().await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        let xml = session
+            .get_course_xml(&search_code, electives, course_index)
+            .await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         
-        Ok::<String, pyo3::PyErr>(String::new())
+        Ok::<String, pyo3::PyErr>(xml)
     })
 }
 

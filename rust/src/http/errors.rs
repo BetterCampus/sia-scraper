@@ -10,6 +10,9 @@ pub enum HttpError {
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
 
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("HTTP {status}: {url}")]
     HttpStatus { status: u16, url: String },
 

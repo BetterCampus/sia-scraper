@@ -71,7 +71,6 @@ impl SessionState {
         self.javax_faces_ViewState = Some(view_state);
     }
 
-    #[cfg(test)]
     pub fn update_params(&mut self, key: &str, value: String) {
         self.params.insert(key.to_string(), value);
     }

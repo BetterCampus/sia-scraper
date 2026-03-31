@@ -17,6 +17,7 @@ impl AsyncHttpClient {
         let pool_idle_timeout = Duration::from_secs(config.pool_idle_timeout_secs);
 
         let mut builder = reqwest::Client::builder()
+            .http1_only()
             .timeout(timeout)
             .connect_timeout(connect_timeout)
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
@@ -58,7 +59,16 @@ impl AsyncHttpClient {
         let resp = self
             .client
             .post(url)
+            .header("accept", "*/*")
+            .header("accept-language", "es-419,es;q=0.9,en;q=0.8")
+            .header("adf-ads-page-id", "1")
+            .header("adf-rich-message", "true")
             .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("origin", "https://sia.unal.edu.co")
+            .header(
+                "referer",
+                "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf",
+            )
             .body(body.to_string())
             .send()
             .await?;
