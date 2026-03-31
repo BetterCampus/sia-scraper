@@ -7,6 +7,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyString};
 use pyo3::PyTypeInfo;
 
+use pyo3_asyncio::tokio::future_into_py;
+
 mod error;
 mod http;
 mod parsers;
@@ -256,7 +258,6 @@ pub fn fuzz_extract_view_state(input: &str) {
 /// PyResult containing a Python dict with response data
 #[pyfunction]
 fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
-    use pyo3_asyncio::tokio::future_into_py;
     use crate::http::AsyncHttpClient;
 
     let url_clone = url.clone();
@@ -287,7 +288,6 @@ fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
 /// PyResult containing a Python dict with response data
 #[pyfunction]
 fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyAny> {
-    use pyo3_asyncio::tokio::future_into_py;
     use crate::http::AsyncHttpClient;
 
     let url_clone = url.clone();
@@ -297,6 +297,49 @@ fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyA
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         
         let resp = client.post(&url_clone, &body_clone).await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("status", resp.status)?;
+            dict.set_item("body", resp.body)?;
+            dict.set_item("url", resp.url)?;
+            Ok(dict.into_py(py))
+        })
+    })
+}
+
+/// Async HTTP GET with custom configuration.
+///
+/// # Arguments
+/// * `url` - The URL to fetch
+/// * `timeout` - Request timeout in seconds (default: 15)
+/// * `user_agent` - Custom user agent string
+///
+/// # Returns
+/// PyResult containing a Python dict with response data
+#[pyfunction]
+fn async_get_with_config<'p>(
+    py: Python<'p>,
+    url: String,
+    timeout: Option<u64>,
+    user_agent: Option<String>,
+) -> PyResult<&'p PyAny> {
+    use crate::http::{config::HttpClientConfig, AsyncHttpClient};
+
+    let url_clone = url.clone();
+    let timeout = timeout.unwrap_or(15);
+    let user_agent = user_agent.unwrap_or_else(|| "sia-scraper/2.0".to_string());
+
+    future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
+        let config = HttpClientConfig::default()
+            .with_timeout(timeout)
+            .with_user_agent(&user_agent);
+        
+        let client = AsyncHttpClient::with_config(config)
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        let resp = client.get(&url_clone).await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         
         Python::with_gil(|py| {
@@ -321,6 +364,7 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_oracle_adf_event_dict, m)?)?;
     m.add_function(wrap_pyfunction!(async_get, m)?)?;
     m.add_function(wrap_pyfunction!(async_post, m)?)?;
+    m.add_function(wrap_pyfunction!(async_get_with_config, m)?)?;
     m.add(
         "SiaScraperException",
         error::SiaScraperException::type_object(py),

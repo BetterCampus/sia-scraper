@@ -4,9 +4,9 @@
 //! It exposes async methods to Python via pyo3-asyncio.
 
 pub mod client;
+pub mod config;
 pub mod errors;
 pub mod types;
 
 pub use client::AsyncHttpClient;
-pub use errors::{HttpError, HttpResult};
-pub use types::HttpResponse;
+pub use errors::HttpError;

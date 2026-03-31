@@ -25,20 +25,25 @@ pub enum HttpError {
 
 impl From<reqwest::Error> for HttpError {
     fn from(err: reqwest::Error) -> Self {
-        if err.is_timeout() {
-            HttpError::Timeout {
-                timeout: 15, // Default, actual timeout not exposed by reqwest
-            }
-        } else if err.is_connect() {
-            HttpError::ConnectionFailed(err.to_string())
-        } else if let Some(status) = err.status() {
-            HttpError::HttpStatus {
+        let error_str = err.to_string();
+
+        // Check for timeout in error message (reqwest 0.12+)
+        if error_str.contains("timeout") || error_str.contains("timed out") {
+            return HttpError::Timeout { timeout: 15 };
+        }
+
+        if err.is_connect() {
+            return HttpError::ConnectionFailed(error_str);
+        }
+
+        if let Some(status) = err.status() {
+            return HttpError::HttpStatus {
                 status: status.as_u16(),
                 url: err.url().map(|u| u.to_string()).unwrap_or_default(),
-            }
-        } else {
-            HttpError::ConnectionFailed(err.to_string())
+            };
         }
+
+        HttpError::ConnectionFailed(error_str)
     }
 }
 
