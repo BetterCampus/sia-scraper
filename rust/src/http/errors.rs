@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum HttpError {
     #[error("Request timeout after {timeout}s")]
     Timeout { timeout: u64 },
