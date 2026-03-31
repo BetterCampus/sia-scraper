@@ -105,8 +105,7 @@ impl OracleAdfRequestBuilderState {
             view_state.unwrap_or_default().to_string(),
         );
 
-        self.request_dict = request_dict.clone();
-        request_dict
+        std::mem::take(&mut self.request_dict)
     }
 
     /// Builds request body for one data map action.
