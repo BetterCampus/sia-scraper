@@ -14,6 +14,51 @@ use std::sync::LazyLock;
 static SCHEDULE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})").unwrap());
 
+static H2_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("h2").expect("h2 selector must parse"));
+static CREDITS_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("span.detass-creditos").expect("credits selector must parse"));
+static CREDITS_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.detass-creditos span").expect("credits span selector must parse")
+});
+static TYPOLOGY_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.detass-tipologia").expect("typology selector must parse")
+});
+static TYPOLOGY_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.detass-tipologia span").expect("typology span selector must parse")
+});
+static GENERIC_SPAN_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("span").expect("span selector must parse"));
+static LISTA_ELEMENTO_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.lista-elemento").expect("lista-elemento selector must parse")
+});
+static GROUP_TITLE_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("h2.af_showDetailHeader_title-text0").expect("group title selector must parse")
+});
+static PANEL_GROUP_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("div.af_panelGroupLayout").expect("panel group selector must parse")
+});
+static DIV_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("div").expect("div selector must parse"));
+static GROUP_CONTENT_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse(".af_showDetailHeader_content0").expect("group content selector must parse")
+});
+static PREREQ_CONDITION_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout")
+        .expect("prereq condition selector must parse")
+});
+static PREREQ_VALUE_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.strong.af_panelGroupLayout + span")
+        .expect("prereq value selector must parse")
+});
+static PREREQ_HEADER_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.strong.af_panelGroupLayout > span.margin-l")
+        .expect("prereq header selector must parse")
+});
+static PREREQ_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.af_panelGroupLayout > span").expect("prereq span selector must parse")
+});
+
 const GROUP_TEACHER_INDEX: usize = 0;
 const GROUP_FACULTY_INDEX: usize = 1;
 const GROUP_SCHEDULES_INDEX: usize = 2;
@@ -22,17 +67,13 @@ const GROUP_SCHEDULE_TYPE_INDEX: usize = 4;
 const GROUP_SPOTS_INDEX: usize = 5;
 const MIN_GROUP_DATA_LENGTH_WITH_SPOTS: usize = 6;
 
-fn css_select_html<'a>(root: &'a Html, selector_str: &str) -> Vec<ElementRef<'a>> {
-    Selector::parse(selector_str)
-        .map(|selector| root.select(&selector).collect())
-        .unwrap_or_default()
+fn css_select_html<'a>(root: &'a Html, selector: &Selector) -> Vec<ElementRef<'a>> {
+    root.select(selector).collect()
 }
 
 #[inline]
-fn css_select_elem<'a>(root: &'a ElementRef<'a>, selector_str: &str) -> Vec<ElementRef<'a>> {
-    Selector::parse(selector_str)
-        .map(|selector| root.select(&selector).collect())
-        .unwrap_or_default()
+fn css_select_elem<'a>(root: &'a ElementRef<'a>, selector: &Selector) -> Vec<ElementRef<'a>> {
+    root.select(selector).collect()
 }
 
 #[inline]
@@ -48,12 +89,12 @@ pub fn get_plain_text(xml: &str) -> String {
 
 #[inline]
 fn extract_credits(root: &Html) -> Result<i32, SiaScraperError> {
-    let elems = css_select_html(root, "span.detass-creditos");
+    let elems = css_select_html(root, &CREDITS_SELECTOR);
     let _elem = elems
         .first()
         .ok_or_else(|| SiaScraperError::ParseError("Credits element not found".to_string()))?;
 
-    let spans = css_select_html(root, "span.detass-creditos span");
+    let spans = css_select_html(root, &CREDITS_SPAN_SELECTOR);
     let span = spans
         .last()
         .ok_or_else(|| SiaScraperError::ParseError("Credits span not found".to_string()))?;
@@ -65,10 +106,10 @@ fn extract_credits(root: &Html) -> Result<i32, SiaScraperError> {
 
 #[inline]
 fn extract_typology(root: &Html) -> String {
-    let elems = css_select_html(root, "span.detass-tipologia");
+    let elems = css_select_html(root, &TYPOLOGY_SELECTOR);
     match elems.first() {
         Some(_elem) => {
-            let spans = css_select_html(root, "span.detass-tipologia span");
+            let spans = css_select_html(root, &TYPOLOGY_SPAN_SELECTOR);
             spans
                 .last()
                 .map(|s| extract_text_from_elem(s))
@@ -80,7 +121,7 @@ fn extract_typology(root: &Html) -> String {
 
 #[inline]
 fn extract_label_value(elem: &ElementRef<'_>) -> String {
-    let spans = css_select_elem(elem, "span");
+    let spans = css_select_elem(elem, &GENERIC_SPAN_SELECTOR);
     match spans.last() {
         Some(s) => {
             let text = extract_text_from_elem(s);
@@ -97,10 +138,10 @@ fn extract_label_value(elem: &ElementRef<'_>) -> String {
 fn extract_schedules(elem: &ElementRef<'_>) -> Vec<Py<pyo3::types::PyAny>> {
     let mut schedules: Vec<Py<pyo3::types::PyAny>> = Vec::new();
 
-    let lista_spans = css_select_elem(elem, "span.lista-elemento");
+    let lista_spans = css_select_elem(elem, &LISTA_ELEMENTO_SELECTOR);
 
     for lista_span in lista_spans {
-        let nested_classroom = css_select_elem(&lista_span, "span.lista-elemento");
+        let nested_classroom = css_select_elem(&lista_span, &LISTA_ELEMENTO_SELECTOR);
         if nested_classroom.is_empty() {
             continue;
         }
@@ -133,7 +174,7 @@ fn extract_schedules(elem: &ElementRef<'_>) -> Vec<Py<pyo3::types::PyAny>> {
 
 #[inline]
 fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
-    let spans = css_select_elem(elem, "span");
+    let spans = css_select_elem(elem, &GENERIC_SPAN_SELECTOR);
     if spans.is_empty() {
         return None;
     }
@@ -163,7 +204,7 @@ fn extract_group(group: &ElementRef<'_>, course_name: &str) -> Option<Py<pyo3::t
 
 fn extract_group_name(group: &ElementRef<'_>) -> Option<String> {
     let parent_ref = group.parent().and_then(ElementRef::wrap).unwrap_or(*group);
-    let h2_elems = css_select_elem(&parent_ref, "h2.af_showDetailHeader_title-text0");
+    let h2_elems = css_select_elem(&parent_ref, &GROUP_TITLE_SELECTOR);
     h2_elems.first().map(|e| extract_text_from_elem(e))
 }
 
@@ -177,19 +218,19 @@ struct GroupFields {
 }
 
 fn extract_group_fields(group: &ElementRef<'_>) -> Option<GroupFields> {
-    let panel_elems = css_select_elem(group, "div.af_panelGroupLayout");
+    let panel_elems = css_select_elem(group, &PANEL_GROUP_SELECTOR);
     if panel_elems.is_empty() {
         return None;
     }
 
     let panel = &panel_elems[0];
-    let group_data: Vec<ElementRef<'_>> = css_select_elem(panel, "div");
+    let group_data: Vec<ElementRef<'_>> = css_select_elem(panel, &DIV_SELECTOR);
 
     if group_data.is_empty() {
         return None;
     }
 
-    let teacher_elems = css_select_elem(&group_data[GROUP_TEACHER_INDEX], "span");
+    let teacher_elems = css_select_elem(&group_data[GROUP_TEACHER_INDEX], &GENERIC_SPAN_SELECTOR);
     let teacher = teacher_elems
         .last()
         .map(|e| extract_text_from_elem(e))
@@ -249,7 +290,7 @@ fn extract_group_fields(group: &ElementRef<'_>) -> Option<GroupFields> {
 pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
     let document = Html::parse_document(xml);
 
-    let h2_elems = css_select_html(&document, "h2");
+    let h2_elems = css_select_html(&document, &H2_SELECTOR);
     let course_name = h2_elems
         .first()
         .map(|e| extract_text_from_elem(e))
@@ -258,7 +299,7 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
     let credits = extract_credits(&document)?;
     let typology = extract_typology(&document);
 
-    let group_elems = css_select_html(&document, ".af_showDetailHeader_content0");
+    let group_elems = css_select_html(&document, &GROUP_CONTENT_SELECTOR);
 
     let mut group_list: Vec<Py<pyo3::types::PyAny>> = Vec::new();
     let mut available_spots: i64 = 0;
@@ -304,7 +345,7 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
 pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
     let document = Html::parse_document(xml);
 
-    let h2_elems = css_select_html(&document, "h2");
+    let h2_elems = css_select_html(&document, &H2_SELECTOR);
     let course_name = h2_elems
         .first()
         .map(|e| extract_text_from_elem(e))
@@ -313,25 +354,21 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
     let credits = extract_credits(&document)?;
     let typology = extract_typology(&document);
 
-    let condition_divs = css_select_html(
-        &document,
-        "span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout",
-    );
+    let condition_divs = css_select_html(&document, &PREREQ_CONDITION_SELECTOR);
 
     let mut conditions: Vec<Py<pyo3::types::PyAny>> = Vec::new();
 
     for condition_div in condition_divs {
-        let sub_divs: Vec<ElementRef<'_>> = css_select_elem(&condition_div, "div");
+        let sub_divs: Vec<ElementRef<'_>> = css_select_elem(&condition_div, &DIV_SELECTOR);
 
         if sub_divs.len() < 2 {
             continue;
         }
 
         let info_div = &sub_divs[0];
-        let all_spans = css_select_elem(info_div, "span.strong.af_panelGroupLayout + span");
+        let all_spans = css_select_elem(info_div, &PREREQ_VALUE_SELECTOR);
 
-        let header_spans =
-            css_select_elem(info_div, "span.strong.af_panelGroupLayout > span.margin-l");
+        let header_spans = css_select_elem(info_div, &PREREQ_HEADER_SELECTOR);
         let header_count = header_spans.len();
 
         if header_count < 4 {
@@ -349,7 +386,7 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
 
         let mut prereqs: Vec<Py<pyo3::types::PyAny>> = Vec::new();
         for prereq_div in &sub_divs[1..] {
-            let prereq_spans = css_select_elem(prereq_div, "span.af_panelGroupLayout > span");
+            let prereq_spans = css_select_elem(prereq_div, &PREREQ_SPAN_SELECTOR);
             if prereq_spans.len() < 2 {
                 continue;
             }
