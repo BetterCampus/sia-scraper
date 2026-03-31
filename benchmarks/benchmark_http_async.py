@@ -11,7 +11,7 @@ from typing import Any
 
 sys.path.insert(0, "src")
 
-from sia_scraper.session_async import SiaSessionAsync
+from sia_scraper.session import SiaSession
 
 
 async def benchmark_session_creation(num_iterations: int = 10) -> dict[str, float]:
@@ -19,7 +19,7 @@ async def benchmark_session_creation(num_iterations: int = 10) -> dict[str, floa
     times = []
     for _ in range(num_iterations):
         start = time.perf_counter()
-        session = await SiaSessionAsync.create(timeout=5)
+        session = await SiaSession.create(timeout=5)
         elapsed = time.perf_counter() - start
         times.append(elapsed)
         await session.close()
@@ -38,7 +38,7 @@ async def benchmark_set_career(num_iterations: int = 5) -> dict[str, float]:
     """Benchmark set_career operation."""
     times = []
     for _ in range(num_iterations):
-        session = await SiaSessionAsync.create(timeout=5)
+        session = await SiaSession.create(timeout=5)
         start = time.perf_counter()
         await session.set_career("0-2-8-3")
         elapsed = time.perf_counter() - start
@@ -59,7 +59,7 @@ async def benchmark_concurrent_sessions(num_sessions: int = 10) -> dict[str, Any
     """Benchmark concurrent session creation."""
 
     async def create_session():
-        session = await SiaSessionAsync.create(timeout=5)
+        session = await SiaSession.create(timeout=5)
         await session.close()
         return session
 

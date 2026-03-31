@@ -14,11 +14,9 @@ description = "Library to extract academic information from the SIA"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "requests~=2.32.3",
     "lxml~=5.2.0",
     "cssselect~=1.2.0",
     "pydantic>=2.0,<3.0",
-    "tenacity~=8.3.0",
     "loguru~=0.7.0",
 ]
 
