@@ -25,3 +25,9 @@ logs/
 target/
 fuzz/artifacts/
 fuzz/corpus/
+
+# Local Rust extension artifacts for editable installs
+src/sia_scraper_rust/*.so
+src/sia_scraper_rust/*.pyd
+src/sia_scraper_rust/*.dll
+src/sia_scraper_rust/*.dylib
