@@ -31,6 +31,7 @@ dev = [
     "ruff~=0.15.8",
     "lxml-stubs",
     "pyyaml",
+    "hypothesis",
 ]
 
 [tool.setuptools.packages.find]
