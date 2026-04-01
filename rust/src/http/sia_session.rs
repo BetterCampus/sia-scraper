@@ -585,9 +585,11 @@ mod tests {
     #[tokio::test]
     async fn test_update_state_overwrites_entire_state() {
         let session = SiaSession::new(15, "https://example.com".to_string()).unwrap();
-        let mut new_state = SessionState::default();
-        new_state.career_code = "9-9-9-9".to_string();
-        new_state.status = "CUSTOM".to_string();
+        let new_state = SessionState {
+            career_code: "9-9-9-9".to_string(),
+            status: "CUSTOM".to_string(),
+            ..Default::default()
+        };
         session.update_state(new_state).await;
 
         let state = session.get_state().await;
