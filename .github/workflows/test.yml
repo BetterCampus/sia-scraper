@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      VIRTUAL_ENV: ${{ github.workspace }}/.venv
+
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +32,11 @@ jobs:
 
       - name: Cache Cargo build artifacts
         uses: Swatinem/rust-cache@v2
+
+      - name: Create virtualenv
+        run: |
+          python -m venv .venv
+          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: |
