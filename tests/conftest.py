@@ -172,7 +172,10 @@ def sia_course_list_electives_json(
 @pytest.fixture
 def sia_session_data_json(fixture_path: Path, latest_fixture_date: str) -> dict[str, Any]:
     """Return captured sanitized session data JSON."""
-    return _read_fixture_json(fixture_path / "json" / f"session_data_{latest_fixture_date}.json")
+    payload = _read_fixture_json(fixture_path / "json" / f"session_data_{latest_fixture_date}.json")
+    if isinstance(payload, dict):
+        payload.setdefault("course_list", [])
+    return payload
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

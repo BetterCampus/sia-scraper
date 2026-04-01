@@ -4,11 +4,13 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from sia_scraper.constants import DEFAULT_TIMEOUT, SiaSessionStatus
 from sia_scraper.core import SiaSessionException
+from sia_scraper.models.session import SessionStateTyped
 from sia_scraper.parsers import CourseInfo, CoursePrereqs, scrape_info
-from sia_scraper.parsers.models import ErrorMode, ScrapeResult, SessionState
+from sia_scraper.parsers.models import ErrorMode, ScrapeResult
 from sia_scraper.scraper import SiaScraper, create_career_session, init_sia_scraper
 
 
@@ -32,7 +34,7 @@ def mock_async_session_class():
         session.get_course_xml = AsyncMock()
         session.close = AsyncMock()
         session.get_session_data = MagicMock(
-            return_value=SessionState(
+            return_value=SessionStateTyped(
                 session_headers={},
                 session_cookies={},
                 params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
@@ -41,6 +43,7 @@ def mock_async_session_class():
                 career_name="N/A",
                 is_electives=False,
                 status=SiaSessionStatus.NO_SESSION.name,
+                course_list=[],
             )
         )
         mock_session_class.return_value = session
@@ -298,6 +301,7 @@ class TestSiaScraperFactories:
                     "career_name": "N/A",
                     "is_electives": False,
                     "status": "ON_CAREER_PAGE",
+                    "course_list": [],
                 },
             )
 
@@ -310,7 +314,7 @@ class TestSiaScraperSessionState:
     """Test session state loading, serialization, and validation."""
 
     def test_constructor_with_session_data(self, mock_async_session_class):
-        data = SessionState(
+        data = SessionStateTyped(
             session_headers={},
             session_cookies={},
             params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
@@ -319,6 +323,7 @@ class TestSiaScraperSessionState:
             career_name="Ingenieria",
             is_electives=False,
             status=SiaSessionStatus.ON_CAREER_PAGE.name,
+            course_list=[],
         )
         scraper = SiaScraper(session_data=data, init_session=False)
         assert scraper.sia_session._career_code == "0-2-8-3"
@@ -327,7 +332,7 @@ class TestSiaScraperSessionState:
 
     def test_load_session_restores_state(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        data = SessionState(
+        data = SessionStateTyped(
             session_headers={},
             session_cookies={},
             params={"Adf-Page-Id": "0", "Adf-Window-Id": "win1"},
@@ -336,6 +341,7 @@ class TestSiaScraperSessionState:
             career_name="Test Career",
             is_electives=True,
             status=SiaSessionStatus.ON_CAREER_PAGE.name,
+            course_list=[],
         )
         result = scraper.load_session(data)
         assert result is scraper
@@ -344,20 +350,22 @@ class TestSiaScraperSessionState:
         assert scraper.sia_session._is_electives is True
         assert scraper.sia_session._status == SiaSessionStatus.ON_CAREER_PAGE
 
-    def test_load_session_invalid_status_defaults_to_no_session(self, mock_async_session_class):
+    def test_load_session_invalid_status_raises(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        data = SessionState(
-            session_headers={},
-            session_cookies={},
-            params={"Adf-Page-Id": "0", "Adf-Window-Id": ""},
-            javax_faces_ViewState=None,
-            career_code="",
-            career_name="",
-            is_electives=False,
-            status="BOGUS_STATUS",
-        )
-        scraper.load_session(data)
-        assert scraper.sia_session._status == SiaSessionStatus.NO_SESSION
+        with pytest.raises(ValidationError):
+            scraper.load_session(
+                {
+                    "session_headers": {},
+                    "session_cookies": {},
+                    "params": {"Adf-Page-Id": "0", "Adf-Window-Id": ""},
+                    "javax_faces_ViewState": None,
+                    "career_code": "",
+                    "career_name": "",
+                    "is_electives": False,
+                    "status": "BOGUS_STATUS",
+                    "course_list": [],
+                }
+            )
 
     def test_valid_session_false_when_no_session(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
@@ -376,7 +384,7 @@ class TestSiaScraperSessionState:
 
     def test_get_session_data_returns_session_state(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        data = SessionState(
+        data = SessionStateTyped(
             session_headers={},
             session_cookies={},
             params={"Adf-Page-Id": "0", "Adf-Window-Id": "w"},
@@ -385,6 +393,7 @@ class TestSiaScraperSessionState:
             career_name="Ing",
             is_electives=False,
             status=SiaSessionStatus.ON_CAREER_PAGE.name,
+            course_list=[],
         )
         scraper.load_session(data)
         mock_session = _mock_session(scraper)
@@ -469,14 +478,8 @@ class TestInitSiaScraperEdgeCases:
 
     @pytest.mark.asyncio
     async def test_init_sia_scraper_with_invalid_session_data(self):
-        mocked_scraper = MagicMock()
-        mocked_scraper.valid_session.return_value = False
-
-        with patch(
-            "sia_scraper.scraper.create_career_session",
-            AsyncMock(return_value=mocked_scraper),
-        ) as mock_create:
-            out = await init_sia_scraper(
+        with pytest.raises(ValidationError):
+            await init_sia_scraper(
                 "0-2-8-3",
                 False,
                 session_data={
@@ -488,8 +491,6 @@ class TestInitSiaScraperEdgeCases:
                     "career_name": "Test",
                     "is_electives": False,
                     "status": "BOGUS_STATUS",
+                    "course_list": [],
                 },
             )
-
-        assert out is mocked_scraper
-        mock_create.assert_awaited_once()
