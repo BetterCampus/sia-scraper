@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
+      PYTHONPATH: ${{ github.workspace }}/src
 
     strategy:
       fail-fast: false
@@ -43,8 +44,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install "maturin>=1.0,<2.0"
           maturin --version
-          maturin develop --release --extras dev
-          python -c "import sia_scraper_rust; print('Rust extension importable')"
+          # Build and install Rust extension
+          maturin develop --release
+          # Install Python dependencies (Python package found via PYTHONPATH)
+          pip install lxml cssselect pydantic loguru
+          pip install pytest pytest-asyncio pytest-mock pytest-cov pyright "ruff~=0.15.8" lxml-stubs pyyaml hypothesis
+          python -c "import sia_scraper; import sia_scraper_rust; print('Both packages importable')"
 
       - name: Run Ruff lint checks
         run: ruff check .
