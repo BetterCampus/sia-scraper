@@ -101,7 +101,7 @@ impl SiaSession {
         Ok(())
     }
 
-    async fn request_url_with_params(&self) -> String {
+    async fn request_url_with_params(&self) -> Result<String, HttpError> {
         let state = self.state.read().await;
         let mut params: Vec<(&str, &str)> = vec![];
 
@@ -113,11 +113,15 @@ impl SiaSession {
         }
 
         if params.is_empty() {
-            return self.base_url.clone();
+            return Ok(self.base_url.clone());
         }
 
-        let query = serde_urlencoded::to_string(&params).unwrap_or_default();
-        format!("{}?{}", self.base_url, query)
+        let query = serde_urlencoded::to_string(&params).map_err(|e| {
+            HttpError::InvalidInput(format!(
+                "Failed to build session URL: invalid query parameters ({e})"
+            ))
+        })?;
+        Ok(format!("{}?{}", self.base_url, query))
     }
 
     fn state_as_request_builder(&self, state: &SessionState) -> OracleAdfRequestBuilderState {
@@ -322,26 +326,24 @@ impl SiaSession {
             "org.apache.myfaces.trinidad.faces.FORM".to_string(),
             "f1".to_string(),
         );
-        back_body.insert(
-            "Adf-Window-Id".to_string(),
-            current_state
-                .params
-                .get("Adf-Window-Id")
-                .cloned()
-                .unwrap_or_default(),
-        );
-        back_body.insert(
-            "Adf-Page-Id".to_string(),
-            current_state
-                .params
-                .get("Adf-Page-Id")
-                .cloned()
-                .unwrap_or_default(),
-        );
-        back_body.insert(
-            "javax.faces.ViewState".to_string(),
-            current_state.javax_faces_ViewState.unwrap_or_default(),
-        );
+        let window_id = current_state
+            .params
+            .get("Adf-Window-Id")
+            .cloned()
+            .ok_or_else(|| HttpError::InvalidInput("Missing Adf-Window-Id in session state".to_string()))?;
+        back_body.insert("Adf-Window-Id".to_string(), window_id);
+
+        let page_id = current_state
+            .params
+            .get("Adf-Page-Id")
+            .cloned()
+            .ok_or_else(|| HttpError::InvalidInput("Missing Adf-Page-Id in session state".to_string()))?;
+        back_body.insert("Adf-Page-Id".to_string(), page_id);
+
+        let view_state = current_state
+            .javax_faces_ViewState
+            .ok_or_else(|| HttpError::InvalidInput("Missing ViewState in session state".to_string()))?;
+        back_body.insert("javax.faces.ViewState".to_string(), view_state);
         back_body.insert("event".to_string(), "pt1:r1:1:cb4".to_string());
         back_body.insert(
             "event.pt1:r1:1:cb4".to_string(),
@@ -386,7 +388,7 @@ impl SiaSession {
     }
 
     async fn do_post_request(&self, body: &str) -> Result<HttpResponse, HttpError> {
-        let url = self.request_url_with_params().await;
+        let url = self.request_url_with_params().await?;
         let resp = self.client.post(&url, body).await?;
 
         if let Ok(view_state) = crate::parsers::adf::extract_view_state(&resp.body) {
@@ -505,7 +507,7 @@ mod tests {
             state.update_params("Adf-Window-Id", "win1".to_string());
             state.update_params("Adf-Page-Id", "0".to_string());
         }
-        let url = session.request_url_with_params().await;
+        let url = session.request_url_with_params().await.unwrap();
         assert!(url.contains("Adf-Window-Id=win1"));
         assert!(url.contains("Adf-Page-Id=0"));
     }
@@ -518,7 +520,7 @@ mod tests {
             let mut state = session.state.write().await;
             state.params.clear();
         }
-        let url = session.request_url_with_params().await;
+        let url = session.request_url_with_params().await.unwrap();
         assert_eq!(url, "https://example.com");
     }
 
