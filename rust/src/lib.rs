@@ -427,13 +427,7 @@ fn set_career<'p>(
             .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         let career_indices: Vec<String> = search_code.split('-').map(|s| s.to_string()).collect();
-        let course_list_json = state
-            .params
-            .get("course_list_json")
-            .cloned()
-            .unwrap_or_default();
-        let course_list: Vec<std::collections::HashMap<String, String>> =
-            serde_json::from_str(&course_list_json).unwrap_or_default();
+        let course_list = &state.course_list;
         
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);

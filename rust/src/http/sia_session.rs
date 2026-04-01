@@ -238,13 +238,11 @@ impl SiaSession {
 
         let course_list =
             get_course_list(&last_xml).map_err(|e| HttpError::ParseError(e.to_string()))?;
+        let course_len = course_list.len();
         let mut current = self.state.write().await;
         current.status = "ON_CAREER_PAGE".to_string();
-        current.update_params("course_list_len", course_list.len().to_string());
-        current.update_params(
-            "course_list_json",
-            serde_json::to_string(&course_list).unwrap_or_default(),
-        );
+        current.course_list = course_list;
+        current.update_params("course_list_len", course_len.to_string());
         Ok(current.clone())
     }
 
@@ -255,13 +253,7 @@ impl SiaSession {
         course_index: i32,
     ) -> Result<String, HttpError> {
         let career_state = self.set_career(search_code, electives).await?;
-        let course_list_json = career_state
-            .params
-            .get("course_list_json")
-            .cloned()
-            .unwrap_or_default();
-        let course_list: Vec<std::collections::HashMap<String, String>> =
-            serde_json::from_str(&course_list_json).unwrap_or_default();
+        let course_list = &career_state.course_list;
 
         let career_indices: Vec<String> = search_code.split('-').map(ToString::to_string).collect();
         if career_indices.len() != 4 {
