@@ -1,4 +1,5 @@
 {
     "exclude": ["benchmarks", "build", "src/sia_scraper_rust", "tests/test_rust_parity.py", ".venv"],
-    "useLibraryCodeForTypes": false
+    "useLibraryCodeForTypes": false,
+    "stubPath": "stubs"
 }
