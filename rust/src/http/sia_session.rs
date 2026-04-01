@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 use crate::constants::{
-    actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX, SIA_BASE_URL,
+    actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX,
 };
 use crate::http::client::AsyncHttpClient;
 use crate::http::config::HttpClientConfig;
@@ -135,21 +135,31 @@ impl SiaSession {
         Ok(format!("{}?{}", self.base_url, query))
     }
 
-    fn state_as_request_builder(&self, state: &SessionState) -> OracleAdfRequestBuilderState {
-        let mut builder = OracleAdfRequestBuilderState::new();
+    fn state_as_request_builder(&self, state: &SessionState) -> Result<OracleAdfRequestBuilderState, HttpError> {
         let tipology_index = if state.is_electives {
             ELECTIVES_TYPOLOGY_INDEX
         } else {
             ""
         };
 
-        let window_id = state.params.get("Adf-Window-Id").map(String::as_str);
-        let page_id = state.params.get("Adf-Page-Id").map(String::as_str);
-        let view_state = state.javax_faces_ViewState.as_deref();
+        let window_id = state.params.get("Adf-Window-Id").and_then(|v| {
+            if v.is_empty() { None } else { Some(v.as_str()) }
+        }).ok_or_else(|| {
+            HttpError::InvalidInput("state_as_request_builder: Adf-Window-Id is required".to_string())
+        })?;
+        let page_id = state.params.get("Adf-Page-Id").and_then(|v| {
+            if v.is_empty() { None } else { Some(v.as_str()) }
+        }).ok_or_else(|| {
+            HttpError::InvalidInput("state_as_request_builder: Adf-Page-Id is required".to_string())
+        })?;
+        let view_state = state.javax_faces_ViewState.as_deref().ok_or_else(|| {
+            HttpError::InvalidInput("state_as_request_builder: javax_faces_ViewState is required".to_string())
+        })?;
 
-        let _ = builder.init_request_dict(tipology_index, window_id, page_id, view_state);
+        let mut builder = OracleAdfRequestBuilderState::new();
+        builder.init_request_dict(tipology_index, window_id, page_id, view_state);
 
-        builder
+        Ok(builder)
     }
 
     fn extract_career_name(xml: &str, career_index: usize) -> String {
@@ -208,7 +218,9 @@ impl SiaSession {
         let mut last_xml = String::new();
 
         for action in action_sequence {
-            let mut builder = self.state_as_request_builder(&state);
+            let mut builder = self.state_as_request_builder(&state).map_err(|e| {
+                HttpError::InvalidInput(format!("state_as_request_builder failed: {}", e))
+            })?;
             builder.request_dict.insert(
                 adf_ids::STUDY_LEVEL_DD_ID.to_string(),
                 career_indices[0].clone(),
@@ -283,7 +295,9 @@ impl SiaSession {
             )));
         }
 
-        let mut builder = self.state_as_request_builder(&career_state);
+        let mut builder = self.state_as_request_builder(&career_state).map_err(|e| {
+            HttpError::InvalidInput(format!("state_as_request_builder failed: {}", e))
+        })?;
         builder.request_dict.insert(
             adf_ids::STUDY_LEVEL_DD_ID.to_string(),
             career_indices[0].clone(),
@@ -311,7 +325,9 @@ impl SiaSession {
             .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
         let _ = self.post_request(&select_row_encoded).await?;
 
-        let mut builder = self.state_as_request_builder(&self.get_state().await);
+        let mut builder = self.state_as_request_builder(&self.get_state().await).map_err(|e| {
+            HttpError::InvalidInput(format!("state_as_request_builder failed: {}", e))
+        })?;
         builder.request_dict.insert(
             adf_ids::STUDY_LEVEL_DD_ID.to_string(),
             career_indices[0].clone(),
@@ -444,6 +460,7 @@ impl SiaSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::SIA_BASE_URL;
 
     #[tokio::test]
     async fn test_session_creation() {
@@ -552,7 +569,7 @@ mod tests {
             state.update_params("Adf-Page-Id", "0".to_string());
         }
         let state = session.get_state().await;
-        let builder = session.state_as_request_builder(&state);
+        let builder = session.state_as_request_builder(&state).expect("state_as_request_builder should succeed");
         assert!(builder.request_dict.contains_key("javax.faces.ViewState"));
         assert_eq!(
             builder.request_dict.get("javax.faces.ViewState").unwrap(),

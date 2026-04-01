@@ -73,9 +73,9 @@ impl OracleAdfRequestBuilderState {
     pub fn init_request_dict(
         &mut self,
         tipology_index: &str,
-        window_id: Option<&str>,
-        page_id: Option<&str>,
-        view_state: Option<&str>,
+        window_id: &str,
+        page_id: &str,
+        view_state: &str,
     ) -> &HashMap<String, String> {
         self.request_dict.clear();
 
@@ -103,18 +103,12 @@ impl OracleAdfRequestBuilderState {
             "org.apache.myfaces.trinidad.faces.FORM".to_string(),
             "f1".to_string(),
         );
-        self.request_dict.insert(
-            "Adf-Window-Id".to_string(),
-            window_id.unwrap_or_default().to_string(),
-        );
-        self.request_dict.insert(
-            "Adf-Page-Id".to_string(),
-            page_id.unwrap_or_default().to_string(),
-        );
-        self.request_dict.insert(
-            "javax.faces.ViewState".to_string(),
-            view_state.unwrap_or_default().to_string(),
-        );
+        self.request_dict
+            .insert("Adf-Window-Id".to_string(), window_id.to_string());
+        self.request_dict
+            .insert("Adf-Page-Id".to_string(), page_id.to_string());
+        self.request_dict
+            .insert("javax.faces.ViewState".to_string(), view_state.to_string());
 
         &self.request_dict
     }
@@ -208,12 +202,8 @@ mod tests {
     #[test]
     fn test_init_request_dict_contains_base_fields() {
         let mut builder = OracleAdfRequestBuilderState::new();
-        let request_dict = builder.init_request_dict(
-            "2",
-            Some("window-123"),
-            Some("page-456"),
-            Some("viewstate-789"),
-        );
+        let request_dict =
+            builder.init_request_dict("2", "window-123", "page-456", "viewstate-789");
 
         assert_eq!(
             request_dict.get("Adf-Window-Id"),
@@ -232,7 +222,7 @@ mod tests {
     #[test]
     fn test_build_request_body_raises_for_unknown_action() {
         let mut builder = OracleAdfRequestBuilderState::new();
-        let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+        let _ = builder.init_request_dict("2", "w", "p", "v");
 
         let result = builder.build_request_body("UNKNOWN_ACTION", -1, &["0".to_string()], 2);
         assert!(result.is_err());
@@ -241,7 +231,7 @@ mod tests {
     #[test]
     fn test_build_request_body_sets_faculty_career_default_index() {
         let mut builder = OracleAdfRequestBuilderState::new();
-        let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+        let _ = builder.init_request_dict("2", "w", "p", "v");
 
         let request_body = builder
             .build_request_body(
@@ -261,7 +251,7 @@ mod tests {
     #[test]
     fn test_build_request_body_sets_electives_campus_increment() {
         let mut builder = OracleAdfRequestBuilderState::new();
-        let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+        let _ = builder.init_request_dict("2", "w", "p", "v");
 
         let request_body = builder
             .build_request_body(
@@ -281,7 +271,7 @@ mod tests {
     #[test]
     fn test_build_request_body_select_row_adds_deltas() {
         let mut builder = OracleAdfRequestBuilderState::new();
-        let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+        let _ = builder.init_request_dict("2", "w", "p", "v");
 
         let request_body = builder
             .build_request_body(SELECT_ROW, 1, &["0".to_string(), "5".to_string()], 2)
@@ -296,7 +286,7 @@ mod tests {
     #[test]
     fn test_build_request_body_course_page_link_sets_render_target() {
         let mut builder = OracleAdfRequestBuilderState::new();
-        let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+        let _ = builder.init_request_dict("2", "w", "p", "v");
 
         let request_body = builder
             .build_request_body(COURSE_PAGE_LINK, -1, &["0".to_string(), "5".to_string()], 2)

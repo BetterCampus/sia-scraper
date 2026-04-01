@@ -38,7 +38,7 @@ impl HttpResponse {
         if self.status >= 400 {
             return Err(crate::http::errors::HttpError::HttpStatus {
                 status: self.status,
-                url: self.url.clone(),
+                url: Some(self.url.clone()),
             });
         }
         Ok(())
