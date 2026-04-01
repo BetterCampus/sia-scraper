@@ -14,6 +14,7 @@ use crate::models::session::SessionStateModel;
 
 pub mod constants;
 mod error;
+pub mod patterns;
 pub mod http;
 mod models;
 mod parsers;
