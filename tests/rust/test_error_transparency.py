@@ -115,7 +115,7 @@ class TestOracleAdfRequestDict:
 
     def test_init_oracle_adf_request_dict_with_none_values(self):
         """Request dict initialization should raise on None values (strict mode)."""
-        with pytest.raises(Exception):
+        with pytest.raises(sia_scraper_rust.SiaScraperException, match="window_id is required"):
             sia_scraper_rust.init_oracle_adf_request_dict(
                 tipology_index="",
                 window_id=None,
