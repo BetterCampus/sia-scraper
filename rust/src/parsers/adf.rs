@@ -4,18 +4,26 @@
 //! from HTML responses, particularly ViewState values used for form submissions.
 
 use crate::error::{SiaScraperError, SiaScraperError::MissingElement};
-use regex::Regex;
-use std::sync::LazyLock;
+use crate::patterns::get_regex;
 
-static INPUT_WITH_VIEWSTATE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?is)<input[^>]*(?:name|id)\s*=\s*["'][^"']*ViewState[^"']*["'][^>]*>"#)
-        .expect("input-with-viewstate regex must compile")
-});
+macro_rules! define_regex {
+    ($name:ident, $pattern:expr) => {
+        static $name: std::sync::LazyLock<Result<regex::Regex, String>> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new($pattern).map_err(|e| format!("{}: {:?}", stringify!($name), e))
+            });
+    };
+}
 
-static VALUE_ATTR_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?is)\bvalue\b\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?"#)
-        .expect("value-attribute regex must compile")
-});
+define_regex!(
+    INPUT_WITH_VIEWSTATE_RE,
+    r#"(?is)<input[^>]*(?:name|id)\s*=\s*["'][^"']*ViewState[^"']*["'][^>]*>"#
+);
+
+define_regex!(
+    VALUE_ATTR_RE,
+    r#"(?is)\bvalue\b\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?"#
+);
 
 const VIEWSTATE_FAST_PREFIX: &str =
     "<input type=\"hidden\" name=\"javax.faces.ViewState\" value=\"";
@@ -57,10 +65,13 @@ pub fn extract_view_state(html: &str) -> Result<String, SiaScraperError> {
         }
     }
 
-    for input_match in INPUT_WITH_VIEWSTATE_RE.find_iter(html) {
+    let input_re = get_regex(&INPUT_WITH_VIEWSTATE_RE, "adf::extract_view_state")?;
+    let value_re = get_regex(&VALUE_ATTR_RE, "adf::extract_view_state")?;
+
+    for input_match in input_re.find_iter(html) {
         let input_tag = input_match.as_str();
 
-        if let Some(captures) = VALUE_ATTR_RE.captures(input_tag) {
+        if let Some(captures) = value_re.captures(input_tag) {
             if let Some(double_quoted) = captures.get(1) {
                 return Ok(double_quoted.as_str().to_string());
             }

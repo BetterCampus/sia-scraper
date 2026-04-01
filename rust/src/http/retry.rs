@@ -119,7 +119,7 @@ mod tests {
         let config = RetryConfig::default();
         let error = crate::http::errors::HttpError::HttpStatus {
             status: 503,
-            url: "test".to_string(),
+            url: Some("test".to_string()),
         };
         assert!(should_retry(&error, &config));
     }
@@ -129,7 +129,7 @@ mod tests {
         let config = RetryConfig::default();
         let error = crate::http::errors::HttpError::HttpStatus {
             status: 400,
-            url: "test".to_string(),
+            url: Some("test".to_string()),
         };
         assert!(!should_retry(&error, &config));
     }

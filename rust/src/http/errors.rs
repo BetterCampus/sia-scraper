@@ -13,8 +13,8 @@ pub enum HttpError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
-    #[error("HTTP {status}: {url}")]
-    HttpStatus { status: u16, url: String },
+    #[error("HTTP {status}: {url:?}")]
+    HttpStatus { status: u16, url: Option<String> },
 
     #[error("Response parsing error: {0}")]
     ParseError(String),
@@ -34,7 +34,7 @@ impl From<reqwest::Error> for HttpError {
         if let Some(status) = err.status() {
             return HttpError::HttpStatus {
                 status: status.as_u16(),
-                url: err.url().map(|u| u.to_string()).unwrap_or_default(),
+                url: err.url().map(|u| u.to_string()),
             };
         }
 

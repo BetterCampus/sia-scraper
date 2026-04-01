@@ -1,13 +1,11 @@
 //! Async SIA Session manager with retry logic.
 
-use regex::Regex;
 use std::sync::Arc;
-use std::sync::LazyLock;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 use crate::constants::{
-    actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX, SIA_BASE_URL,
+    actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX,
 };
 use crate::http::client::AsyncHttpClient;
 use crate::http::config::HttpClientConfig;
@@ -17,11 +15,18 @@ use crate::http::session::SessionState;
 use crate::http::types::HttpResponse;
 use crate::parsers::adf_request::OracleAdfRequestBuilderState;
 use crate::parsers::table_parser::get_course_list;
+use crate::patterns::get_regex;
 
-static ADF_WINDOW_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?is)<input[^>]*name\s*=\s*[\"']Adf-Window-Id[\"'][^>]*value\s*=\s*[\"']([^\"']*)[\"'][^>]*>"#)
-        .expect("Adf-Window-Id regex must compile")
-});
+macro_rules! define_regex {
+    ($name:ident, $pattern:expr) => {
+        static $name: std::sync::LazyLock<Result<regex::Regex, String>> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new($pattern).map_err(|e| format!("{}: {:?}", stringify!($name), e))
+            });
+    };
+}
+
+define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
 pub struct SiaSession {
     client: AsyncHttpClient,
@@ -93,7 +98,9 @@ impl SiaSession {
             state.update_view_state(view_state);
         }
 
-        if let Some(captures) = ADF_WINDOW_ID_RE.captures(&resp.body) {
+        let window_id_re = get_regex(&ADF_WINDOW_ID_RE, "sia_session::do_init_session")
+            .map_err(|e| HttpError::ParseError(format!("ADF_WINDOW_ID_RE init failed: {}", e)))?;
+        if let Some(captures) = window_id_re.captures(&resp.body) {
             if let Some(window_id) = captures.get(1) {
                 state.update_params("Adf-Window-Id", window_id.as_str().to_string());
             }
@@ -128,21 +135,31 @@ impl SiaSession {
         Ok(format!("{}?{}", self.base_url, query))
     }
 
-    fn state_as_request_builder(&self, state: &SessionState) -> OracleAdfRequestBuilderState {
-        let mut builder = OracleAdfRequestBuilderState::new();
+    fn state_as_request_builder(&self, state: &SessionState) -> Result<OracleAdfRequestBuilderState, HttpError> {
         let tipology_index = if state.is_electives {
             ELECTIVES_TYPOLOGY_INDEX
         } else {
             ""
         };
 
-        let window_id = state.params.get("Adf-Window-Id").map(String::as_str);
-        let page_id = state.params.get("Adf-Page-Id").map(String::as_str);
-        let view_state = state.javax_faces_ViewState.as_deref();
+        let window_id = state.params.get("Adf-Window-Id").and_then(|v| {
+            if v.is_empty() { None } else { Some(v.as_str()) }
+        }).ok_or_else(|| {
+            HttpError::InvalidInput("state_as_request_builder: Adf-Window-Id is required".to_string())
+        })?;
+        let page_id = state.params.get("Adf-Page-Id").and_then(|v| {
+            if v.is_empty() { None } else { Some(v.as_str()) }
+        }).ok_or_else(|| {
+            HttpError::InvalidInput("state_as_request_builder: Adf-Page-Id is required".to_string())
+        })?;
+        let view_state = state.javax_faces_ViewState.as_deref().ok_or_else(|| {
+            HttpError::InvalidInput("state_as_request_builder: javax_faces_ViewState is required".to_string())
+        })?;
 
-        let _ = builder.init_request_dict(tipology_index, window_id, page_id, view_state);
+        let mut builder = OracleAdfRequestBuilderState::new();
+        builder.init_request_dict(tipology_index, window_id, page_id, view_state);
 
-        builder
+        Ok(builder)
     }
 
     fn extract_career_name(xml: &str, career_index: usize) -> String {
@@ -201,7 +218,9 @@ impl SiaSession {
         let mut last_xml = String::new();
 
         for action in action_sequence {
-            let mut builder = self.state_as_request_builder(&state);
+            let mut builder = self.state_as_request_builder(&state).map_err(|e| {
+                HttpError::InvalidInput(format!("state_as_request_builder failed: {}", e))
+            })?;
             builder.request_dict.insert(
                 adf_ids::STUDY_LEVEL_DD_ID.to_string(),
                 career_indices[0].clone(),
@@ -276,7 +295,9 @@ impl SiaSession {
             )));
         }
 
-        let mut builder = self.state_as_request_builder(&career_state);
+        let mut builder = self.state_as_request_builder(&career_state).map_err(|e| {
+            HttpError::InvalidInput(format!("state_as_request_builder failed: {}", e))
+        })?;
         builder.request_dict.insert(
             adf_ids::STUDY_LEVEL_DD_ID.to_string(),
             career_indices[0].clone(),
@@ -304,7 +325,9 @@ impl SiaSession {
             .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
         let _ = self.post_request(&select_row_encoded).await?;
 
-        let mut builder = self.state_as_request_builder(&self.get_state().await);
+        let mut builder = self.state_as_request_builder(&self.get_state().await).map_err(|e| {
+            HttpError::InvalidInput(format!("state_as_request_builder failed: {}", e))
+        })?;
         builder.request_dict.insert(
             adf_ids::STUDY_LEVEL_DD_ID.to_string(),
             career_indices[0].clone(),
@@ -434,16 +457,10 @@ impl SiaSession {
     }
 }
 
-impl Default for SiaSession {
-    fn default() -> Self {
-        Self::new(15, SIA_BASE_URL.to_string())
-            .expect("SiaSession::default() should never fail with standard config")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::SIA_BASE_URL;
 
     #[tokio::test]
     async fn test_session_creation() {
@@ -453,7 +470,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_default_session() {
-        let session = SiaSession::default();
+        let session = SiaSession::new(15, SIA_BASE_URL.to_string()).expect("default session should create");
         let state = session.get_state().await;
         assert_eq!(state.status, "CREATED");
     }
@@ -552,7 +569,7 @@ mod tests {
             state.update_params("Adf-Page-Id", "0".to_string());
         }
         let state = session.get_state().await;
-        let builder = session.state_as_request_builder(&state);
+        let builder = session.state_as_request_builder(&state).expect("state_as_request_builder should succeed");
         assert!(builder.request_dict.contains_key("javax.faces.ViewState"));
         assert_eq!(
             builder.request_dict.get("javax.faces.ViewState").unwrap(),
