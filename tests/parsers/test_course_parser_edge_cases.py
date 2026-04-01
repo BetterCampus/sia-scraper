@@ -302,6 +302,16 @@ class TestDiagnosticErrorMessages:
         <span class="detass-creditos">3</span>
         <span class="detass-tipologia"><span>OBLIGATORIA</span></span>
         """
+
+        with pytest.raises(ValueError) as exc_info:
+            scrape_info(xml)
+
+        error_msg = str(exc_info.value)
+        assert "credits" in error_msg.lower()
+        assert "span" in error_msg.lower()
+        assert "not found" in error_msg.lower()
+
+
 class TestFixtureEdgeCases:
     """Test parser behavior with edge case fixtures."""
 
