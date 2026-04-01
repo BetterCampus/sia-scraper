@@ -199,6 +199,22 @@ fn init_oracle_adf_request_dict(
 ) -> Result<Py<PyAny>, error::SiaScraperError> {
     use parsers::adf_request::OracleAdfRequestBuilderState;
 
+    let window_id = window_id.ok_or_else(|| {
+        error::SiaScraperError::InvalidInput(
+            "init_oracle_adf_request_dict: window_id is required".to_string(),
+        )
+    })?;
+    let page_id = page_id.ok_or_else(|| {
+        error::SiaScraperError::InvalidInput(
+            "init_oracle_adf_request_dict: page_id is required".to_string(),
+        )
+    })?;
+    let view_state = view_state.ok_or_else(|| {
+        error::SiaScraperError::InvalidInput(
+            "init_oracle_adf_request_dict: view_state is required".to_string(),
+        )
+    })?;
+
     let mut builder = OracleAdfRequestBuilderState::new();
     let request_dict = builder.init_request_dict(tipology_index, window_id, page_id, view_state);
 

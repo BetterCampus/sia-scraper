@@ -11,12 +11,7 @@ const SELECT_ROW_EVENT_VALUE: &str =
 #[test]
 fn test_init_request_dict_contains_base_fields() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let request_dict = builder.init_request_dict(
-        "2",
-        Some("window-123"),
-        Some("page-456"),
-        Some("viewstate-789"),
-    );
+    let request_dict = builder.init_request_dict("2", "window-123", "page-456", "viewstate-789");
 
     assert_eq!(
         request_dict.get("Adf-Window-Id"),
@@ -35,7 +30,7 @@ fn test_init_request_dict_contains_base_fields() {
 #[test]
 fn test_build_request_body_raises_for_unknown_action() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+    let _ = builder.init_request_dict("2", "w", "p", "v");
 
     let result = builder.build_request_body("UNKNOWN_ACTION", -1, &["0".to_string()], 2);
     assert!(result.is_err());
@@ -44,7 +39,7 @@ fn test_build_request_body_raises_for_unknown_action() {
 #[test]
 fn test_build_request_body_sets_faculty_career_default_index() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+    let _ = builder.init_request_dict("2", "w", "p", "v");
 
     let request_body = builder
         .build_request_body(
@@ -61,7 +56,7 @@ fn test_build_request_body_sets_faculty_career_default_index() {
 #[test]
 fn test_build_request_body_sets_electives_campus_increment() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+    let _ = builder.init_request_dict("2", "w", "p", "v");
 
     let request_body = builder
         .build_request_body(
@@ -78,7 +73,7 @@ fn test_build_request_body_sets_electives_campus_increment() {
 #[test]
 fn test_build_request_body_select_row_adds_deltas() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+    let _ = builder.init_request_dict("2", "w", "p", "v");
 
     let request_body = builder
         .build_request_body("SELECT_ROW", 1, &["0".to_string(), "5".to_string()], 2)
@@ -95,7 +90,7 @@ fn test_build_request_body_select_row_adds_deltas() {
 #[test]
 fn test_build_request_body_course_page_link_sets_render_target() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+    let _ = builder.init_request_dict("2", "w", "p", "v");
 
     let request_body = builder
         .build_request_body(
@@ -171,7 +166,7 @@ fn test_build_request_body_supports_all_dropdown_and_button_actions() {
 
     for action in actions {
         let mut builder = OracleAdfRequestBuilderState::new();
-        let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+        let _ = builder.init_request_dict("2", "w", "p", "v");
 
         let body = builder
             .build_request_body(action, -1, &["0".to_string(), "5".to_string()], 10)
@@ -184,7 +179,7 @@ fn test_build_request_body_supports_all_dropdown_and_button_actions() {
 #[test]
 fn test_build_request_body_electives_requires_second_career_index() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+    let _ = builder.init_request_dict("2", "w", "p", "v");
 
     let result = builder.build_request_body("CAMPUS_ELECTIVES_DD", -1, &["0".to_string()], 2);
     assert!(result.is_err());
@@ -193,7 +188,7 @@ fn test_build_request_body_electives_requires_second_career_index() {
 #[test]
 fn test_build_request_body_electives_requires_numeric_second_index() {
     let mut builder = OracleAdfRequestBuilderState::new();
-    let _ = builder.init_request_dict("2", Some("w"), Some("p"), Some("v"));
+    let _ = builder.init_request_dict("2", "w", "p", "v");
 
     let result = builder.build_request_body(
         "CAMPUS_ELECTIVES_DD",
