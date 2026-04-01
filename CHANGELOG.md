@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- **Typed session payloads**: `init_sia_session` and `set_career` now return typed JSON payloads via `init_sia_session_json` and `set_career_json` endpoints; Python wrappers consume typed models end-to-end
+- **SessionState removed from parser layer**: `SessionState` is no longer exported from `sia_scraper.parsers`; use `SessionStateTyped` from `sia_scraper.models.session`
+- **Deprecated `.to_dict()` helpers removed**: `CourseInfoTyped.to_dict()` and `CoursePrereqsTyped.to_dict()` removed; use Pydantic's built-in `.model_dump()` instead
 - **Async-only API**: Removed sync Python API entirely; Rust-backed async is now the sole interface
 - **Session status property**: Renamed `SiaSession.STATUS` to `SiaSession.status`
 - **Session state serialization**: Renamed `SessionState.STATUS` field to `SessionState.status`

@@ -58,7 +58,7 @@ class TestCourseInfoTyped:
         with pytest.raises(ValidationError):
             CourseInfoTyped.model_validate(payload)
 
-    def test_to_dict_deprecation(self):
+    def test_model_dump_returns_dict(self):
         model = CourseInfoTyped(
             course_name="X",
             credits=1,
@@ -68,6 +68,5 @@ class TestCourseInfoTyped:
             groups=[],
             code=None,
         )
-        with pytest.warns(DeprecationWarning):
-            data = model.to_dict()
+        data = model.model_dump()
         assert data["course_name"] == "X"
