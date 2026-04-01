@@ -2,9 +2,9 @@
 
 import asyncio
 from collections.abc import Callable
-from typing import Any
 
 from .constants import http, status
+from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
 from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
 from .parsers.models import ErrorMode, ScrapeResult, SessionState
@@ -17,7 +17,7 @@ class SiaScraper:
     def __init__(
         self,
         timeout: int = http.DEFAULT_TIMEOUT,
-        session_data: dict[str, Any] | SessionState | None = None,
+        session_data: dict[str, object] | SessionState | None = None,
         init_session: bool = False,
     ) -> None:
         self._timeout = timeout
@@ -31,7 +31,7 @@ class SiaScraper:
     async def create(
         cls,
         timeout: int = http.DEFAULT_TIMEOUT,
-        session_data: dict[str, Any] | SessionState | None = None,
+        session_data: dict[str, object] | SessionState | None = None,
         init_session: bool = True,
     ) -> "SiaScraper":
         """Factory to create and optionally initialize an async scraper."""
@@ -44,43 +44,44 @@ class SiaScraper:
 
     @property
     def career_name(self) -> str:
-        value = self._sia_session.career_name
-        return value if isinstance(value, str) else "N/A"
+        """Get the active career display name."""
+        return self._sia_session.career_name
 
     @property
     def career_code(self) -> str:
-        value = self._sia_session.career_code
-        return value if isinstance(value, str) else ""
+        """Get the active hyphen-delimited career code."""
+        return self._sia_session.career_code
 
     @property
     def course_list(self) -> list[dict[str, str]]:
-        value = self._sia_session.course_list
-        return value if isinstance(value, list) else []
+        """Get loaded courses for the active career."""
+        return self._sia_session.course_list
 
     @property
-    def sia_session(self) -> Any:
+    def sia_session(self) -> SiaSession:
+        """Get underlying async session wrapper."""
         return self._sia_session
 
     async def create_session(self) -> "SiaScraper":
         await self._sia_session.init_session()
         return self
 
-    def load_session(self, session_data: dict[str, Any] | SessionState) -> "SiaScraper":
+    def load_session(self, session_data: dict[str, object] | SessionState) -> "SiaScraper":
         """Restore lightweight async session state from serialized data."""
         state = SessionState.model_validate(session_data)
 
         self._sia_session._career_code = state.career_code
-        self._sia_session._career_name = state.career_name or "N/A"
+        self._sia_session._career_name = state.career_name or DEFAULT_CAREER_NAME
         self._sia_session._is_electives = state.is_electives
         self._sia_session._career_indices = (
             state.career_code.split("-") if state.career_code else []
         )
 
         try:
-            restored_status = status.SiaSessionStatus[state.STATUS]
+            restored_status = status.SiaSessionStatus[state.status]
         except KeyError:
             restored_status = status.SiaSessionStatus.NO_SESSION
-        self._sia_session._STATUS = restored_status
+        self._sia_session._status = restored_status
 
         self._sia_session._session_state = {
             "javax_faces_ViewState": state.javax_faces_ViewState,
@@ -108,19 +109,23 @@ class SiaScraper:
         await self._sia_session.close()
 
     def valid_session(self) -> bool:
-        return self._sia_session.STATUS != status.SiaSessionStatus.NO_SESSION
+        return self._sia_session.status != status.SiaSessionStatus.NO_SESSION
 
-    async def set_career(self, search_code: str, electives: bool = False) -> "SiaScraper":
-        await self._sia_session.set_career(search_code, electives=electives)
+    async def set_career(self, search_code: str, is_electives: bool = False) -> "SiaScraper":
+        await self._sia_session.set_career(search_code, is_electives=is_electives)
         return self
 
+    def _resolve_course_index(self, course_index: int, course_code: str) -> int:
+        """Resolve index from explicit code when provided."""
+        return self.get_course_index(course_code) if course_code else course_index
+
     async def get_course_info(self, course_index: int = 0, course_code: str = "") -> CourseInfo:
-        resolved_index = self.get_course_index(course_code) if course_code != "" else course_index
+        resolved_index = self._resolve_course_index(course_index, course_code)
         xml = await self._sia_session.get_course_xml(resolved_index)
         return scrape_info(xml)
 
     def get_course_index(self, course_code: str) -> int:
-        if self._sia_session.STATUS not in (
+        if self._sia_session.status not in (
             status.SiaSessionStatus.ON_CAREER_PAGE,
             status.SiaSessionStatus.ON_COURSE_PAGE,
         ):
@@ -134,9 +139,52 @@ class SiaScraper:
     async def get_course_prereqs(
         self, course_index: int = 0, course_code: str = ""
     ) -> CoursePrereqs:
-        resolved_index = self.get_course_index(course_code) if course_code != "" else course_index
+        resolved_index = self._resolve_course_index(course_index, course_code)
         xml = await self._sia_session.get_course_xml(resolved_index)
         return scrape_prereqs(xml)
+
+    async def _scrape_abort_mode(self, paired: list[tuple[int, str]]) -> list[CourseInfo]:
+        """Scrape courses and abort immediately on first failure."""
+        courses: list[CourseInfo] = []
+        for index, code in paired:
+            course = await self.get_course_info(index)
+            courses.append(course.model_copy(update={"code": code}))
+        return courses
+
+    async def _scrape_resilient_mode(
+        self,
+        paired: list[tuple[int, str]],
+        error_mode: str,
+        max_retries: int,
+        retry_delay: float,
+        progress_callback: Callable[[int, int, int, int], None] | None,
+    ) -> ScrapeResult:
+        """Scrape courses with skip/retry handling."""
+        successes: list[CourseInfo] = []
+        failures: list[tuple[int, str]] = []
+
+        for i, (index, code) in enumerate(paired):
+            last_error = ""
+            attempts = max_retries if error_mode == ErrorMode.RETRY else 1
+
+            for attempt in range(attempts):
+                try:
+                    course = await self.get_course_info(index)
+                    successes.append(course.model_copy(update={"code": code}))
+                    last_error = ""
+                    break
+                except (RuntimeError, ValueError, SiaSessionException) as exc:
+                    last_error = str(exc)
+                    if error_mode == ErrorMode.RETRY and attempt < attempts - 1:
+                        await asyncio.sleep(retry_delay)
+
+            if last_error and error_mode == ErrorMode.SKIP:
+                failures.append((index, last_error))
+
+            if progress_callback:
+                progress_callback(i + 1, len(paired), len(successes), len(failures))
+
+        return ScrapeResult.create(successes, failures)
 
     async def scrape_courses(
         self,
@@ -148,55 +196,31 @@ class SiaScraper:
         progress_callback: Callable[[int, int, int, int], None] | None = None,
     ) -> ScrapeResult | list[CourseInfo]:
         """Batch scrape multiple courses by index or code."""
-        if courses_indices is None:
-            courses_indices = []
-        if courses_codes is None:
-            courses_codes = []
+        courses_indices = courses_indices or []
+        courses_codes = courses_codes or []
 
-        if courses_indices == []:
+        if not courses_indices:
             courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
         paired = list(zip(courses_indices, courses_codes, strict=True))
         paired.sort(key=lambda x: x[0])
 
-        if error_mode == str(ErrorMode.ABORT):
-            courses: list[CourseInfo] = []
-            for index, code in paired:
-                course = await self.get_course_info(index)
-                course = course.model_copy(update={"code": code})
-                courses.append(course)
-            return courses
+        if error_mode == ErrorMode.ABORT:
+            return await self._scrape_abort_mode(paired)
 
-        successes: list[CourseInfo] = []
-        failures: list[tuple[int, str]] = []
-
-        for i, (index, code) in enumerate(paired):
-            last_error = ""
-            for attempt in range(max_retries if error_mode == str(ErrorMode.RETRY) else 1):
-                try:
-                    course = await self.get_course_info(index)
-                    course = course.model_copy(update={"code": code})
-                    successes.append(course)
-                    last_error = ""
-                    break
-                except Exception as e:  # noqa: BLE001
-                    last_error = str(e)
-                    if error_mode == ErrorMode.RETRY and attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay)
-
-            if last_error and error_mode == ErrorMode.SKIP:
-                failures.append((index, last_error))
-
-            if progress_callback:
-                progress_callback(i + 1, len(paired), len(successes), len(failures))
-
-        return ScrapeResult.create(successes, failures)
+        return await self._scrape_resilient_mode(
+            paired,
+            error_mode,
+            max_retries,
+            retry_delay,
+            progress_callback,
+        )
 
 
 async def init_sia_scraper(
     search_code: str,
     is_electives: bool,
-    session_data: dict[str, Any] | SessionState | None = None,
+    session_data: dict[str, object] | SessionState | None = None,
     timeout: int = http.DEFAULT_TIMEOUT,
 ) -> SiaScraper:
     """Initialize or restore an async scraper with session management."""
@@ -213,7 +237,7 @@ async def init_sia_scraper(
         return await create_career_session(search_code, is_electives, timeout=timeout)
 
     if sc.career_code != search_code or sc.sia_session.is_electives != is_electives:
-        await sc.set_career(search_code, electives=is_electives)
+        await sc.set_career(search_code, is_electives=is_electives)
 
     return sc
 
@@ -225,5 +249,5 @@ async def create_career_session(
 ) -> SiaScraper:
     """Create a new async scraper and navigate to the requested career."""
     sc = await SiaScraper.create(timeout=timeout)
-    await sc.set_career(search_code, electives=is_electives)
+    await sc.set_career(search_code, is_electives=is_electives)
     return sc

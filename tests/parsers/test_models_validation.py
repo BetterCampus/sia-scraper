@@ -475,7 +475,7 @@ class TestSessionStateValidation:
                 career_code="1-1-1-1",
                 career_name="Ingenieria",
                 is_electives=False,
-                STATUS="READY",
+                status="READY",
             )
         assert "params" in str(exc_info.value)
 
@@ -490,7 +490,7 @@ class TestSessionStateValidation:
                 career_code="1-1-1-1",
                 career_name="Ingenieria",
                 is_electives=False,
-                STATUS="READY",
+                status="READY",
             )
 
     def test_session_state_valid_full(self) -> None:
@@ -503,7 +503,7 @@ class TestSessionStateValidation:
             career_code="1-01-01-1000",
             career_name="Ingenieria de Sistemas",
             is_electives=False,
-            STATUS="READY",
+            status="READY",
         )
         assert state.career_code == "1-01-01-1000"
         assert state.is_electives is False
@@ -518,7 +518,7 @@ class TestSessionStateValidation:
             career_code="1-01-01-1000",
             career_name="Ingenieria",
             is_electives=False,
-            STATUS="CAREER_NOT_SET",
+            status="CAREER_NOT_SET",
         )
         assert state.javax_faces_ViewState is None
 

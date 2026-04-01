@@ -1,11 +1,20 @@
 """Rust-backed async SIA session management."""
 
-from typing import Any
+from typing import TypedDict, cast
 
 import sia_scraper_rust
 
 from .constants import status
+from .constants.defaults import DEFAULT_CAREER_NAME
+from .core import SiaSessionException
 from .parsers.models import SessionState
+
+
+class _SessionRuntimeState(TypedDict, total=False):
+    """Lightweight runtime state returned by Rust session helpers."""
+
+    javax_faces_ViewState: str | None
+    course_list: list[dict[str, str]]
 
 
 class SiaSession:
@@ -13,12 +22,12 @@ class SiaSession:
 
     def __init__(self, timeout: int = 15) -> None:
         self._timeout = timeout
-        self._career_name = "N/A"
+        self._career_name = DEFAULT_CAREER_NAME
         self._career_code = ""
         self._is_electives = False
         self._career_indices: list[str] = []
-        self._STATUS: status.SiaSessionStatus = status.SiaSessionStatus.NO_SESSION
-        self._session_state: dict[str, Any] = {}
+        self._status: status.SiaSessionStatus = status.SiaSessionStatus.NO_SESSION
+        self._session_state: _SessionRuntimeState = {}
 
     @classmethod
     async def create(cls, timeout: int = 15) -> "SiaSession":
@@ -29,44 +38,50 @@ class SiaSession:
 
     @property
     def career_name(self) -> str:
+        """Get current career display name."""
         return self._career_name
 
     @property
     def career_code(self) -> str:
+        """Get current hyphen-delimited career code."""
         return self._career_code
 
     @property
     def is_electives(self) -> bool:
+        """Return whether elective flow is active."""
         return self._is_electives
 
     @property
-    def STATUS(self) -> status.SiaSessionStatus:
-        return self._STATUS
+    def status(self) -> status.SiaSessionStatus:
+        """Get current lifecycle status."""
+        return self._status
 
     @property
     def course_list(self) -> list[dict[str, str]]:
+        """Get loaded course list for the selected career."""
         return self._session_state.get("course_list", [])
 
     @property
     def career_indices(self) -> list[str]:
+        """Get parsed career code indices."""
         return self._career_indices
 
     async def init_session(self) -> None:
         """Initialize HTTP session with SIA and fetch initial ViewState."""
         result = await sia_scraper_rust.init_sia_session(self._timeout)  # type: ignore[attr-defined]
-        self._STATUS = status.SiaSessionStatus.CAREER_NOT_SET
-        self._session_state = dict(result)
+        self._status = status.SiaSessionStatus.CAREER_NOT_SET
+        self._session_state = cast(_SessionRuntimeState, dict(result))
 
-    async def set_career(self, search_code: str, electives: bool = False) -> None:
+    async def set_career(self, search_code: str, is_electives: bool = False) -> None:
         """Navigate to career and load course list."""
         result = await sia_scraper_rust.set_career(  # type: ignore[attr-defined]
             self._timeout,
             search_code,
-            electives,
+            is_electives,
         )
         self._career_code = search_code
         self._career_indices = search_code.split("-")
-        self._is_electives = electives
+        self._is_electives = is_electives
         if isinstance(result, dict):
             self._career_name = str(result.get("career_name", self._career_name))
             course_list = result.get("course_list", [])
@@ -75,10 +90,22 @@ class SiaSession:
             view_state = result.get("javax_faces_ViewState")
             if isinstance(view_state, str):
                 self._session_state["javax_faces_ViewState"] = view_state
-        self._STATUS = status.SiaSessionStatus.ON_CAREER_PAGE
+        self._status = status.SiaSessionStatus.ON_CAREER_PAGE
 
     async def get_course_xml(self, course_index: int) -> str:
         """Get course detail XML for given index."""
+        if self._status not in (
+            status.SiaSessionStatus.ON_CAREER_PAGE,
+            status.SiaSessionStatus.ON_COURSE_PAGE,
+        ):
+            raise SiaSessionException.InvalidStatus from None
+
+        course_list = self.course_list
+        if not 0 <= course_index < len(course_list):
+            raise ValueError(
+                f"Course index {course_index} out of range (0-{max(len(course_list) - 1, 0)})"
+            )
+
         result = await sia_scraper_rust.get_course_xml(  # type: ignore[attr-defined]
             self._timeout,
             course_index,
@@ -89,7 +116,7 @@ class SiaSession:
 
     async def close(self) -> None:
         """Close the session and cleanup resources."""
-        self._STATUS = status.SiaSessionStatus.NO_SESSION
+        self._status = status.SiaSessionStatus.NO_SESSION
         self._session_state = {}
 
     def get_session_data(self) -> SessionState:
@@ -102,7 +129,7 @@ class SiaSession:
             career_code=self._career_code,
             career_name=self._career_name,
             is_electives=self._is_electives,
-            STATUS=self._STATUS.value,
+            status=self._status.value,
         )
 
     async def __aenter__(self) -> "SiaSession":

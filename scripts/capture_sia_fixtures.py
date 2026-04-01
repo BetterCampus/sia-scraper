@@ -429,7 +429,7 @@ async def main() -> int:
         )
 
         print("[3/6] Capturing regular courses flow...")
-        await scraper.set_career(config.career_code, electives=False)
+        await scraper.set_career(config.career_code, is_electives=False)
         replacements = extract_replacements(scraper, config)
 
         regular_page_xml = (
@@ -517,7 +517,7 @@ async def main() -> int:
             elective_scraper = SiaScraper(timeout=config.timeout, init_session=False)
             try:
                 await elective_scraper.create_session()
-                await elective_scraper.set_career(config.career_code, electives=True)
+                await elective_scraper.set_career(config.career_code, is_electives=True)
                 elective_replacements = extract_replacements(elective_scraper, config)
 
                 electives_page_xml = (

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **Async-only API**: Removed sync Python API entirely; Rust-backed async is now the sole interface
+- **Session status property**: Renamed `SiaSession.STATUS` to `SiaSession.status`
+- **Session state serialization**: Renamed `SessionState.STATUS` field to `SessionState.status`
+- **Electives parameter**: Renamed `electives` parameter to `is_electives` in `set_career()` (Python + Rust bindings)
+- Removed sync modules: `adf_context`, `adf_state_manager`, `enhanced_session`, `navigation_controller`, `oracle_adf_request`, `decorators`
+- Removed Python dependencies: `requests`, `tenacity`
+
 ### Added
 
 - **Async HTTP Client (Rust reqwest + tokio)**: Phase 4 complete - async HTTP transport layer

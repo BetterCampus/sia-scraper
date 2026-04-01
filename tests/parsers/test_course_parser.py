@@ -345,24 +345,24 @@ class TestScrapePrereqs:
         result = scrape_prereqs(xml)
         assert result.conditions == []
 
-    def test_scrape_prereqs_skips_when_less_than_four_headers(self):
+    def test_scrape_prereqs_skips_when_less_than_required_headers(self):
         parser = MagicMock()
-        parser.findall.side_effect = [
+        parser.find_all.side_effect = [
             [MagicMock(text_content=MagicMock(return_value="CURSO (1000)"))],
-            [MagicMock(text_content=MagicMock(return_value="Tipología: DISCIPLINAR OBLIGATORIA"))],
+            [],
+            [],
         ]
         parser.find.return_value.find.return_value.text_content.return_value = "3"
         condition_div = MagicMock()
         condition_info_div = MagicMock()
-        h1, h2, h3 = MagicMock(), MagicMock(), MagicMock()
+        h1, h2 = MagicMock(), MagicMock()
         for h, key, val in [
             (h1, "Condición", "1"),
             (h2, "Tipo", "M"),
-            (h3, "¿Todas?", "SI"),
         ]:
             h.text_content.return_value = key
             h.getnext.return_value = MagicMock(text_content=MagicMock(return_value=val))
-        condition_info_div.css_select.return_value = [h1, h2, h3]
+        condition_info_div.css_select.return_value = [h1, h2]
         condition_div.__iter__ = MagicMock(return_value=iter([condition_info_div, MagicMock()]))
         parser.css_select.return_value = [condition_div]
         with patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser):

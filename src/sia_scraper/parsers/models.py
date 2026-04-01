@@ -10,6 +10,50 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
+from ..constants.defaults import (
+    DEFAULT_CAREER_NAME,
+    DEFAULT_DURATION,
+    DEFAULT_FACULTY,
+    DEFAULT_GROUP_NAME,
+    DEFAULT_SCHEDULE_TYPE,
+    DEFAULT_TEACHER,
+    DEFAULT_TYPOLOGY,
+)
+
+
+def _clean_string_field(value: str | None, default: str) -> str:
+    """Clean optional string field and apply fallback default."""
+    if value is None:
+        return default
+    cleaned = str(value).strip()
+    return cleaned if cleaned else default
+
+
+def _validate_course_code(value: str | None, allow_empty: bool = True) -> str | None:
+    """Validate 7-digit course code.
+
+    Args:
+        value: Raw code value.
+        allow_empty: Whether empty string should be normalized to None.
+
+    Returns:
+        Normalized code or None.
+
+    Raises:
+        ValueError: If code is not a 7-digit numeric string.
+    """
+    if value is None:
+        return None
+
+    if value == "":
+        if allow_empty:
+            return None
+        raise ValueError("Course code cannot be empty")
+
+    if not value.isdigit() or len(value) != 7:
+        raise ValueError(f"Course code must be 7 digits, got '{value}'")
+    return value
+
 
 class Schedule(BaseModel):
     """Schedule entry for a course group.
@@ -79,56 +123,37 @@ class Group(BaseModel):
     @classmethod
     def clean_group_name(cls, v: str | None) -> str:
         """Clean and set default for group_name."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_GROUP_NAME)
 
     @field_validator("teacher", mode="before")
     @classmethod
     def clean_teacher(cls, v: str | None) -> str:
         """Clean and set default for teacher."""
-        if v is None:
-            return "Not reported"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Not reported"
+        return _clean_string_field(v, DEFAULT_TEACHER)
 
     @field_validator("faculty", mode="before")
     @classmethod
     def clean_faculty(cls, v: str | None) -> str:
         """Clean and set default for faculty."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_FACULTY)
 
     @field_validator("duration", mode="before")
     @classmethod
     def clean_duration(cls, v: str | None) -> str:
         """Clean and set default for duration."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_DURATION)
 
     @field_validator("schedule_type", mode="before")
     @classmethod
     def clean_schedule_type(cls, v: str | None) -> str:
         """Clean and set default for schedule_type."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_SCHEDULE_TYPE)
 
     @field_validator("code")
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
         """Ensure course code is 7 digits or None/empty."""
-        if v is None or v == "":
-            return None
-        if not v.isdigit() or len(v) != 7:
-            raise ValueError(f"Course code must be 7 digits, got '{v}'")
-        return v
+        return _validate_course_code(v)
 
 
 class CourseInfo(BaseModel):
@@ -173,18 +198,13 @@ class CourseInfo(BaseModel):
     @classmethod
     def clean_typology(cls, v: str | None) -> str:
         """Clean and set default for typology."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_TYPOLOGY)
 
     @field_validator("code")
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
         """Ensure course code is 7 digits or None."""
-        if v is not None and (not v.isdigit() or len(v) != 7):
-            raise ValueError(f"Course code must be 7 digits, got '{v}'")
-        return v
+        return _validate_course_code(v, allow_empty=False)
 
 
 class Prerequisite(BaseModel):
@@ -356,21 +376,13 @@ class CoursePrereqs(BaseModel):
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
         """Ensure course code is 7 digits or None/empty."""
-        if v is None or v == "":
-            return None
-        if not v.isdigit() or len(v) != 7:
-            raise ValueError(f"Course code must be 7 digits, got '{v}'")
-        return v
+        return _validate_course_code(v)
 
     @field_validator("typology", mode="before")
     @classmethod
     def clean_typology(cls, v: str | None) -> str:
         """Clean and set default for typology."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        if not cleaned:
-            return "Unknown"
+        cleaned = _clean_string_field(v, DEFAULT_TYPOLOGY)
         if ": " in cleaned:
             cleaned = cleaned.split(": ")[-1]
         return cleaned
@@ -390,7 +402,7 @@ class SessionState(BaseModel):
         career_code: Hyphen-delimited career code (level-campus-faculty-career)
         career_name: Name of the academic program
         is_electives: Whether the current view shows elective courses
-        STATUS: Current session status as string
+        status: Current session status as string
     """
 
     model_config = {"frozen": True, "populate_by_name": True}
@@ -400,9 +412,12 @@ class SessionState(BaseModel):
     params: dict[str, str] = Field(..., description="URL parameters including ADF IDs")
     javax_faces_ViewState: str | None = Field(default=None, description="JSF ViewState token")
     career_code: str = Field(default="", description="Career code (empty if no career set)")
-    career_name: str = Field(default="", description="Career name (empty if no career set)")
+    career_name: str = Field(
+        default=DEFAULT_CAREER_NAME,
+        description="Career name (default if no career set)",
+    )
     is_electives: bool = Field(..., description="Whether viewing elective courses")
-    STATUS: str = Field(..., description="Session status name")
+    status: str = Field(..., description="Session status name")
 
     @field_validator("params")
     @classmethod

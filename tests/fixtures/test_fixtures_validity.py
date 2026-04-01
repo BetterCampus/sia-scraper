@@ -162,7 +162,7 @@ class TestFixturesStructure:
 
     def test_session_data_has_required_fields(self, sia_session_data_json: dict[str, object]):
         required_keys = {
-            "STATUS",
+            "status",
             "career_code",
             "career_name",
             "is_electives",

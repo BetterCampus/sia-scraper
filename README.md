@@ -127,9 +127,9 @@ asyncio.run(main())
 prereqs = await scraper.get_course_prereqs(course_code="2016489")
 
 for condition in prereqs.conditions:
-    print(condition.condition_type)
+    print(condition.type)
     for req in condition.prerequisites:
-        print(req.code, req.name)
+        print(req.course_code, req.course_name)
 ```
 
 ### Session Persistence

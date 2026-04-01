@@ -78,9 +78,9 @@ from sia_scraper import SiaScraper
 async def main() -> None:
     scraper = SiaScraper(init_session=False)
     await scraper.create_session()
-    print(scraper.sia_session.STATUS)
+    print(scraper.sia_session.status)
     await scraper.set_career("0-2-8-3")
-    print(scraper.sia_session.STATUS)
+    print(scraper.sia_session.status)
 
 
 asyncio.run(main())
@@ -98,15 +98,15 @@ Checks:
 Example anti-pattern:
 
 ```python
-# Bad: bypasses state sync logic
-session._SiaSession__session.post(session_url, data=payload)
+# Bad: missing await on async API
+session.get_course_xml(0)
 ```
 
 Preferred pattern:
 
 ```python
-# Good: keeps ViewState synchronized
-session.post_request(payload)
+# Good: await async session methods
+await session.get_course_xml(0)
 ```
 
 ## 3) `ValueError` in course parsing

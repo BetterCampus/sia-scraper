@@ -16,7 +16,11 @@ def mock_rust_module():
         rust.set_career = AsyncMock(
             return_value={
                 "career_name": "Ingenieria de Sistemas",
-                "course_list": [{"2016489": "Estructuras de Datos"}],
+                "course_list": [
+                    {"1000001": "Calculo"},
+                    {"2016489": "Estructuras de Datos"},
+                    {"3000003": "Fisica"},
+                ],
                 "javax_faces_ViewState": "vs-2",
             }
         )
@@ -31,8 +35,8 @@ class TestSiaSessionCreation:
     async def test_create_initializes_session(self, mock_rust_module):
         session = await SiaSession.create(timeout=5)
         try:
-            assert session.STATUS == SiaSessionStatus.CAREER_NOT_SET
-            assert session._session_state["javax_faces_ViewState"] == "vs-1"
+            assert session.status == SiaSessionStatus.CAREER_NOT_SET
+            assert session._session_state.get("javax_faces_ViewState") == "vs-1"
             mock_rust_module.init_sia_session.assert_awaited_once_with(5)
         finally:
             await session.close()
@@ -40,7 +44,7 @@ class TestSiaSessionCreation:
     @pytest.mark.asyncio
     async def test_default_state_is_no_session(self, mock_rust_module):
         session = SiaSession()
-        assert session.STATUS == SiaSessionStatus.NO_SESSION
+        assert session.status == SiaSessionStatus.NO_SESSION
 
 
 class TestSiaSessionCareerFlow:
@@ -50,15 +54,19 @@ class TestSiaSessionCareerFlow:
     async def test_set_career_updates_state(self, mock_rust_module):
         session = await SiaSession.create(timeout=5)
         try:
-            await session.set_career("0-2-8-3", electives=True)
+            await session.set_career("0-2-8-3", is_electives=True)
 
-            assert session.STATUS == SiaSessionStatus.ON_CAREER_PAGE
+            assert session.status == SiaSessionStatus.ON_CAREER_PAGE
             assert session.career_code == "0-2-8-3"
             assert session.career_indices == ["0", "2", "8", "3"]
             assert session.is_electives is True
             assert session.career_name == "Ingenieria de Sistemas"
-            assert session.course_list == [{"2016489": "Estructuras de Datos"}]
-            assert session._session_state["javax_faces_ViewState"] == "vs-2"
+            assert session.course_list == [
+                {"1000001": "Calculo"},
+                {"2016489": "Estructuras de Datos"},
+                {"3000003": "Fisica"},
+            ]
+            assert session._session_state.get("javax_faces_ViewState") == "vs-2"
             mock_rust_module.set_career.assert_awaited_once_with(5, "0-2-8-3", True)
         finally:
             await session.close()
@@ -67,7 +75,7 @@ class TestSiaSessionCareerFlow:
     async def test_get_course_xml_passes_electives_flag(self, mock_rust_module):
         session = await SiaSession.create(timeout=5)
         try:
-            await session.set_career("0-2-8-3", electives=True)
+            await session.set_career("0-2-8-3", is_electives=True)
             xml = await session.get_course_xml(2)
 
             assert xml == "<xml>course</xml>"
@@ -87,9 +95,9 @@ class TestSiaSessionLifecycle:
     @pytest.mark.asyncio
     async def test_context_manager_closes_session(self, mock_rust_module):
         async with await SiaSession.create(timeout=5) as session:
-            assert session.STATUS == SiaSessionStatus.CAREER_NOT_SET
+            assert session.status == SiaSessionStatus.CAREER_NOT_SET
 
-        assert session.STATUS == SiaSessionStatus.NO_SESSION
+        assert session.status == SiaSessionStatus.NO_SESSION
 
     @pytest.mark.asyncio
     async def test_get_session_data(self, mock_rust_module):
@@ -101,7 +109,7 @@ class TestSiaSessionLifecycle:
             assert data.career_code == "0-2-8-3"
             assert data.career_name == "Ingenieria de Sistemas"
             assert data.is_electives is False
-            assert data.STATUS == SiaSessionStatus.ON_CAREER_PAGE.value
+            assert data.status == SiaSessionStatus.ON_CAREER_PAGE.value
             assert data.javax_faces_ViewState == "vs-2"
         finally:
             await session.close()

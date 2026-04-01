@@ -19,9 +19,11 @@ Before (`v1.x`):
 ```python
 from sia_scraper import SiaScraper
 
-scraper = SiaScraper(username="user", password="pass")
-history = scraper.scrape_history()
-print(history)
+scraper = SiaScraper(init_session=False)
+scraper.create_session()
+scraper.set_career("0-2-8-3")
+course = scraper.get_course_info(course_index=0)
+print(course)
 ```
 
 After (`v2.0`):
@@ -77,8 +79,10 @@ Before:
 
 ```python
 def run() -> None:
-    scraper = SiaScraper(username="user", password="pass")
-    data = scraper.scrape_history()
+    scraper = SiaScraper(init_session=False)
+    scraper.create_session()
+    scraper.set_career("0-2-8-3")
+    data = scraper.get_course_info(course_index=0)
     print(data)
 
 
@@ -110,7 +114,7 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_scrape_history_returns_data() -> None:
+async def test_get_course_info_returns_data() -> None:
     scraper = await SiaScraper.create()
     await scraper.set_career("0-2-8-3")
     data = await scraper.get_course_info(course_index=0)
@@ -143,8 +147,10 @@ Before (`v1.x`, sequential):
 ```python
 results = []
 for creds in users:
-    scraper = SiaScraper(**creds)
-    results.append(scraper.scrape_history())
+    scraper = SiaScraper(init_session=False)
+    scraper.create_session()
+    scraper.set_career("0-2-8-3")
+    results.append(scraper.get_course_info(course_index=0))
 ```
 
 After (`v2.0`, concurrent):
