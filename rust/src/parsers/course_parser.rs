@@ -410,94 +410,6 @@ fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, Sia
     Ok(groups)
 }
 
-fn extract_groups_tolerant(root: &Html, course_name: &str) -> Vec<GroupModel> {
-    let group_elems: Vec<ElementRef> = root.select(&GROUP_CONTENT_SELECTOR).collect();
-    let mut groups = Vec::with_capacity(group_elems.len());
-
-    for (idx, group) in group_elems.iter().enumerate() {
-        match extract_group_model(group, course_name, idx) {
-            Ok(model) => groups.push(model),
-            Err(err) => {
-                log::warn!("Skipping invalid group {idx}: {err}");
-            }
-        }
-    }
-
-    groups
-}
-
-fn parse_course_model_tolerant(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
-    let document = Html::parse_document(xml);
-    let mut errors: Vec<SiaScraperError> = Vec::new();
-
-    let course_name = {
-        let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
-        match h2_elems.first().map(extract_text_from_elem) {
-            Some(value) if !value.is_empty() => Some(value),
-            _ => {
-                errors.push(parse_error_with_context(
-                    "course_name",
-                    "h2",
-                    "Course title <h2> not found",
-                    &html_snippet(xml),
-                    &["parse_course_model_tolerant"],
-                ));
-                None
-            }
-        }
-    };
-
-    let credits = match extract_credits(&document, xml) {
-        Ok(v) => Some(v),
-        Err(e) => {
-            errors.push(e);
-            None
-        }
-    };
-
-    let typology = match extract_typology(&document) {
-        Ok(v) => Some(v),
-        Err(e) => {
-            errors.push(e);
-            None
-        }
-    };
-
-    if !errors.is_empty() {
-        let combined = errors
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n---\n");
-        return Err(SiaScraperError::ParseError(format!(
-            "Course parsing failed with aggregated errors:\n{combined}"
-        )));
-    }
-
-    let course_name_value = course_name.ok_or_else(|| {
-        SiaScraperError::ParseError("Course parsing failed: course_name missing".to_string())
-    })?;
-    let credits_value = credits.ok_or_else(|| {
-        SiaScraperError::ParseError("Course parsing failed: credits missing".to_string())
-    })?;
-    let typology_value = typology.ok_or_else(|| {
-        SiaScraperError::ParseError("Course parsing failed: typology missing".to_string())
-    })?;
-
-    let groups = extract_groups_tolerant(&document, &course_name_value);
-    let available_spots = groups.iter().filter_map(|g| g.spots).sum::<i64>();
-
-    Ok(CourseInfoModel {
-        course_name: course_name_value,
-        credits: credits_value,
-        typology: typology_value,
-        available_spots,
-        scrape_timestamp: String::new(),
-        groups,
-        code: None,
-    })
-}
-
 #[cfg(all(feature = "fail-fast", not(feature = "full-error-collection")))]
 fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let document = Html::parse_document(xml);
@@ -613,7 +525,7 @@ pub fn parse_course_model_json(xml: &str) -> Result<String, SiaScraperError> {
 
 /// Parse comprehensive course information from Oracle ADF course detail page.
 pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
-    let model = parse_course_model_tolerant(xml)?;
+    let model = parse_course_model(xml)?;
 
     let result = PyDict::new(py);
     result.set_item("course_name", &model.course_name)?;
