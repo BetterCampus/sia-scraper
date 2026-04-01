@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Electives parameter**: Renamed `electives` parameter to `is_electives` in `set_career()` (Python + Rust bindings)
 - Removed sync modules: `adf_context`, `adf_state_manager`, `enhanced_session`, `navigation_controller`, `oracle_adf_request`, `decorators`
 - Removed Python dependencies: `requests`, `tenacity`
+- **Strict parsing for all endpoints**: Both legacy dict endpoints (`parse_course_info`, `parse_prereqs`) and typed JSON endpoints (`parse_course_info_json`, `parse_prereqs_json`) now enforce strict validation. Malformed groups, empty panels, and invalid prerequisite conditions that were previously skipped now cause parsing errors. This ensures data quality and early error detection at the cost of backward compatibility.
 
 ### Added
 
