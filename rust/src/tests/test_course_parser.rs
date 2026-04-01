@@ -288,7 +288,7 @@ fn test_parse_course_xml_extract_label_value_without_span_uses_extracted_text() 
 }
 
 #[test]
-fn test_parse_course_xml_group_without_panel_is_skipped() {
+fn test_parse_course_xml_group_without_panel_fails_strict_validation() {
     let xml = r#"
         <html>
             <body>
@@ -307,7 +307,7 @@ fn test_parse_course_xml_group_without_panel_is_skipped() {
 }
 
 #[test]
-fn test_parse_course_xml_group_with_empty_panel_data_is_skipped() {
+fn test_parse_course_xml_group_with_empty_panel_data_fails_strict_validation() {
     let xml = r#"
         <html>
             <body>
@@ -524,14 +524,14 @@ fn test_parse_prereqs_xml_extracts_nested_header_values() {
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
-            "[N]"
+            "N"
         );
         assert_eq!(
             cond.get_item("number_of_courses")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
-            "[1]"
+            "1"
         );
     });
 }
@@ -677,7 +677,7 @@ fn test_parse_prereqs_xml_skips_condition_with_too_few_subdivs() {
 }
 
 #[test]
-fn test_parse_prereqs_xml_skips_condition_with_too_few_headers() {
+fn test_parse_prereqs_xml_condition_with_too_few_headers_is_strict_error() {
     let xml = r#"
         <html>
             <body>
@@ -701,12 +701,9 @@ fn test_parse_prereqs_xml_skips_condition_with_too_few_headers() {
         </html>
     "#;
 
-    Python::with_gil(|py| {
-        let result = parse_prereqs(xml).unwrap();
-        let dict = result.as_ref(py);
-        let conditions = dict.get_item("conditions").unwrap();
-        let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
-        assert!(conditions_list.is_empty());
+    Python::with_gil(|_py| {
+        let result = parse_prereqs(xml);
+        assert!(result.is_err());
     });
 }
 
@@ -747,7 +744,7 @@ fn test_parse_prereqs_xml_fills_missing_header_values_with_empty_string() {
 
         let cond = conditions_list[0].as_ref(py);
         let number_of_courses = cond.get_item("number_of_courses").unwrap();
-        assert_eq!(number_of_courses.extract::<String>().unwrap(), "");
+        assert_eq!(number_of_courses.extract::<String>().unwrap(), "0");
     });
 }
 

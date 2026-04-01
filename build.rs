@@ -1,39 +1,141 @@
 use scraper::Selector;
-
-const SELECTORS: &[(&str, &str)] = &[
-    ("H2_SELECTOR", "h2"),
-    ("CREDITS_SELECTOR", "span.detass-creditos"),
-    ("CREDITS_SPAN_SELECTOR", "span.detass-creditos span"),
-    ("TYPOLOGY_SPAN_SELECTOR", "span.detass-tipologia span"),
-    ("GENERIC_SPAN_SELECTOR", "span"),
-    ("LISTA_ELEMENTO_SELECTOR", "span.lista-elemento"),
-    ("GROUP_TITLE_SELECTOR", "h2.af_showDetailHeader_title-text0"),
-    ("PANEL_GROUP_SELECTOR", "div.af_panelGroupLayout"),
-    ("DIV_SELECTOR", "div"),
-    ("GROUP_CONTENT_SELECTOR", ".af_showDetailHeader_content0"),
-    (
-        "PREREQ_CONDITION_SELECTOR",
-        "span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout",
-    ),
-    ("PREREQ_STRONG_SELECTOR", "span.strong.af_panelGroupLayout"),
-    (
-        "PREREQ_VALUE_SIBLING_SELECTOR",
-        "span.strong.af_panelGroupLayout + span",
-    ),
-    (
-        "PREREQ_HEADER_SELECTOR",
-        "span.strong.af_panelGroupLayout > span.margin-l",
-    ),
-    ("PREREQ_SPAN_SELECTOR", "span.af_panelGroupLayout > span"),
-];
+use std::fs;
+use std::path::Path;
+use syn::{
+    Expr, ExprCall, ExprClosure, ExprLit, ExprMethodCall, File, Item, ItemStatic, Lit, Macro, Stmt,
+};
 
 fn main() {
-    for (name, selector_str) in SELECTORS {
-        if let Err(e) = Selector::parse(selector_str) {
-            panic!("Invalid CSS selector in registry: {name}='{selector_str}'. Error: {e:?}");
+    let parser_path = Path::new("rust/src/parsers/course_parser.rs");
+
+    let content = fs::read_to_string(parser_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {}", parser_path.display(), e));
+
+    let syntax_tree: File = syn::parse_file(&content).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse Rust syntax in {}: {}",
+            parser_path.display(),
+            e
+        )
+    });
+
+    let mut selector_count = 0;
+
+    for item in syntax_tree.items {
+        match item {
+            Item::Static(item_static) => {
+                if is_selector_static(&item_static) {
+                    let selector_name = item_static.ident.to_string();
+
+                    if let Some(selector_str) = extract_selector_string(&item_static) {
+                        if let Err(e) = Selector::parse(&selector_str) {
+                            panic!(
+                                "Invalid CSS selector in {}: '{}'\nError: {:?}",
+                                selector_name, selector_str, e
+                            );
+                        }
+
+                        println!(
+                            "cargo:warning=Validated selector {}: '{}'",
+                            selector_name, selector_str
+                        );
+                        selector_count += 1;
+                    } else {
+                        panic!("Failed to extract selector string from {}", selector_name);
+                    }
+                }
+            }
+            Item::Macro(macro_item) => {
+                if let Some((name, pattern)) = extract_define_selector(&macro_item.mac) {
+                    if let Err(e) = Selector::parse(&pattern) {
+                        panic!(
+                            "Invalid CSS selector in {}: '{}'\nError: {:?}",
+                            name, pattern, e
+                        );
+                    }
+
+                    println!("cargo:warning=Validated selector {}: '{}'", name, pattern);
+                    selector_count += 1;
+                }
+            }
+            _ => {}
         }
     }
 
+    if selector_count == 0 {
+        panic!(
+            "No selectors found in {}! Expected define_selector! macro or LazyLock<Result<Selector, String>> statics.",
+            parser_path.display()
+        );
+    }
+
+    println!(
+        "cargo:warning=Successfully validated {} CSS selectors",
+        selector_count
+    );
+    println!("cargo:rerun-if-changed={}", parser_path.display());
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=rust/src/parsers/course_parser.rs");
+}
+
+fn is_selector_static(item: &ItemStatic) -> bool {
+    let type_str = quote::quote!(#item.ty).to_string();
+    type_str.contains("LazyLock") && type_str.contains("Selector")
+}
+
+fn extract_selector_string(item: &ItemStatic) -> Option<String> {
+    if let Expr::Call(ExprCall { args, .. }) = &*item.expr {
+        if let Some(Expr::Closure(ExprClosure { body, .. })) = args.first() {
+            return extract_from_expr(body);
+        }
+    }
+    None
+}
+
+fn extract_from_expr(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::MethodCall(method_call) => extract_from_method_call(method_call),
+        Expr::Block(block_expr) => {
+            if let Some(Stmt::Expr(inner_expr, _)) = block_expr.block.stmts.last() {
+                extract_from_expr(inner_expr)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn extract_from_method_call(method_call: &ExprMethodCall) -> Option<String> {
+    if method_call.method == "map_err" {
+        if let Expr::Call(inner_call) = &*method_call.receiver {
+            if let Some(Expr::Lit(ExprLit {
+                lit: Lit::Str(lit_str),
+                ..
+            })) = inner_call.args.first()
+            {
+                return Some(lit_str.value());
+            }
+        }
+    }
+    None
+}
+
+fn extract_define_selector(mac: &Macro) -> Option<(String, String)> {
+    let mac_str = quote::quote!(#mac).to_string();
+
+    if !mac_str.starts_with("define_selector !") {
+        return None;
+    }
+
+    let mac_string = mac.tokens.to_string();
+    let tokens: Vec<_> = mac_string.split(',').collect();
+    if tokens.len() != 2 {
+        return None;
+    }
+
+    let name = tokens[0].trim().to_string();
+    let pattern = tokens[1].trim().trim_matches('"').trim().to_string();
+
+    Some((name, pattern))
 }

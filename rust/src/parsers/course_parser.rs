@@ -12,56 +12,45 @@ use std::sync::LazyLock;
 
 use crate::error::SiaScraperError;
 use crate::models::course::{CourseInfoModel, GroupModel, ScheduleModel};
+use crate::models::prerequisite::{CoursePrereqsModel, PrereqConditionModel, PrerequisiteModel};
 use crate::parsers::utils::extract_text_from_elem;
 
 static SCHEDULE_REGEX: LazyLock<Result<Regex, String>> = LazyLock::new(|| {
     Regex::new(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})").map_err(|e| e.to_string())
 });
 
-static H2_SELECTOR: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("h2").expect("h2 selector must parse"));
-static CREDITS_SELECTOR: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("span.detass-creditos").expect("credits selector must parse"));
-static CREDITS_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.detass-creditos span").expect("credits span selector must parse")
-});
-static TYPOLOGY_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.detass-tipologia span").expect("typology span selector must parse")
-});
-static GENERIC_SPAN_SELECTOR: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("span").expect("span selector must parse"));
-static LISTA_ELEMENTO_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.lista-elemento").expect("lista-elemento selector must parse")
-});
-static GROUP_TITLE_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("h2.af_showDetailHeader_title-text0").expect("group title selector must parse")
-});
-static PANEL_GROUP_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("div.af_panelGroupLayout").expect("panel group selector must parse")
-});
-static DIV_SELECTOR: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("div").expect("div selector must parse"));
-static GROUP_CONTENT_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse(".af_showDetailHeader_content0").expect("group content selector must parse")
-});
-static PREREQ_CONDITION_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout")
-        .expect("prereq condition selector must parse")
-});
-static PREREQ_STRONG_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.strong.af_panelGroupLayout").expect("prereq strong selector must parse")
-});
-static PREREQ_VALUE_SIBLING_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.strong.af_panelGroupLayout + span")
-        .expect("prereq value sibling selector must parse")
-});
-static PREREQ_HEADER_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.strong.af_panelGroupLayout > span.margin-l")
-        .expect("prereq header selector must parse")
-});
-static PREREQ_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.af_panelGroupLayout > span").expect("prereq span selector must parse")
-});
+macro_rules! define_selector {
+    ($name:ident, $pattern:expr) => {
+        static $name: LazyLock<Result<Selector, String>> = LazyLock::new(|| {
+            Selector::parse($pattern).map_err(|e| format!("{}: {:?}", stringify!($name), e))
+        });
+    };
+}
+
+define_selector!(H2_SELECTOR, "h2");
+define_selector!(CREDITS_SELECTOR, "span.detass-creditos");
+define_selector!(CREDITS_SPAN_SELECTOR, "span.detass-creditos span");
+define_selector!(TYPOLOGY_SPAN_SELECTOR, "span.detass-tipologia span");
+define_selector!(GENERIC_SPAN_SELECTOR, "span");
+define_selector!(LISTA_ELEMENTO_SELECTOR, "span.lista-elemento");
+define_selector!(GROUP_TITLE_SELECTOR, "h2.af_showDetailHeader_title-text0");
+define_selector!(PANEL_GROUP_SELECTOR, "div.af_panelGroupLayout");
+define_selector!(DIV_SELECTOR, "div");
+define_selector!(GROUP_CONTENT_SELECTOR, ".af_showDetailHeader_content0");
+define_selector!(
+    PREREQ_CONDITION_SELECTOR,
+    "span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout"
+);
+define_selector!(PREREQ_STRONG_SELECTOR, "span.strong.af_panelGroupLayout");
+define_selector!(
+    PREREQ_VALUE_SIBLING_SELECTOR,
+    "span.strong.af_panelGroupLayout + span"
+);
+define_selector!(
+    PREREQ_HEADER_SELECTOR,
+    "span.strong.af_panelGroupLayout > span.margin-l"
+);
+define_selector!(PREREQ_SPAN_SELECTOR, "span.af_panelGroupLayout > span");
 
 const REQUIRED_PREREQ_HEADERS: usize = 4;
 
@@ -78,6 +67,31 @@ fn schedule_regex() -> Result<&'static Regex, SiaScraperError> {
             "Schedule regex initialization failed: {msg}"
         ))),
     }
+}
+
+fn get_selector(lazy: &LazyLock<Result<Selector, String>>) -> Result<&Selector, SiaScraperError> {
+    match &**lazy {
+        Ok(selector) => Ok(selector),
+        Err(msg) => Err(SiaScraperError::ParseError(format!(
+            "Selector initialization failed: {msg}"
+        ))),
+    }
+}
+
+fn css_select_html<'a>(
+    root: &'a Html,
+    lazy: &LazyLock<Result<Selector, String>>,
+) -> Result<Vec<ElementRef<'a>>, SiaScraperError> {
+    let selector = get_selector(lazy)?;
+    Ok(root.select(selector).collect())
+}
+
+fn css_select_elem<'a>(
+    root: &'a ElementRef<'a>,
+    lazy: &LazyLock<Result<Selector, String>>,
+) -> Result<Vec<ElementRef<'a>>, SiaScraperError> {
+    let selector = get_selector(lazy)?;
+    Ok(root.select(selector).collect())
 }
 
 fn html_snippet(html: &str) -> String {
@@ -115,6 +129,53 @@ fn parse_error_with_elem_context(
     parse_error_with_context(field, selector, context, &elem_snippet(elem), stack_context)
 }
 
+fn parse_condition_number(raw: &str) -> Result<i32, SiaScraperError> {
+    let digits = raw
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>();
+
+    if digits.is_empty() {
+        return Ok(0);
+    }
+
+    digits.parse::<i32>().map_err(|e| {
+        SiaScraperError::ParseError(format!(
+            "Failed to parse condition number '{raw}' (digits '{digits}'): {e}"
+        ))
+    })
+}
+
+fn normalize_type(raw: &str) -> String {
+    let trimmed = raw.trim().trim_matches(['[', ']']);
+    if trimmed.is_empty() {
+        return "UNKNOWN".to_string();
+    }
+    trimmed.to_uppercase()
+}
+
+fn parse_all_required(raw: &str) -> bool {
+    let value = raw.trim().trim_matches(['[', ']']).to_uppercase();
+    matches!(value.as_str(), "S" | "SI" | "Y" | "YES" | "TRUE")
+}
+
+fn parse_number_of_courses(raw: &str) -> Result<i32, SiaScraperError> {
+    let digits = raw
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>();
+
+    if digits.is_empty() {
+        return Ok(0);
+    }
+
+    digits.parse::<i32>().map_err(|e| {
+        SiaScraperError::ParseError(format!(
+            "Failed to parse number_of_courses '{raw}' (digits '{digits}'): {e}"
+        ))
+    })
+}
+
 #[inline]
 pub fn get_plain_text(xml: &str) -> String {
     let document = Html::parse_document(xml);
@@ -126,7 +187,7 @@ pub fn get_plain_text(xml: &str) -> String {
 }
 
 fn extract_credits(root: &Html, xml: &str) -> Result<i32, SiaScraperError> {
-    let elems: Vec<ElementRef> = root.select(&CREDITS_SELECTOR).collect();
+    let elems = css_select_html(root, &CREDITS_SELECTOR)?;
     let elem = elems.first().ok_or_else(|| {
         parse_error_with_context(
             "credits",
@@ -137,7 +198,7 @@ fn extract_credits(root: &Html, xml: &str) -> Result<i32, SiaScraperError> {
         )
     })?;
 
-    let spans: Vec<ElementRef> = root.select(&CREDITS_SPAN_SELECTOR).collect();
+    let spans = css_select_html(root, &CREDITS_SPAN_SELECTOR)?;
     let span = spans.last().ok_or_else(|| {
         parse_error_with_elem_context(
             "credits",
@@ -161,7 +222,7 @@ fn extract_credits(root: &Html, xml: &str) -> Result<i32, SiaScraperError> {
 }
 
 fn extract_typology(root: &Html) -> Result<String, SiaScraperError> {
-    let spans: Vec<ElementRef> = root.select(&TYPOLOGY_SPAN_SELECTOR).collect();
+    let spans = css_select_html(root, &TYPOLOGY_SPAN_SELECTOR)?;
     match spans.last() {
         Some(span) => {
             let text = extract_text_from_elem(span);
@@ -175,11 +236,9 @@ fn extract_typology(root: &Html) -> Result<String, SiaScraperError> {
     }
 }
 
-fn row_texts(panel: &ElementRef<'_>) -> Vec<String> {
-    panel
-        .select(&DIV_SELECTOR)
-        .map(|e| extract_text_from_elem(&e))
-        .collect()
+fn row_texts(panel: &ElementRef<'_>) -> Result<Vec<String>, SiaScraperError> {
+    let rows = css_select_elem(panel, &DIV_SELECTOR)?;
+    Ok(rows.iter().map(extract_text_from_elem).collect())
 }
 
 fn extract_labeled_or_inferred_value(
@@ -188,12 +247,12 @@ fn extract_labeled_or_inferred_value(
     field_name: &str,
     required: bool,
 ) -> Result<Option<String>, SiaScraperError> {
-    let rows: Vec<ElementRef> = panel.select(&DIV_SELECTOR).collect();
+    let rows = css_select_elem(panel, &DIV_SELECTOR)?;
     for row in rows {
         let text = extract_text_from_elem(&row);
         let lowered = text.to_lowercase();
         if labels.iter().any(|label| lowered.contains(label)) {
-            let spans: Vec<ElementRef> = row.select(&GENERIC_SPAN_SELECTOR).collect();
+            let spans = css_select_elem(&row, &GENERIC_SPAN_SELECTOR)?;
             if spans.len() >= 2 {
                 if let Some(last_span) = spans.last() {
                     let value = extract_text_from_elem(last_span);
@@ -215,7 +274,7 @@ fn extract_labeled_or_inferred_value(
     }
 
     if field_name == "teacher" {
-        let rows_text = row_texts(panel);
+        let rows_text = row_texts(panel)?;
         for row_text in rows_text {
             let lowered = row_text.to_lowercase();
             if lowered.contains("prof") || lowered.contains("docente") {
@@ -246,7 +305,7 @@ fn extract_labeled_or_inferred_value(
 fn extract_schedules(panel: &ElementRef<'_>) -> Result<Vec<ScheduleModel>, SiaScraperError> {
     let mut schedules: Vec<ScheduleModel> = Vec::new();
     let regex = schedule_regex()?;
-    let lista_spans: Vec<ElementRef> = panel.select(&LISTA_ELEMENTO_SELECTOR).collect();
+    let lista_spans = css_select_elem(panel, &LISTA_ELEMENTO_SELECTOR)?;
 
     for lista_span in lista_spans {
         let schedule_txt = extract_text_from_elem(&lista_span);
@@ -271,8 +330,7 @@ fn extract_schedules(panel: &ElementRef<'_>) -> Result<Vec<ScheduleModel>, SiaSc
                 continue;
             }
 
-            let nested_classroom: Vec<ElementRef> =
-                lista_span.select(&LISTA_ELEMENTO_SELECTOR).collect();
+            let nested_classroom = css_select_elem(&lista_span, &LISTA_ELEMENTO_SELECTOR)?;
             let classroom = if let Some(classroom_elem) = nested_classroom.last() {
                 extract_text_from_elem(classroom_elem)
             } else {
@@ -314,7 +372,7 @@ fn extract_spots(panel: &ElementRef<'_>) -> Result<Option<i64>, SiaScraperError>
 
 fn extract_group_name(group: &ElementRef<'_>) -> Result<Option<String>, SiaScraperError> {
     if let Some(parent_ref) = group.parent().and_then(ElementRef::wrap) {
-        let h2_elems: Vec<ElementRef> = parent_ref.select(&GROUP_TITLE_SELECTOR).collect();
+        let h2_elems = css_select_elem(&parent_ref, &GROUP_TITLE_SELECTOR)?;
         if let Some(title_elem) = h2_elems.first() {
             let value = extract_text_from_elem(title_elem);
             if !value.is_empty() {
@@ -330,7 +388,7 @@ fn extract_group_model(
     course_name: &str,
     group_index: usize,
 ) -> Result<GroupModel, SiaScraperError> {
-    let panel_elems: Vec<ElementRef> = group.select(&PANEL_GROUP_SELECTOR).collect();
+    let panel_elems = css_select_elem(group, &PANEL_GROUP_SELECTOR)?;
     let panel = panel_elems.first().ok_or_else(|| {
         parse_error_with_elem_context(
             "group_panel",
@@ -385,7 +443,7 @@ fn extract_group_model(
 }
 
 fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, SiaScraperError> {
-    let group_elems: Vec<ElementRef> = root.select(&GROUP_CONTENT_SELECTOR).collect();
+    let group_elems = css_select_html(root, &GROUP_CONTENT_SELECTOR)?;
     let mut groups = Vec::with_capacity(group_elems.len());
     let mut errors: Vec<SiaScraperError> = Vec::new();
 
@@ -413,7 +471,7 @@ fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, Sia
 #[cfg(all(feature = "fail-fast", not(feature = "full-error-collection")))]
 fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let document = Html::parse_document(xml);
-    let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
+    let h2_elems = css_select_html(&document, &H2_SELECTOR, "H2_SELECTOR")?;
     let course_name = h2_elems
         .first()
         .map(extract_text_from_elem)
@@ -449,8 +507,11 @@ fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let mut errors: Vec<SiaScraperError> = Vec::new();
 
     let course_name = {
-        let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
-        match h2_elems.first().map(extract_text_from_elem) {
+        let h2_elems = css_select_html(&document, &H2_SELECTOR);
+        match h2_elems
+            .ok()
+            .and_then(|elems| elems.first().map(extract_text_from_elem))
+        {
             Some(value) if !value.is_empty() => Some(value),
             _ => {
                 errors.push(parse_error_with_context(
@@ -568,11 +629,10 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
     Ok(result.into())
 }
 
-/// Parse course prerequisites and enrollment conditions from Oracle ADF XML.
-pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
+fn parse_prereqs_model(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
     let document = Html::parse_document(xml);
 
-    let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
+    let h2_elems = css_select_html(&document, &H2_SELECTOR)?;
     let course_name = h2_elems
         .first()
         .map(extract_text_from_elem)
@@ -582,29 +642,29 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
                 "h2",
                 "Course name not found",
                 &html_snippet(xml),
-                &["parse_prereqs_xml"],
+                &["parse_prereqs_model"],
             )
         })?;
 
     let credits = extract_credits(&document, xml)?;
     let typology = extract_typology(&document)?;
 
-    let condition_divs: Vec<ElementRef> = document.select(&PREREQ_CONDITION_SELECTOR).collect();
+    let condition_divs = css_select_html(&document, &PREREQ_CONDITION_SELECTOR)?;
+    let mut conditions = Vec::new();
+    let mut errors: Vec<SiaScraperError> = Vec::new();
 
-    let conditions = PyList::empty(py);
-
-    for condition_div in condition_divs {
-        let sub_divs: Vec<ElementRef> = condition_div.select(&DIV_SELECTOR).collect();
+    for (condition_index, condition_div) in condition_divs.iter().enumerate() {
+        let sub_divs: Vec<ElementRef<'_>> = css_select_elem(condition_div, &DIV_SELECTOR)?;
         if sub_divs.len() < 2 {
             continue;
         }
 
         let info_div = &sub_divs[0];
-        let strong_spans: Vec<ElementRef> = info_div.select(&PREREQ_STRONG_SELECTOR).collect();
+        let strong_spans = css_select_elem(info_div, &PREREQ_STRONG_SELECTOR)?;
 
         let mut all_spans: Vec<ElementRef> = Vec::new();
         if let Some(strong_span) = strong_spans.first() {
-            for nested_span in strong_span.select(&GENERIC_SPAN_SELECTOR) {
+            for nested_span in css_select_elem(strong_span, &GENERIC_SPAN_SELECTOR)? {
                 let is_header = nested_span
                     .value()
                     .classes()
@@ -615,14 +675,22 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             }
         }
 
-        let header_spans: Vec<ElementRef> = info_div.select(&PREREQ_HEADER_SELECTOR).collect();
+        let header_spans = css_select_elem(info_div, &PREREQ_HEADER_SELECTOR)?;
         let header_count = header_spans.len();
+
         if header_count < REQUIRED_PREREQ_HEADERS {
+            errors.push(parse_error_with_elem_context(
+                "prereq_headers",
+                "span.strong.af_panelGroupLayout > span.margin-l",
+                &format!("Condition {condition_index} has too few headers: {header_count}"),
+                info_div,
+                &["parse_prereqs_model", "parse_condition"],
+            ));
             continue;
         }
 
         if all_spans.len() < header_count {
-            all_spans = info_div.select(&PREREQ_VALUE_SIBLING_SELECTOR).collect();
+            all_spans = css_select_elem(info_div, &PREREQ_VALUE_SIBLING_SELECTOR)?;
         }
 
         let mut header_values: Vec<String> = Vec::with_capacity(header_count);
@@ -634,9 +702,9 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             }
         }
 
-        let prereqs = PyList::empty(py);
+        let mut prerequisites = Vec::new();
         for prereq_div in &sub_divs[1..] {
-            let prereq_spans: Vec<ElementRef> = prereq_div.select(&PREREQ_SPAN_SELECTOR).collect();
+            let prereq_spans = css_select_elem(prereq_div, &PREREQ_SPAN_SELECTOR)?;
             if prereq_spans.len() < 2 {
                 continue;
             }
@@ -644,26 +712,99 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             let course_code = extract_text_from_elem(&prereq_spans[0]);
             let course_name_prereq = extract_text_from_elem(&prereq_spans[1]);
 
+            prerequisites.push(PrerequisiteModel {
+                course_code,
+                course_name: course_name_prereq,
+            });
+        }
+
+        let condition_number = parse_condition_number(&header_values[0]).map_err(|e| {
+            parse_error_with_elem_context(
+                "condition",
+                "span.strong.af_panelGroupLayout > span.margin-l",
+                &e.to_string(),
+                info_div,
+                &["parse_prereqs_model", "parse_condition"],
+            )
+        })?;
+
+        let number_of_courses = parse_number_of_courses(&header_values[3]).map_err(|e| {
+            parse_error_with_elem_context(
+                "number_of_courses",
+                "span.strong.af_panelGroupLayout > span.margin-l",
+                &e.to_string(),
+                info_div,
+                &["parse_prereqs_model", "parse_condition"],
+            )
+        })?;
+
+        conditions.push(PrereqConditionModel {
+            condition: condition_number,
+            prereq_type: normalize_type(&header_values[1]),
+            all_required: parse_all_required(&header_values[2]),
+            number_of_courses,
+            prerequisites,
+        });
+    }
+
+    if !errors.is_empty() {
+        let combined = errors
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        return Err(SiaScraperError::ParseError(format!(
+            "Prerequisite parsing failed with aggregated errors:\n{combined}"
+        )));
+    }
+
+    Ok(CoursePrereqsModel {
+        course_name,
+        code: None,
+        credits,
+        typology,
+        conditions,
+    })
+}
+
+/// Parse prerequisite information and return typed JSON.
+pub fn parse_prereqs_model_json(xml: &str) -> Result<String, SiaScraperError> {
+    let model = parse_prereqs_model(xml)?;
+    serde_json::to_string(&model)
+        .map_err(|e| SiaScraperError::ParseError(format!("Prereqs JSON serialization failed: {e}")))
+}
+
+/// Parse course prerequisites and enrollment conditions from Oracle ADF XML.
+pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
+    let model = parse_prereqs_model(xml)?;
+
+    let conditions = PyList::empty(py);
+    for condition in model.conditions {
+        let prereqs = PyList::empty(py);
+        for prereq in condition.prerequisites {
             let prereq_dict = PyDict::new(py);
-            prereq_dict.set_item("course_code", course_code)?;
-            prereq_dict.set_item("course_name", course_name_prereq)?;
+            prereq_dict.set_item("course_code", prereq.course_code)?;
+            prereq_dict.set_item("course_name", prereq.course_name)?;
             prereqs.append(prereq_dict)?;
         }
 
         let condition_dict = PyDict::new(py);
-        condition_dict.set_item("condition", &header_values[0])?;
-        condition_dict.set_item("type", &header_values[1])?;
-        condition_dict.set_item("all_required", &header_values[2])?;
-        condition_dict.set_item("number_of_courses", &header_values[3])?;
+        condition_dict.set_item("condition", condition.condition.to_string())?;
+        condition_dict.set_item("type", condition.prereq_type)?;
+        condition_dict.set_item(
+            "all_required",
+            if condition.all_required { "S" } else { "N" },
+        )?;
+        condition_dict.set_item("number_of_courses", condition.number_of_courses.to_string())?;
         condition_dict.set_item("prerequisites", prereqs)?;
         conditions.append(condition_dict)?;
     }
 
     let result = PyDict::new(py);
-    result.set_item("course_name", course_name.trim())?;
+    result.set_item("course_name", model.course_name.trim())?;
     result.set_item("code", py.None())?;
-    result.set_item("credits", credits)?;
-    result.set_item("typology", typology)?;
+    result.set_item("credits", model.credits)?;
+    result.set_item("typology", model.typology)?;
     result.set_item("conditions", conditions)?;
 
     Ok(result.into())

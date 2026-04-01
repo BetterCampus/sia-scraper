@@ -12,7 +12,13 @@ responses returned by SIA's web interface.
 | `models` | Dataclasses for type-safe data structures |
 """
 
-from .course_parser import get_plain_text, scrape_info, scrape_info_typed, scrape_prereqs
+from .course_parser import (
+    get_plain_text,
+    scrape_info,
+    scrape_info_typed,
+    scrape_prereqs,
+    scrape_prereqs_typed,
+)
 from .html_parser import HtmlParser, get_course_list
 from .models import (
     CourseInfo,
@@ -34,6 +40,7 @@ __all__ = [
     "scrape_info",
     "scrape_info_typed",
     "scrape_prereqs",
+    "scrape_prereqs_typed",
     # Models
     "CourseInfo",
     "CoursePrereqs",

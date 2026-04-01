@@ -1,14 +1,17 @@
 """Rust/Python parity tests - compare outputs from Rust extension vs Python implementation."""
 
 import pytest
+from pydantic import ValidationError
 
 from sia_scraper.constants import business
 from sia_scraper.core.adf_state import extract_view_state as python_extract_view_state
+from sia_scraper.models.prerequisite import CoursePrereqsTyped
 from sia_scraper.parsers.course_parser import scrape_info as python_scrape_info
 from sia_scraper.parsers.course_parser import scrape_prereqs as python_scrape_prereqs
 from sia_scraper_rust import extract_view_state as rust_extract_view_state
 from sia_scraper_rust import parse_course_info as rust_parse_course_info
 from sia_scraper_rust import parse_prereqs as rust_parse_prereqs
+from sia_scraper_rust import parse_prereqs_json as rust_parse_prereqs_json
 
 
 class TestExtractViewStateParity:
@@ -103,6 +106,19 @@ class TestParsePrereqsParity:
             int(rust_condition["number_of_courses"].strip("[]"))
             == python_condition.number_of_courses
         )
+
+    def test_typed_prereqs_json_parity(self, sia_course_prereqs_xml):
+        rust_json = rust_parse_prereqs_json(sia_course_prereqs_xml)
+        typed = CoursePrereqsTyped.model_validate_json(rust_json)
+        python_result = python_scrape_prereqs(sia_course_prereqs_xml)
+
+        assert typed.course_name == python_result.course_name
+        assert typed.credits == python_result.credits
+        assert len(typed.conditions) == len(python_result.conditions)
+
+    def test_typed_prereqs_json_invalid_raises(self):
+        with pytest.raises((ValidationError, Exception)):  # noqa: B017 - PyO3 runtime exception path
+            CoursePrereqsTyped.model_validate_json(rust_parse_prereqs_json("<div></div>"))
 
 
 class TestRustErrors:

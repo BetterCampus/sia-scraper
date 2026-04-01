@@ -32,6 +32,7 @@ from ..constants.defaults import (
     DEFAULT_TYPOLOGY,
 )
 from ..models.course import CourseInfoTyped
+from ..models.prerequisite import CoursePrereqsTyped
 from ..utils import format_date
 from .html_parser import HtmlElement, HtmlParser
 from .models import (
@@ -487,3 +488,16 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
         typology=typology,
         conditions=conditions,
     )
+
+
+def scrape_prereqs_typed(xml: str) -> CoursePrereqsTyped:
+    """Parse prerequisites using Rust typed JSON contract.
+
+    Args:
+        xml: Raw XML/HTML from SIA course prerequisite response.
+
+    Returns:
+        Strictly validated typed prerequisite payload.
+    """
+    typed_json = sia_scraper_rust.parse_prereqs_json(xml)  # type: ignore[attr-defined]
+    return CoursePrereqsTyped.model_validate_json(typed_json)
