@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from sia_scraper.parsers import get_course_list, scrape_info, scrape_prereqs
+from sia_scraper.parsers.models import PrereqType
 
 
 @pytest.fixture
@@ -74,10 +75,16 @@ class TestParserRegression:
 
         first_condition = expected["first_condition"]
         assert isinstance(first_condition, dict)
-        assert parsed.conditions[0].condition == first_condition["condition"]
-        assert parsed.conditions[0].type == first_condition["type"]
-        assert parsed.conditions[0].all_required == first_condition["all_required"]
-        assert parsed.conditions[0].number_of_courses == first_condition["number_of_courses"]
+        assert parsed.conditions[0].condition == int(str(first_condition["condition"]).strip("[]"))
+        assert parsed.conditions[0].type == PrereqType(str(first_condition["type"]).strip("[]"))
+        raw_all_required = (
+            str(first_condition.get("all_required", "")).strip("[]").upper().replace(" ", "")
+        )
+        expected_all_required = raw_all_required in {"S", "SI"}
+        assert parsed.conditions[0].all_required is expected_all_required
+        assert parsed.conditions[0].number_of_courses == int(
+            str(first_condition["number_of_courses"]).strip("[]")
+        )
         assert len(parsed.conditions[0].prerequisites) == first_condition["prerequisites_count"]
 
         first_prereq = expected["first_prerequisite"]

@@ -18,19 +18,10 @@ an older token can make the server apply actions against stale component state.
 - ViewState is extracted from every POST response and immediately stored.
 - Request body generation happens per-step so each POST uses the latest ViewState.
 
-### Example
+### Implementation note
 
-```python
-def post_request(self, data: dict[str, str]) -> Any:
-    response = self.__session.post(
-        self.__url,
-        params=self.__params,
-        headers=http.SIA_HEADERS,
-        data=data,
-    )
-    self.sync_view_state_from_response(response)
-    return response
-```
+In v2.0+, ViewState synchronization is handled in Rust HTTP/session code. The
+Python layer no longer performs manual request posting for this workflow.
 
 ## 2) Strict action order in dependent dropdowns
 
@@ -48,18 +39,10 @@ Electives include additional steps before show.
 - We execute a full action sequence in `set_career()`.
 - Each step sends its own event payload and receives fresh state.
 
-### Example
+### Implementation note
 
-```python
-for action in action_sequence:
-    self.__init_request_dict()
-    self.request_dict[adf_ids.STUDY_LEVEL_DD_ID] = self.career_indices[0]
-    self.request_dict[adf_ids.CAMPUS_DD_ID] = self.career_indices[1]
-    self.request_dict[adf_ids.FACULTY_DD_ID] = self.career_indices[2]
-    self.request_dict[adf_ids.CAREER_DD_ID] = self.career_indices[3]
-    data = self._generate_request_body(action)
-    self.post_request(data=data)
-```
+The action sequence is executed by the Rust-backed session implementation,
+maintaining parity with the observed Oracle ADF workflow.
 
 ## 3) Token trio required in every POST
 
@@ -74,15 +57,9 @@ Most ADF interactions require:
 - Tokens are captured on session initialization.
 - The request builder injects them into each request body.
 
-### Example
+### Implementation note
 
-```python
-self.request_dict = {
-    "Adf-Window-Id": self.session._window_id or "",
-    "Adf-Page-Id": self.session._page_id or "",
-    "javax.faces.ViewState": self.session._view_state or "",
-}
-```
+Token propagation is now centralized in Rust session/request code.
 
 ## 4) Table row selection needs DELTAS metadata
 
@@ -94,14 +71,9 @@ Selecting a course row is not only about event name; ADF expects a matching
 - DELTAS is built dynamically from current course list size.
 - `selectedRowKeys` is set to the requested course index.
 
-### Example
+### Implementation note
 
-```python
-specific_request_dict["oracle.adf.view.rich.DELTAS"] = (
-    f"{{pt1:r1:0:t4={{viewportSize={len(course_list) + 1},"
-    f"rows={len(course_list)},selectedRowKeys={idx}}}}}"
-)
-```
+DELTAS construction is handled in Rust request-building logic used by the async flow.
 
 ## 5) Component IDs are brittle
 
@@ -125,10 +97,14 @@ reproducing consistently and is currently treated as state-drift related.
 - Avoid precomputing long request chains with a single stale request dictionary.
 - If scraping starts returning mismatched rows, verify ViewState and DELTAS first.
 
-## Module locations (v0.2.1+)
+## Module locations (v2.0+)
 
-Related implementation modules now live under `core/`:
+Current implementation modules:
 
 - `src/sia_scraper/core/adf_state.py`
-- `src/sia_scraper/core/oracle_adf_request.py`
 - `src/sia_scraper/core/exceptions.py`
+- `rust/src/http/sia_session.rs`
+- `rust/src/parsers/adf_request.rs`
+
+Historical sync implementation details are archived in
+`docs/SYNC_API_REFERENCE.md`.

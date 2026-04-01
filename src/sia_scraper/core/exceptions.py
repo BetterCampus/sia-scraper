@@ -50,7 +50,7 @@ class TimeoutError(SiaSessionException):
 class InvalidStatus(SiaSessionException):
     """Raised when attempting an action incompatible with current session state.
 
-    Example: Trying to exit_course_page() when STATUS != ON_COURSE_PAGE.
+    Example: Trying to exit_course_page() when status != ON_COURSE_PAGE.
     """
 
     def __init__(self) -> None:

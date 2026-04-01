@@ -1,0 +1,10 @@
+# Benchmark results
+*.prof
+*.perf
+profile_results/
+__pycache__/
+
+# Profiling output
+profiling/
+*.html  # flame graphs
+*.json  # profile data

@@ -6,8 +6,53 @@ type-safe Pydantic models for runtime validation.
 """
 
 import re
+from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
+
+from ..constants.defaults import (
+    DEFAULT_CAREER_NAME,
+    DEFAULT_DURATION,
+    DEFAULT_FACULTY,
+    DEFAULT_GROUP_NAME,
+    DEFAULT_SCHEDULE_TYPE,
+    DEFAULT_TEACHER,
+    DEFAULT_TYPOLOGY,
+)
+
+
+def _clean_string_field(value: str | None, default: str) -> str:
+    """Clean optional string field and apply fallback default."""
+    if value is None:
+        return default
+    cleaned = str(value).strip()
+    return cleaned if cleaned else default
+
+
+def _validate_course_code(value: str | None, allow_empty: bool = True) -> str | None:
+    """Validate 7-digit course code.
+
+    Args:
+        value: Raw code value.
+        allow_empty: Whether empty string should be normalized to None.
+
+    Returns:
+        Normalized code or None.
+
+    Raises:
+        ValueError: If code is not a 7-digit numeric string.
+    """
+    if value is None:
+        return None
+
+    if value == "":
+        if allow_empty:
+            return None
+        raise ValueError("Course code cannot be empty")
+
+    if not value.isdigit() or len(value) != 7:
+        raise ValueError(f"Course code must be 7 digits, got '{value}'")
+    return value
 
 
 class Schedule(BaseModel):
@@ -78,56 +123,37 @@ class Group(BaseModel):
     @classmethod
     def clean_group_name(cls, v: str | None) -> str:
         """Clean and set default for group_name."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_GROUP_NAME)
 
     @field_validator("teacher", mode="before")
     @classmethod
     def clean_teacher(cls, v: str | None) -> str:
         """Clean and set default for teacher."""
-        if v is None:
-            return "Not reported"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Not reported"
+        return _clean_string_field(v, DEFAULT_TEACHER)
 
     @field_validator("faculty", mode="before")
     @classmethod
     def clean_faculty(cls, v: str | None) -> str:
         """Clean and set default for faculty."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_FACULTY)
 
     @field_validator("duration", mode="before")
     @classmethod
     def clean_duration(cls, v: str | None) -> str:
         """Clean and set default for duration."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_DURATION)
 
     @field_validator("schedule_type", mode="before")
     @classmethod
     def clean_schedule_type(cls, v: str | None) -> str:
         """Clean and set default for schedule_type."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_SCHEDULE_TYPE)
 
     @field_validator("code")
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
         """Ensure course code is 7 digits or None/empty."""
-        if v is None or v == "":
-            return None
-        if not v.isdigit() or len(v) != 7:
-            raise ValueError(f"Course code must be 7 digits, got '{v}'")
-        return v
+        return _validate_course_code(v)
 
 
 class CourseInfo(BaseModel):
@@ -172,18 +198,13 @@ class CourseInfo(BaseModel):
     @classmethod
     def clean_typology(cls, v: str | None) -> str:
         """Clean and set default for typology."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        return cleaned if cleaned else "Unknown"
+        return _clean_string_field(v, DEFAULT_TYPOLOGY)
 
     @field_validator("code")
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
         """Ensure course code is 7 digits or None."""
-        if v is not None and (not v.isdigit() or len(v) != 7):
-            raise ValueError(f"Course code must be 7 digits, got '{v}'")
-        return v
+        return _validate_course_code(v, allow_empty=False)
 
 
 class Prerequisite(BaseModel):
@@ -200,26 +221,119 @@ class Prerequisite(BaseModel):
     course_name: str = Field(default="", description="Course name")
 
 
+class PrereqType(str, Enum):
+    """SIA prerequisite condition type codes.
+
+    Attributes:
+        M: Cannot enroll without passing prerequisite.
+        O: Can enroll, but cannot be graded without passing prerequisite.
+        E: Must enroll simultaneously or have enrolled before.
+        A: Cancellation due to incompatibility.
+        UNKNOWN: Fallback for unrecognized future SIA type codes.
+    """
+
+    M = "M"
+    O = "O"  # noqa: E741
+    E = "E"
+    A = "A"
+    UNKNOWN = "UNKNOWN"
+
+
 class PrereqCondition(BaseModel):
     """Prerequisite condition with list of required courses.
 
     Attributes:
-        condition: Condition type from SIA (e.g., "Must pass ALL")
-        type: Condition type
-        all_required: Whether all courses are required ("Si" or "No")
-        number_of_courses: Number of required courses
+        condition: Condition number from SIA.
+        type: Prerequisite condition type code.
+        all_required: Whether all listed courses are required.
+        number_of_courses: Number of listed prerequisite courses.
         prerequisites: List of prerequisite courses
     """
 
     model_config = {"frozen": True, "populate_by_name": True}
 
-    condition: str = Field(default="", description="Condition description")
-    type: str = Field(default="", description="Condition type")
-    all_required: str = Field(default="", description="Whether all are required")
-    number_of_courses: str = Field(default="", description="Number of required courses")
+    condition: int = Field(default=0, ge=0, description="Condition number")
+    type: PrereqType = Field(
+        default=PrereqType.UNKNOWN,
+        description="Prerequisite type code (M/O/E/A/UNKNOWN)",
+    )
+    all_required: bool = Field(default=False, description="Whether all listed courses are required")
+    number_of_courses: int = Field(default=0, ge=0, description="Number of required courses")
     prerequisites: list[Prerequisite] = Field(
         default_factory=list, description="List of prerequisite courses"
     )
+
+    @staticmethod
+    def _normalize_token(value: object) -> str:
+        """Normalize input token by stripping whitespace and brackets."""
+        token = str(value).strip()
+        if token.startswith("[") and token.endswith("]"):
+            token = token[1:-1].strip()
+        return token
+
+    @field_validator("condition", mode="before")
+    @classmethod
+    def parse_condition(cls, v: object) -> int:
+        """Parse condition number from SIA value."""
+        if v is None:
+            return 0
+        token = cls._normalize_token(v)
+        if not token:
+            return 0
+
+        if token.isdigit():
+            return int(token)
+
+        match = re.search(r"(\d+)", token)
+        if match:
+            return int(match.group(1))
+
+        raise ValueError(f"Condition must contain a number, got '{v}'")
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def parse_type(cls, v: object) -> PrereqType:
+        """Map raw SIA prerequisite type to PrereqType enum."""
+        if isinstance(v, PrereqType):
+            return v
+        if v is None:
+            return PrereqType.UNKNOWN
+        token = cls._normalize_token(v).upper()
+        if not token:
+            return PrereqType.UNKNOWN
+
+        try:
+            return PrereqType(token)
+        except ValueError:
+            return PrereqType.UNKNOWN
+
+    @field_validator("all_required", mode="before")
+    @classmethod
+    def parse_all_required(cls, v: object) -> bool:
+        """Parse all_required flag from SIA values (S/N, SI/NO)."""
+        if isinstance(v, bool):
+            return v
+        if v is None:
+            return False
+        token = cls._normalize_token(v).upper()
+        if token in {"S", "SI"}:
+            return True
+        if token in {"N", "NO"}:
+            return False
+        return False
+
+    @field_validator("number_of_courses", mode="before")
+    @classmethod
+    def parse_number_of_courses(cls, v: object) -> int:
+        """Parse number of prerequisite courses from SIA value."""
+        if v is None:
+            return 0
+        token = cls._normalize_token(v)
+        if not token:
+            return 0
+        if token.isdigit():
+            return int(token)
+        raise ValueError(f"number_of_courses must be numeric, got '{v}'")
 
 
 class CoursePrereqs(BaseModel):
@@ -262,21 +376,13 @@ class CoursePrereqs(BaseModel):
     @classmethod
     def validate_course_code(cls, v: str | None) -> str | None:
         """Ensure course code is 7 digits or None/empty."""
-        if v is None or v == "":
-            return None
-        if not v.isdigit() or len(v) != 7:
-            raise ValueError(f"Course code must be 7 digits, got '{v}'")
-        return v
+        return _validate_course_code(v)
 
     @field_validator("typology", mode="before")
     @classmethod
     def clean_typology(cls, v: str | None) -> str:
         """Clean and set default for typology."""
-        if v is None:
-            return "Unknown"
-        cleaned = str(v).strip()
-        if not cleaned:
-            return "Unknown"
+        cleaned = _clean_string_field(v, DEFAULT_TYPOLOGY)
         if ": " in cleaned:
             cleaned = cleaned.split(": ")[-1]
         return cleaned
@@ -296,7 +402,7 @@ class SessionState(BaseModel):
         career_code: Hyphen-delimited career code (level-campus-faculty-career)
         career_name: Name of the academic program
         is_electives: Whether the current view shows elective courses
-        STATUS: Current session status as string
+        status: Current session status as string
     """
 
     model_config = {"frozen": True, "populate_by_name": True}
@@ -306,9 +412,12 @@ class SessionState(BaseModel):
     params: dict[str, str] = Field(..., description="URL parameters including ADF IDs")
     javax_faces_ViewState: str | None = Field(default=None, description="JSF ViewState token")
     career_code: str = Field(default="", description="Career code (empty if no career set)")
-    career_name: str = Field(default="", description="Career name (empty if no career set)")
+    career_name: str = Field(
+        default=DEFAULT_CAREER_NAME,
+        description="Career name (default if no career set)",
+    )
     is_electives: bool = Field(..., description="Whether viewing elective courses")
-    STATUS: str = Field(..., description="Session status name")
+    status: str = Field(..., description="Session status name")
 
     @field_validator("params")
     @classmethod
@@ -319,3 +428,52 @@ class SessionState(BaseModel):
         if missing:
             raise ValueError(f"Missing required ADF parameters: {missing}")
         return v
+
+
+class ScrapeResult(BaseModel):
+    """Result from batch scraping operation.
+
+    This model encapsulates the outcome of a batch scrape operation,
+    including success/failure counts and detailed results.
+
+    Attributes:
+        successes: List of successfully scraped courses
+        failures: List of (index, error_message) tuples for failed scrapes
+        total: Total number of courses attempted
+        success_rate: Percentage of successful scrapes (0-100)
+    """
+
+    model_config = {"frozen": True, "populate_by_name": True}
+
+    successes: list[CourseInfo] = Field(
+        default_factory=list, description="Successfully scraped courses"
+    )
+    failures: list[tuple[int, str]] = Field(
+        default_factory=list, description="Failed scrape attempts as (index, error)"
+    )
+    total: int = Field(ge=0, description="Total courses attempted")
+    success_rate: float = Field(ge=0, le=100, description="Success rate as percentage")
+
+    @classmethod
+    def create(
+        cls,
+        successes: list[CourseInfo],
+        failures: list[tuple[int, str]],
+    ) -> "ScrapeResult":
+        """Create a ScrapeResult with calculated success rate."""
+        total = len(successes) + len(failures)
+        success_rate = (len(successes) / total * 100) if total > 0 else 0.0
+        return cls(
+            successes=successes,
+            failures=failures,
+            total=total,
+            success_rate=round(success_rate, 2),
+        )
+
+
+class ErrorMode(str, Enum):
+    """Error handling mode for batch scraping operations."""
+
+    SKIP = "skip"
+    RETRY = "retry"
+    ABORT = "abort"

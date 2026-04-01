@@ -7,6 +7,7 @@ from sia_scraper.parsers.models import (
     CoursePrereqs,
     Group,
     PrereqCondition,
+    PrereqType,
     Prerequisite,
     Schedule,
 )
@@ -119,20 +120,20 @@ class TestPrereqModels:
 
     def test_prereq_condition_fields(self) -> None:
         condition = PrereqCondition(
-            condition="Debe aprobar",
-            type="Materia",
-            all_required="SI",
-            number_of_courses="2",
+            condition=1,
+            type=PrereqType.M,
+            all_required=True,
+            number_of_courses=2,
             prerequisites=[
                 Prerequisite(course_code="1000001", course_name="CALCULO"),
                 Prerequisite(course_code="1000002", course_name="ALGEBRA"),
             ],
         )
 
-        assert condition.condition == "Debe aprobar"
-        assert condition.type == "Materia"
-        assert condition.all_required == "SI"
-        assert condition.number_of_courses == "2"
+        assert condition.condition == 1
+        assert condition.type == PrereqType.M
+        assert condition.all_required is True
+        assert condition.number_of_courses == 2
         assert len(condition.prerequisites) == 2
 
     def test_course_prereqs_fields(self) -> None:
@@ -143,10 +144,10 @@ class TestPrereqModels:
             typology="DISCIPLINAR OBLIGATORIA",
             conditions=[
                 PrereqCondition(
-                    condition="Debe aprobar",
-                    type="Materia",
-                    all_required="SI",
-                    number_of_courses="1",
+                    condition=1,
+                    type=PrereqType.M,
+                    all_required=True,
+                    number_of_courses=1,
                     prerequisites=[Prerequisite(course_code="1000001", course_name="CALCULO")],
                 )
             ],

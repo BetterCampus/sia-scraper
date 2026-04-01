@@ -1,6 +1,13 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools>=61.0", "maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["extension-module"]
+module-name = "sia_scraper_rust"
+manifest-path = "Cargo.toml"
+python-source = "src"
+python-packages = ["sia_scraper", "sia_scraper_rust"]
 
 [project]
 name = "sia-scraper"
@@ -9,27 +16,36 @@ description = "Library to extract academic information from the SIA"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "requests~=2.32.3",
     "lxml~=5.2.0",
     "cssselect~=1.2.0",
     "pydantic>=2.0,<3.0",
-    "tenacity~=8.3.0",
     "loguru~=0.7.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-asyncio",
     "pytest-mock",
     "pytest-cov",
     "pyright",
     "ruff~=0.15.8",
     "lxml-stubs",
     "pyyaml",
+    "hypothesis",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: marks unit tests",
+    "integration: marks tests that make real HTTP requests to SIA",
+    "network: marks tests that require network connectivity to SIA",
+]
+asyncio_mode = "auto"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["sia_scraper*"]
 
 [tool.ruff]
 target-version = "py310"
@@ -61,10 +77,3 @@ line-ending = "auto"
 
 [tool.ruff.lint.isort]
 known-first-party = ["sia_scraper"]
-
-[tool.pytest.ini_options]
-markers = [
-    "unit: marks unit tests",
-    "integration: marks tests that make real HTTP requests to SIA",
-    "network: marks tests that require network connectivity to SIA",
-]

@@ -1,0 +1,32 @@
+name: Rust Fuzz Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0"
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Fuzz get_course_list (60s)
+        run: cargo fuzz run --manifest-path fuzz/Cargo.toml fuzz_get_course_list -- -max_total_time=60
+
+      - name: Fuzz get_plain_text (60s)
+        run: cargo fuzz run --manifest-path fuzz/Cargo.toml fuzz_get_plain_text -- -max_total_time=60
+
+      - name: Fuzz extract_view_state (60s)
+        run: cargo fuzz run --manifest-path fuzz/Cargo.toml fuzz_extract_view_state -- -max_total_time=60

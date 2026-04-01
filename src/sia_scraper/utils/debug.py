@@ -73,7 +73,7 @@ def debug_log(message: str, data: str | dict[str, Any] | None = None) -> None:
         logger.debug(message, extra={"data": str(data)})
 
 
-def info_log(message: str, data: dict[str, Any] | None = None) -> None:
+def info_log(message: str, data: Any = None) -> None:
     """Log informational messages to file.
 
     ## Args
@@ -88,7 +88,7 @@ def info_log(message: str, data: dict[str, Any] | None = None) -> None:
         logger.info(message, extra={"data": str(data)})
 
 
-def error_log(message: str, data: dict[str, Any] | None = None) -> None:
+def error_log(message: str, data: Any = None) -> None:
     """Log error messages to both file and error log.
 
     ## Args

@@ -8,6 +8,8 @@ import re
 from datetime import datetime
 from typing import Any
 
+import sia_scraper_rust
+
 from ..constants.business import (
     GROUP_DURATION_INDEX,
     GROUP_FACULTY_INDEX,
@@ -16,6 +18,15 @@ from ..constants.business import (
     GROUP_SPOTS_INDEX,
     GROUP_TEACHER_INDEX,
     MIN_GROUP_DATA_LENGTH_WITH_SPOTS,
+    REQUIRED_CONDITION_HEADERS,
+)
+from ..constants.defaults import (
+    DEFAULT_DURATION,
+    DEFAULT_FACULTY,
+    DEFAULT_GROUP_NAME,
+    DEFAULT_SCHEDULE_TYPE,
+    DEFAULT_TEACHER,
+    DEFAULT_TYPOLOGY,
 )
 from ..utils import format_date
 from .html_parser import HtmlElement, HtmlParser
@@ -40,8 +51,7 @@ def get_plain_text(xml: str) -> str:
     ## Returns
         Plain text content before the first triple non-breaking space separator.
     """
-    parser = HtmlParser(xml)
-    return parser.text_content().split("\xa0\xa0\xa0")[0]
+    return sia_scraper_rust.get_plain_text(xml)  # type: ignore[attr-defined]
 
 
 def _extract_credits(parser: HtmlParser) -> int:
@@ -74,13 +84,13 @@ def _extract_typology(parser: HtmlParser) -> str:
     ## Returns
         Course typology string, or "Unknown" if not found.
     """
-    tipology_elem = parser.find("span", class_="detass-tipologia")
-    if tipology_elem is None:
-        return "Unknown"
-    tipology_spans = tipology_elem.findall(".//span")
-    if not tipology_spans:
-        return "Unknown"
-    return _safe_text_content(tipology_spans[-1], fallback="Unknown")
+    typology_elem = parser.find("span", class_="detass-tipologia")
+    if typology_elem is None:
+        return DEFAULT_TYPOLOGY
+    typology_spans = typology_elem.findall(".//span")
+    if not typology_spans:
+        return DEFAULT_TYPOLOGY
+    return _safe_text_content(typology_spans[-1], fallback=DEFAULT_TYPOLOGY)
 
 
 def _safe_text_content(element: Any, fallback: str = "") -> str:
@@ -94,7 +104,7 @@ def _safe_text_content(element: Any, fallback: str = "") -> str:
         return fallback
 
 
-def _extract_label_value(item: HtmlElement, fallback: str = "Unknown") -> str:
+def _extract_label_value(item: HtmlElement, fallback: str = DEFAULT_TYPOLOGY) -> str:
     spans = item.findall(".//span")
     if not spans:
         return fallback
@@ -195,14 +205,86 @@ def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
     spots = _extract_spots(group_data)
 
     return Group(
-        group_name=group_name or "",
-        teacher=teacher or "",
-        faculty=faculty or "",
+        group_name=group_name or DEFAULT_GROUP_NAME,
+        teacher=teacher or DEFAULT_TEACHER,
+        faculty=faculty or DEFAULT_FACULTY,
         course_name=course_name,
         schedules=schedules,
-        duration=duration or "",
-        schedule_type=schedule_type or "",
+        duration=duration or DEFAULT_DURATION,
+        schedule_type=schedule_type or DEFAULT_SCHEDULE_TYPE,
         spots=spots,
+    )
+
+
+def _extract_prereq_metadata(parser: HtmlParser) -> tuple[str, int, str]:
+    """Extract basic course metadata required by prerequisites parser."""
+    h2_elements = parser.find_all("h2")
+    if not h2_elements:
+        raise ValueError("Course name element not found in prerequisites XML")
+
+    course_name = _safe_text_content(h2_elements[0])
+    credits = _extract_credits(parser)
+    typology = _extract_typology(parser)
+    return course_name, credits, typology
+
+
+def _extract_condition_values(condition_info_div: HtmlElement) -> list[str] | None:
+    """Extract ordered condition fields from a condition info block."""
+    condition_headers_spans = condition_info_div.css_select(
+        "span.strong.af_panelGroupLayout > span.margin-l"
+    )
+    condition_values_spans = [header.getnext() for header in condition_headers_spans]
+
+    if len(condition_headers_spans) != len(condition_values_spans):
+        return None
+    if len(condition_headers_spans) < REQUIRED_CONDITION_HEADERS:
+        return None
+
+    return [
+        _safe_text_content(condition_values_spans[0]),
+        _safe_text_content(condition_values_spans[1]),
+        _safe_text_content(condition_values_spans[2]),
+        _safe_text_content(condition_values_spans[3]),
+    ]
+
+
+def _extract_prereqs_from_divs(condition_prereq_divs: list[HtmlElement]) -> list[Prerequisite]:
+    """Extract prerequisite courses from prerequisite container divs."""
+    prereqs: list[Prerequisite] = []
+    for prereq_div in condition_prereq_divs:
+        prereq_code_spans = prereq_div.css_select("span.af_panelGroupLayout > span")
+        if not prereq_code_spans:
+            continue
+
+        prereq_code_span = prereq_code_spans[0]
+        prereq_code = _safe_text_content(prereq_code_span)
+        next_sibling = prereq_code_span.getnext()
+        prereq_name = _safe_text_content(next_sibling)
+
+        prereqs.append(Prerequisite(course_code=prereq_code, course_name=prereq_name))
+
+    return prereqs
+
+
+def _parse_condition(condition_div: HtmlElement) -> PrereqCondition | None:
+    """Parse one prerequisite condition block into a validated model."""
+    condition_sub_divs = list(condition_div)
+    if len(condition_sub_divs) < 2:
+        return None
+
+    condition_values = _extract_condition_values(condition_sub_divs[0])
+    if condition_values is None:
+        return None
+
+    prereqs = _extract_prereqs_from_divs(condition_sub_divs[1:])
+    return PrereqCondition.model_validate(
+        {
+            "condition": condition_values[0],
+            "type": condition_values[1],
+            "all_required": condition_values[2],
+            "number_of_courses": condition_values[3],
+            "prerequisites": prereqs,
+        }
     )
 
 
@@ -264,15 +346,7 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
     """
     parser = HtmlParser(xml)
 
-    h2_elements = parser.find_all("h2")
-    if not h2_elements:
-        raise ValueError("Course name element not found in prerequisites XML")
-    course_name = _safe_text_content(h2_elements[0])
-
-    credits = _extract_credits(parser)
-
-    tipology_elements = parser.find_all("span", class_="detass-tipologia")
-    typology: str | None = tipology_elements[0].text_content() if tipology_elements else None
+    course_name, credits, typology = _extract_prereq_metadata(parser)
 
     conditions: list[PrereqCondition] = []
 
@@ -281,57 +355,14 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
     )
 
     for condition_div in condition_divs:
-        condition_sub_divs = list(condition_div)
-        if len(condition_sub_divs) < 2:
-            continue
-
-        condition_info_div = condition_sub_divs[0]
-        condition_headers_spans = condition_info_div.css_select(
-            "span.strong.af_panelGroupLayout > span.margin-l"
-        )
-        condition_values_spans = [header.getnext() for header in condition_headers_spans]
-
-        if len(condition_headers_spans) != len(condition_values_spans):
-            continue
-        if len(condition_headers_spans) < 4:
-            continue
-
-        prereq_values = [
-            _safe_text_content(condition_values_spans[0]),
-            _safe_text_content(condition_values_spans[1]),
-            _safe_text_content(condition_values_spans[2]),
-            _safe_text_content(condition_values_spans[3]),
-        ]
-
-        prereqs: list[Prerequisite] = []
-        condition_prereq_divs = condition_sub_divs[1:]
-
-        for prereq_div in condition_prereq_divs:
-            prereq_code_spans = prereq_div.css_select("span.af_panelGroupLayout > span")
-            if not prereq_code_spans:
-                continue
-
-            prereq_code_span = prereq_code_spans[0]
-            prereq_code = _safe_text_content(prereq_code_span)
-            next_sibling = prereq_code_span.getnext()
-            prereq_name = _safe_text_content(next_sibling)
-
-            prereqs.append(Prerequisite(course_code=prereq_code, course_name=prereq_name))
-
-        conditions.append(
-            PrereqCondition(
-                condition=prereq_values[0],
-                type=prereq_values[1],
-                all_required=prereq_values[2],
-                number_of_courses=prereq_values[3],
-                prerequisites=prereqs,
-            )
-        )
+        condition = _parse_condition(condition_div)
+        if condition is not None:
+            conditions.append(condition)
 
     return CoursePrereqs(
         course_name=course_name,
         code=None,
         credits=credits,
-        typology=typology or "",
+        typology=typology,
         conditions=conditions,
     )

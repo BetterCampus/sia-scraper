@@ -1,0 +1,33 @@
+[package]
+name = "sia-scraper-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+sia_scraper_rust = { package = "sia-scraper", path = ".." }
+
+[[bin]]
+name = "fuzz_get_course_list"
+path = "fuzz_targets/fuzz_get_course_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_get_plain_text"
+path = "fuzz_targets/fuzz_get_plain_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_extract_view_state"
+path = "fuzz_targets/fuzz_extract_view_state.rs"
+test = false
+doc = false
+bench = false

@@ -8,6 +8,7 @@ from sia_scraper.parsers import (
     CourseInfo,
     CoursePrereqs,
     Group,
+    PrereqType,
     Schedule,
     get_plain_text,
     scrape_info,
@@ -282,6 +283,17 @@ class TestScrapePrereqs:
         assert prereqs.typology != ""
         assert hasattr(prereqs, "conditions")
 
+    def test_scrape_prereqs_condition_fields_are_typed(self, sample_prereqs_xml):
+        """Prerequisite condition fields should be normalized to typed values."""
+        prereqs = scrape_prereqs(sample_prereqs_xml)
+
+        assert prereqs.conditions
+        first = prereqs.conditions[0]
+        assert first.condition == 1
+        assert first.type == PrereqType.M
+        assert first.all_required is False
+        assert first.number_of_courses == 1
+
     def test_scrape_prereqs_empty_xml(self):
         """Test scraping prerequisites from empty XML."""
         empty_xml = "<div></div>"
@@ -333,24 +345,24 @@ class TestScrapePrereqs:
         result = scrape_prereqs(xml)
         assert result.conditions == []
 
-    def test_scrape_prereqs_skips_when_less_than_four_headers(self):
+    def test_scrape_prereqs_skips_when_less_than_required_headers(self):
         parser = MagicMock()
-        parser.findall.side_effect = [
+        parser.find_all.side_effect = [
             [MagicMock(text_content=MagicMock(return_value="CURSO (1000)"))],
-            [MagicMock(text_content=MagicMock(return_value="Tipología: DISCIPLINAR OBLIGATORIA"))],
+            [],
+            [],
         ]
         parser.find.return_value.find.return_value.text_content.return_value = "3"
         condition_div = MagicMock()
         condition_info_div = MagicMock()
-        h1, h2, h3 = MagicMock(), MagicMock(), MagicMock()
+        h1, h2 = MagicMock(), MagicMock()
         for h, key, val in [
-            (h1, "Condición", "Debe aprobar"),
-            (h2, "Tipo", "Materia"),
-            (h3, "¿Todas?", "SI"),
+            (h1, "Condición", "1"),
+            (h2, "Tipo", "M"),
         ]:
             h.text_content.return_value = key
             h.getnext.return_value = MagicMock(text_content=MagicMock(return_value=val))
-        condition_info_div.css_select.return_value = [h1, h2, h3]
+        condition_info_div.css_select.return_value = [h1, h2]
         condition_div.__iter__ = MagicMock(return_value=iter([condition_info_div, MagicMock()]))
         parser.css_select.return_value = [condition_div]
         with patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser):
@@ -368,8 +380,8 @@ class TestScrapePrereqs:
         condition_info_div = MagicMock()
         headers = []
         for key, val in [
-            ("Condición", "Debe aprobar"),
-            ("Tipo", "Materia"),
+            ("Condición", "1"),
+            ("Tipo", "M"),
             ("¿Todas?", "SI"),
             ("Número asignaturas", "2"),
         ]:
@@ -417,10 +429,10 @@ class TestScrapePrereqs:
         condition_info_div = MagicMock()
         h1 = MagicMock()
         h1.text_content.return_value = "Condición"
-        h1.getnext.return_value = MagicMock(text_content=MagicMock(return_value="Debe aprobar"))
+        h1.getnext.return_value = MagicMock(text_content=MagicMock(return_value="1"))
         h2 = MagicMock()
         h2.text_content.return_value = "Tipo"
-        h2.getnext.return_value = MagicMock(text_content=MagicMock(return_value="Materia"))
+        h2.getnext.return_value = MagicMock(text_content=MagicMock(return_value="M"))
         h3 = MagicMock()
         h3.text_content.return_value = "¿Todas?"
         h3.getnext.return_value = MagicMock(text_content=MagicMock(return_value="SI"))
@@ -434,3 +446,56 @@ class TestScrapePrereqs:
         with patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser):
             out = scrape_prereqs("<xml/>")
         assert out.conditions == []
+
+
+@pytest.mark.unit
+class TestSafeTextContent:
+    """Test _safe_text_content helper function edge cases."""
+
+    def test_returns_fallback_for_none(self):
+        """Should return fallback when element is None."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        result = _safe_text_content(None, fallback="DEFAULT")
+        assert result == "DEFAULT"
+
+    def test_returns_fallback_for_missing_text_content_method(self):
+        """Should return fallback when element has no text_content method."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        class NoTextContentMethod:
+            pass
+
+        result = _safe_text_content(NoTextContentMethod(), fallback="FALLBACK")
+        assert result == "FALLBACK"
+
+    def test_returns_fallback_when_text_content_raises_type_error(self):
+        """Should return fallback when text_content raises TypeError."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        class RaisesTypeError:
+            def text_content(self):
+                raise TypeError("cannot get text")
+
+        result = _safe_text_content(RaisesTypeError(), fallback="ERROR_FALLBACK")
+        assert result == "ERROR_FALLBACK"
+
+    def test_returns_stripped_text(self):
+        """Should return stripped text content."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        mock_elem = MagicMock()
+        mock_elem.text_content.return_value = "  hello world  "
+
+        result = _safe_text_content(mock_elem)
+        assert result == "hello world"
+
+    def test_returns_fallback_for_empty_text(self):
+        """Should return fallback when text is empty."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        mock_elem = MagicMock()
+        mock_elem.text_content.return_value = ""
+
+        result = _safe_text_content(mock_elem, fallback="EMPTY")
+        assert result == "EMPTY"

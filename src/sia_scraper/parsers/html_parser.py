@@ -251,26 +251,14 @@ def get_course_list(content: bytes | str) -> list[dict[str, str]]:
         Target: Oracle ADF table → <tr class="af_table_data-row"> elements.
         Each row contains <span class="af_column_data-container"> for code and name.
         First span = course code, second span = course name.
+
+    ## Implementation
+        Uses Rust extension for performance (sia_scraper_rust.get_course_list).
     """
-    from sia_scraper.constants import COURSE_CODE_COL, COURSE_NAME_COL
-
-    html_content = (
-        content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else content
+    from sia_scraper_rust import (
+        get_course_list as rust_get_course_list,  # type: ignore[attr-defined]
     )
-    html_parser = HtmlParser(html_content)
 
-    rows = html_parser.find_all("tr", class_="af_table_data-row")
-
-    course_list = []
-    for row in rows:
-        data_spans = row.findall(".//span[@class='af_column_data-container']")
-
-        if len(data_spans) < 2:
-            continue
-
-        course_code = data_spans[COURSE_CODE_COL].text_content().strip()
-        course_name = data_spans[COURSE_NAME_COL].text_content().strip()
-
-        course_list.append({course_code: course_name})
-
-    return course_list
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="ignore")
+    return rust_get_course_list(content)

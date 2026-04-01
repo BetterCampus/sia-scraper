@@ -8,9 +8,12 @@ from sia_scraper.parsers.models import (
     CoursePrereqs,
     Group,
     PrereqCondition,
+    PrereqType,
     Prerequisite,
     Schedule,
     SessionState,
+    _clean_string_field,
+    _validate_course_code,
 )
 
 
@@ -296,6 +299,111 @@ class TestPrerequisiteValidation:
 
 
 @pytest.mark.unit
+class TestPrereqConditionValidation:
+    """Test PrereqCondition validation and type conversion rules."""
+
+    @staticmethod
+    def _build(**payload) -> PrereqCondition:
+        return PrereqCondition.model_validate(payload)
+
+    def test_condition_parses_plain_number(self) -> None:
+        condition = self._build(condition="3")
+        assert condition.condition == 3
+
+    def test_condition_parses_bracketed_number(self) -> None:
+        condition = self._build(condition="[2]")
+        assert condition.condition == 2
+
+    def test_condition_empty_defaults_to_zero(self) -> None:
+        condition = self._build(condition="")
+        assert condition.condition == 0
+
+    def test_condition_invalid_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            self._build(condition="abc")
+
+    def test_type_m_valid(self) -> None:
+        condition = self._build(type="M")
+        assert condition.type == PrereqType.M
+
+    def test_type_o_valid(self) -> None:
+        condition = self._build(type="O")
+        assert condition.type == PrereqType.O
+
+    def test_type_e_valid(self) -> None:
+        condition = self._build(type="E")
+        assert condition.type == PrereqType.E
+
+    def test_type_a_valid(self) -> None:
+        condition = self._build(type="A")
+        assert condition.type == PrereqType.A
+
+    def test_type_bracketed(self) -> None:
+        condition = self._build(type="[M]")
+        assert condition.type == PrereqType.M
+
+    def test_type_lowercase(self) -> None:
+        condition = self._build(type="m")
+        assert condition.type == PrereqType.M
+
+    def test_type_unknown_maps_to_unknown(self) -> None:
+        condition = self._build(type="Z")
+        assert condition.type == PrereqType.UNKNOWN
+
+    def test_type_empty_defaults_unknown(self) -> None:
+        condition = self._build(type="")
+        assert condition.type == PrereqType.UNKNOWN
+
+    def test_all_required_s_is_true(self) -> None:
+        condition = self._build(all_required="S")
+        assert condition.all_required is True
+
+    def test_all_required_n_is_false(self) -> None:
+        condition = self._build(all_required="N")
+        assert condition.all_required is False
+
+    def test_all_required_bracketed_s(self) -> None:
+        condition = self._build(all_required="[S]")
+        assert condition.all_required is True
+
+    def test_all_required_bracketed_n(self) -> None:
+        condition = self._build(all_required="[N]")
+        assert condition.all_required is False
+
+    def test_all_required_si_is_true(self) -> None:
+        condition = self._build(all_required="SI")
+        assert condition.all_required is True
+
+    def test_all_required_no_is_false(self) -> None:
+        condition = self._build(all_required="NO")
+        assert condition.all_required is False
+
+    def test_all_required_empty_defaults_false(self) -> None:
+        condition = self._build(all_required="")
+        assert condition.all_required is False
+
+    def test_all_required_invalid_defaults_false(self) -> None:
+        condition = self._build(all_required="maybe")
+        assert condition.all_required is False
+
+    def test_number_of_courses_parses_plain(self) -> None:
+        condition = self._build(number_of_courses="5")
+        assert condition.number_of_courses == 5
+
+    def test_number_of_courses_parses_bracketed(self) -> None:
+        condition = self._build(number_of_courses="[3]")
+        assert condition.number_of_courses == 3
+
+    def test_number_of_courses_empty_defaults_zero(self) -> None:
+        condition = self._build(number_of_courses="")
+        assert condition.number_of_courses == 0
+
+    def test_number_of_courses_invalid_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            self._build(number_of_courses="xyz")
+
+
+@pytest.mark.unit
 class TestCoursePrereqsValidation:
     """Test CoursePrereqs validation rules."""
 
@@ -342,10 +450,10 @@ class TestCoursePrereqsValidation:
             typology="DISCIPLINAR",
             conditions=[
                 PrereqCondition(
-                    condition="Debe aprobar",
-                    type="Materia",
-                    all_required="SI",
-                    number_of_courses="1",
+                    condition=1,
+                    type=PrereqType.M,
+                    all_required=True,
+                    number_of_courses=1,
                     prerequisites=[Prerequisite(course_code="1000001", course_name="CALCULO")],
                 )
             ],
@@ -369,7 +477,7 @@ class TestSessionStateValidation:
                 career_code="1-1-1-1",
                 career_name="Ingenieria",
                 is_electives=False,
-                STATUS="READY",
+                status="READY",
             )
         assert "params" in str(exc_info.value)
 
@@ -384,7 +492,7 @@ class TestSessionStateValidation:
                 career_code="1-1-1-1",
                 career_name="Ingenieria",
                 is_electives=False,
-                STATUS="READY",
+                status="READY",
             )
 
     def test_session_state_valid_full(self) -> None:
@@ -397,7 +505,7 @@ class TestSessionStateValidation:
             career_code="1-01-01-1000",
             career_name="Ingenieria de Sistemas",
             is_electives=False,
-            STATUS="READY",
+            status="READY",
         )
         assert state.career_code == "1-01-01-1000"
         assert state.is_electives is False
@@ -412,7 +520,7 @@ class TestSessionStateValidation:
             career_code="1-01-01-1000",
             career_name="Ingenieria",
             is_electives=False,
-            STATUS="CAREER_NOT_SET",
+            status="CAREER_NOT_SET",
         )
         assert state.javax_faces_ViewState is None
 
@@ -459,3 +567,179 @@ class TestModelImmutability:
         )
         with pytest.raises(ValidationError):
             course.credits = 5
+
+
+@pytest.mark.unit
+class TestHelperFunctions:
+    """Test helper functions for model validators."""
+
+    def test_clean_string_field_returns_default_for_none(self) -> None:
+        """_clean_string_field should return default when value is None."""
+        result = _clean_string_field(None, "DEFAULT")
+        assert result == "DEFAULT"
+
+    def test_clean_string_field_strips_whitespace(self) -> None:
+        """_clean_string_field should strip whitespace."""
+        result = _clean_string_field("  hello  ", "DEFAULT")
+        assert result == "hello"
+
+    def test_clean_string_field_returns_default_for_empty_string(self) -> None:
+        """_clean_string_field should return default for empty string."""
+        result = _clean_string_field("", "DEFAULT")
+        assert result == "DEFAULT"
+
+    def test_validate_course_code_returns_none_for_none(self) -> None:
+        """_validate_course_code should return None when value is None."""
+        result = _validate_course_code(None)
+        assert result is None
+
+    def test_validate_course_code_returns_none_for_empty_with_allow_empty(self) -> None:
+        """_validate_course_code should return None for empty when allow_empty=True."""
+        result = _validate_course_code("", allow_empty=True)
+        assert result is None
+
+    def test_validate_course_code_raises_for_empty_without_allow_empty(self) -> None:
+        """_validate_course_code should raise for empty when allow_empty=False."""
+        with pytest.raises(ValueError, match="cannot be empty"):
+            _validate_course_code("", allow_empty=False)
+
+    def test_validate_course_code_raises_for_non_numeric(self) -> None:
+        """_validate_course_code should raise for non-numeric input."""
+        with pytest.raises(ValueError, match="7 digits"):
+            _validate_course_code("ABC1234")
+
+    def test_validate_course_code_returns_valid_code(self) -> None:
+        """_validate_course_code should return valid code."""
+        result = _validate_course_code("1234567")
+        assert result == "1234567"
+
+
+@pytest.mark.unit
+class TestScheduleClassroomNone:
+    """Test Schedule classroom validator with None input."""
+
+    def test_schedule_classroom_none_becomes_empty(self) -> None:
+        """Schedule with None classroom should become empty string."""
+        schedule = Schedule(
+            day="LUNES",
+            start_time="08:00",
+            end_time="10:00",
+            classroom=None,  # type: ignore[assignment]
+        )
+        assert schedule.classroom == ""
+
+
+@pytest.mark.unit
+class TestCourseInfoValidators:
+    """Test CourseInfo validator edge cases."""
+
+    def test_course_name_none_raises(self) -> None:
+        """CourseInfo with None course_name should raise."""
+        with pytest.raises(ValidationError, match="cannot be None"):
+            CourseInfo(
+                course_name=None,  # type: ignore[assignment]
+                credits=3,
+                typology="Test",
+                available_spots=5,
+                scrape_timestamp="2026-03-30 10:00",
+                groups=[],
+            )
+
+    def test_course_name_empty_raises(self) -> None:
+        """CourseInfo with empty course_name should raise."""
+        with pytest.raises(ValidationError, match="cannot be empty"):
+            CourseInfo(
+                course_name="   ",
+                credits=3,
+                typology="Test",
+                available_spots=5,
+                scrape_timestamp="2026-03-30 10:00",
+                groups=[],
+            )
+
+
+@pytest.mark.unit
+class TestPrereqConditionEdgeCases:
+    """Test PrereqCondition validator edge cases."""
+
+    def test_condition_none_returns_zero(self) -> None:
+        """PrereqCondition with None condition should default to 0."""
+        cond = PrereqCondition(
+            condition=None,  # type: ignore[assignment]
+            type="M",  # type: ignore[assignment]
+            all_required="SI",  # type: ignore[assignment]
+            number_of_courses="1",  # type: ignore[assignment]
+            prerequisites=[],
+        )
+        assert cond.condition == 0
+
+    def test_condition_with_bracketed_extraction(self) -> None:
+        """PrereqCondition should extract number from bracketed format."""
+        cond = PrereqCondition(
+            condition="[5]",  # type: ignore[assignment]
+            type="M",  # type: ignore[assignment]
+            all_required="SI",  # type: ignore[assignment]
+            number_of_courses="1",  # type: ignore[assignment]
+            prerequisites=[],
+        )
+        assert cond.condition == 5
+
+    def test_condition_with_mixed_content_regex_extraction(self) -> None:
+        """PrereqCondition should extract digits from mixed content string."""
+        cond = PrereqCondition(
+            condition="abc123",  # type: ignore[assignment]
+            type="M",  # type: ignore[assignment]
+            all_required="SI",  # type: ignore[assignment]
+            number_of_courses="1",  # type: ignore[assignment]
+            prerequisites=[],
+        )
+        assert cond.condition == 123
+
+    def test_type_none_returns_unknown(self) -> None:
+        """PrereqCondition with None type should default to UNKNOWN."""
+        cond = PrereqCondition(
+            condition="1",  # type: ignore[assignment]
+            type=None,  # type: ignore[assignment]
+            all_required="SI",  # type: ignore[assignment]
+            number_of_courses="1",  # type: ignore[assignment]
+            prerequisites=[],
+        )
+        assert cond.type == PrereqType.UNKNOWN
+
+    def test_all_required_none_returns_false(self) -> None:
+        """PrereqCondition with None all_required should default to False."""
+        cond = PrereqCondition(
+            condition="1",  # type: ignore[assignment]
+            type="M",  # type: ignore[assignment]
+            all_required=None,  # type: ignore[assignment]
+            number_of_courses="1",  # type: ignore[assignment]
+            prerequisites=[],
+        )
+        assert cond.all_required is False
+
+    def test_number_of_courses_none_returns_zero(self) -> None:
+        """PrereqCondition with None number_of_courses should default to 0."""
+        cond = PrereqCondition(
+            condition="1",  # type: ignore[assignment]
+            type="M",  # type: ignore[assignment]
+            all_required="SI",  # type: ignore[assignment]
+            number_of_courses=None,  # type: ignore[assignment]
+            prerequisites=[],
+        )
+        assert cond.number_of_courses == 0
+
+
+@pytest.mark.unit
+class TestCoursePrereqsTypology:
+    """Test CoursePrereqs typology validator with colon format."""
+
+    def test_typology_with_colon_prefix_extracts_value(self) -> None:
+        """CoursePrereqs should extract value after colon in typology."""
+        prereqs = CoursePrereqs(
+            course_name="Test Course",
+            code=None,
+            credits=3,
+            typology="Tipologia: DISCIPLINAR OBLIGATORIA",
+            conditions=[],
+        )
+        assert prereqs.typology == "DISCIPLINAR OBLIGATORIA"

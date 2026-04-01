@@ -1,0 +1,39 @@
+[package]
+name = "sia-scraper"
+version = "0.1.0"
+edition = "2021"
+description = "Rust extensions for sia-scraper"
+
+[lib]
+name = "sia_scraper_rust"
+crate-type = ["cdylib", "rlib"]
+path = "rust/src/lib.rs"
+
+[features]
+default = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["auto-initialize"] }
+scraper = "0.20"
+quick-xml = "0.31"
+thiserror = "1.0"
+log = "0.4"
+regex = "1.10"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+
+# Async HTTP - Phase 4.1+
+pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "cookies"] }
+
+[dev-dependencies]
+proptest = "1.6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

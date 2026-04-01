@@ -69,3 +69,41 @@ class TestGetCourseList:
         </table>
         """
         assert get_course_list(html) == [{"1000001": "CALCULO"}]
+
+
+@pytest.mark.unit
+class TestHtmlElementMethods:
+    """Test HtmlElement method edge cases."""
+
+    def test_get_returns_attribute_value(self):
+        parser = HtmlParser('<div id="test-id">content</div>')
+        elem = HtmlElement(parser.root)
+        assert elem.get("id") == "test-id"
+
+    def test_get_returns_default_for_missing_attribute(self):
+        parser = HtmlParser("<div>no attrs</div>")
+        elem = HtmlElement(parser.root)
+        assert elem.get("missing-attr") is None
+
+    def test_get_returns_custom_default_for_missing_attribute(self):
+        parser = HtmlParser("<div>no attrs</div>")
+        elem = HtmlElement(parser.root)
+        assert elem.get("missing-attr", "fallback") == "fallback"
+
+    def test_text_property_returns_direct_text(self):
+        parser = HtmlParser("<div>direct text</div>")
+        elem = HtmlElement(parser.root)
+        assert elem.text == "direct text"
+
+    def test_text_property_returns_empty_for_no_text(self):
+        parser = HtmlParser("<div><span>nested</span></div>")
+        elem = HtmlElement(parser.root)
+        assert elem.text == ""
+
+    def test_text_content_returns_all_text_content(self):
+        parser = HtmlParser("<div>hello <span>world</span></div>")
+        assert parser.text_content() == "hello world"
+
+    def test_text_content_returns_empty_for_empty_document(self):
+        parser = HtmlParser("<div></div>")
+        assert parser.text_content() == ""

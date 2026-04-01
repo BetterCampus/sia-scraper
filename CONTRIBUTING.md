@@ -18,7 +18,23 @@ Clone and install:
 git clone https://github.com/BetterCampus/sia-scraper.git
 cd sia-scraper
 pip install -e ".[dev]"
+python scripts/sync_rust_extension.py --build --release --verify
 ```
+
+### Rust Extension Workflow (Important)
+
+Use the sync script whenever you change Rust code:
+
+```bash
+python scripts/sync_rust_extension.py --build --release --verify
+```
+
+Why this is required:
+
+- The project uses `setuptools` for editable Python installs and `maturin` for Rust wheels.
+- `maturin develop` and `pip install -e .` can overwrite each other in local environments.
+- The sync script avoids that conflict by copying the compiled extension directly into
+  `src/sia_scraper_rust/` for stable local imports.
 
 Quick validation:
 

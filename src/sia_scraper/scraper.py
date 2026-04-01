@@ -1,224 +1,131 @@
-"""SIA Scraper Orchestrator Module.
+"""Async SIA scraper facade backed by Rust session workflow."""
 
-This module provides the high-level orchestration layer for scraping course data from
-Universidad Nacional de Colombia's SIA (Sistema de Información Académica) system.
-
-The SiaScraper class acts as a facade over SiaSession, delegating session management
-and HTTP operations to SiaSession while handling all XML parsing and data extraction:
-- Course information (name, credits, typology, groups)
-- Schedule data (days, times, classrooms)
-- Group details (teacher, faculty, spots, duration)
-- Prerequisites and conditions
-
-Architecture:
-    SiaScraper (this module) - Orchestration, delegation to SiaSession
-        ↓ delegates to
-    SiaSession - HTTP requests, Oracle ADF state management, navigation
-        ↓ uses
-    parsers - Course info and prerequisites extraction with dataclasses
-        ↓ uses
-    constants - Oracle ADF component IDs, request templates, status enums
-"""
-
-from typing import Any
+import asyncio
+from collections.abc import Callable
 
 from .constants import http, status
+from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
 from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
-from .parsers.models import SessionState
+from .parsers.models import ErrorMode, ScrapeResult, SessionState
 from .session import SiaSession
 
 
 class SiaScraper:
-    """High-level facade for SIA course data scraping.
-
-    This class provides a simplified interface for scraping course information from SIA
-    by delegating session management to SiaSession and handling all XML parsing logic.
-
-    The scraper maintains career context (code, name, course list) and provides methods
-    to extract course details, schedules, groups, and prerequisites from Oracle ADF XML.
-
-    ## Typical Workflow
-        1. Create scraper: sc = SiaScraper()
-        2. Set career: sc.set_career("0-2-8-3")
-        3. Scrape courses: course_info = sc.get_course_info(course_code="2016489")
-        4. Access data: course_info.groups[0].schedules
-    """
+    """Async facade for SIA course data scraping."""
 
     def __init__(
         self,
         timeout: int = http.DEFAULT_TIMEOUT,
-        session_data: dict[str, Any] | None = None,
-        init_session: bool = True,
+        session_data: dict[str, object] | SessionState | None = None,
+        init_session: bool = False,
     ) -> None:
-        """Initialize SiaScraper with optional session restoration.
+        self._timeout = timeout
+        self._init_session = init_session
+        self._sia_session = SiaSession(timeout=timeout)
 
-        ## Args
-            timeout: HTTP request timeout in seconds for SIA operations.
-            session_data: Serialized session state from get_session_data().
-                If provided, restores previous session (career, course list, cookies).
-            init_session: Whether to initialize a new HTTP session if session_data
-                is empty. Set to False to defer session creation.
+        if session_data is not None:
+            self.load_session(session_data)
 
-        ## Note
-            Session restoration is used to avoid re-authenticating and re-navigating
-            through SIA's multi-page workflow when session_data is available.
-        """
-        if session_data is None:
-            session_data = {}
+    @classmethod
+    async def create(
+        cls,
+        timeout: int = http.DEFAULT_TIMEOUT,
+        session_data: dict[str, object] | SessionState | None = None,
+        init_session: bool = True,
+    ) -> "SiaScraper":
+        """Factory to create and optionally initialize an async scraper."""
+        scraper = cls(timeout=timeout, session_data=session_data, init_session=init_session)
 
-        self._sia_session = SiaSession(
-            timeout=timeout, session_data=session_data, init_session=init_session
-        )
+        if session_data is None and init_session:
+            await scraper.create_session()
+
+        return scraper
 
     @property
     def career_name(self) -> str:
-        """Human-readable name of the current academic program."""
-        value = self._sia_session.career_name
-        return value if isinstance(value, str) else "N/A"
+        """Get the active career display name."""
+        return self._sia_session.career_name
 
     @property
     def career_code(self) -> str:
-        """Search code identifier for the current career (e.g., "0-2-8-3")."""
-        value = self._sia_session.career_code
-        return value if isinstance(value, str) else ""
+        """Get the active hyphen-delimited career code."""
+        return self._sia_session.career_code
 
     @property
     def course_list(self) -> list[dict[str, str]]:
-        """List of course codes available in the current career."""
-        value = self._sia_session.course_list
-        return value if isinstance(value, list) else []
+        """Get loaded courses for the active career."""
+        return self._sia_session.course_list
 
     @property
     def sia_session(self) -> SiaSession:
-        """Underlying SiaSession instance for direct access to session operations."""
+        """Get underlying async session wrapper."""
         return self._sia_session
 
-    ##################### PUBLIC METHODS #####################
-
-    def create_session(self) -> "SiaScraper":
-        """Initialize a new HTTP session with SIA's Oracle ADF backend.
-
-        ## Returns
-            Self for method chaining.
-
-        ## Raises
-            SiaSessionException.TimeoutError: If SIA server is unreachable.
-        """
-        self._sia_session.init_session()
+    async def create_session(self) -> "SiaScraper":
+        await self._sia_session.init_session()
         return self
 
-    def load_session(self, session_data: dict[str, Any]) -> "SiaScraper":
-        """Restore a previously saved session from serialized state.
+    def load_session(self, session_data: dict[str, object] | SessionState) -> "SiaScraper":
+        """Restore lightweight async session state from serialized data."""
+        state = SessionState.model_validate(session_data)
 
-        ## Args
-            session_data: Serialized session obtained from get_session_data().
-                Contains cookies, Oracle ADF state tokens, career context.
+        self._sia_session._career_code = state.career_code
+        self._sia_session._career_name = state.career_name or DEFAULT_CAREER_NAME
+        self._sia_session._is_electives = state.is_electives
+        self._sia_session._career_indices = (
+            state.career_code.split("-") if state.career_code else []
+        )
 
-        ## Returns
-            Self for method chaining.
+        try:
+            restored_status = status.SiaSessionStatus[state.status]
+        except KeyError:
+            restored_status = status.SiaSessionStatus.NO_SESSION
+        self._sia_session._status = restored_status
 
-        """
-        self._sia_session.load_session(session_data)
+        self._sia_session._session_state = {
+            "javax_faces_ViewState": state.javax_faces_ViewState,
+            "course_list": self._sia_session._session_state.get("course_list", []),
+        }
+
         return self
 
     def get_session_data(self) -> SessionState:
-        """Serialize current session state for later restoration.
-
-        ## Returns
-            SessionState containing session cookies, Oracle ADF tokens, and career context.
-            Can be passed to load_session() to restore the session.
-
-        ## Note
-            Useful for persisting sessions across requests (e.g., in Flask session storage).
-        """
         return self._sia_session.get_session_data()
 
-    def close_session(self) -> "SiaScraper":
-        """Close the HTTP session and release resources.
-
-        ## Returns
-            Self for method chaining.
-        """
-        self._sia_session.close_session()
+    async def close_session(self) -> "SiaScraper":
+        await self._sia_session.close()
         return self
+
+    async def __aenter__(self) -> "SiaScraper":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        await self._sia_session.close()
 
     def valid_session(self) -> bool:
-        """Check if the current session is still valid for SIA operations.
+        return self._sia_session.status != status.SiaSessionStatus.NO_SESSION
 
-        ## Returns
-            True if session has valid Oracle ADF tokens and is in a navigable state.
-            False if session needs to be reinitialized.
-        """
-        return self._sia_session.valid_session()
-
-    def set_career(self, search_code: str, electives: bool = False) -> "SiaScraper":
-        """Navigate to a specific academic program and load its course list.
-
-        ## Args
-            search_code: Career search code from SIA (e.g., "0-2-8-3" for Computer Science).
-                Format: "{study_level}-{campus}-{faculty}-{career_index}"
-            electives: If True, navigate to elective courses page instead of core curriculum.
-
-        ## Returns
-            Self for method chaining.
-
-        ## Raises
-            SiaSessionException.SessionNotSet: If session not initialized.
-            SiaSessionException.TimeoutError: If SIA server doesn't respond.
-
-        """
-        self._sia_session.set_career(search_code, electives=electives)
+    async def set_career(self, search_code: str, is_electives: bool = False) -> "SiaScraper":
+        await self._sia_session.set_career(search_code, is_electives=is_electives)
         return self
 
-    def get_course_info(self, course_index: int = 0, course_code: str = "") -> CourseInfo:
-        """Retrieve complete course information including all groups and schedules.
+    def _resolve_course_index(self, course_index: int, course_code: str) -> int:
+        """Resolve index from explicit code when provided."""
+        return self.get_course_index(course_code) if course_code else course_index
 
-        ## Args
-            course_index: Zero-based index in current career's course list.
-                Ignored if course_code is provided.
-            course_code: Course code to search for (e.g., "2016489").
-                If provided, overrides course_index.
-
-        ## Returns
-            CourseInfo dataclass with structure:
-                - course_name: str
-                - credits: int
-                - typology: str
-                - available_spots: int
-                - scrape_timestamp: str
-                - groups: list[Group]
-                    - group_name, teacher, faculty, course_name
-                    - schedules: list[Schedule] (day, start_time, end_time, classroom)
-                    - duration, schedule_type, spots
-
-        ## Raises
-            ValueError: If course name, credits, or tipology elements not found in XML.
-            SiaSessionException.InvalidStatus: If session not on career/course page.
-            ValueError: If course code is not found in the current course list.
-        """
-        course_index = self.get_course_index(course_code) if course_code != "" else course_index
-        xml = self._sia_session.get_course_xml(course_index)
+    async def get_course_info(self, course_index: int = 0, course_code: str = "") -> CourseInfo:
+        resolved_index = self._resolve_course_index(course_index, course_code)
+        xml = await self._sia_session.get_course_xml(resolved_index)
         return scrape_info(xml)
 
     def get_course_index(self, course_code: str) -> int:
-        """Find the index of a course code in the current career's course list.
-
-        ## Args
-            course_code: Course code to search for (e.g., "2016489").
-
-        ## Returns
-            Zero-based index if found.
-
-        ## Raises
-            SiaSessionException.InvalidStatus: If session not on career or course page.
-            ValueError: If course code is not found in the current course list.
-
-        ## Note
-            The historical 0/1 swap workaround was removed after ViewState auto-sync.
-            Validate behavior against live SIA if index mismatches are observed.
-        """
-        if self._sia_session.STATUS not in (
+        if self._sia_session.status not in (
             status.SiaSessionStatus.ON_CAREER_PAGE,
             status.SiaSessionStatus.ON_COURSE_PAGE,
         ):
@@ -229,133 +136,118 @@ class SiaScraper:
                 return i
         raise ValueError(f"Course code '{course_code}' not found")
 
-    def get_course_prereqs(self, course_index: int = 0, course_code: str = "") -> CoursePrereqs:
-        """Retrieve course prerequisites and enrollment conditions.
-
-        ## Args
-            course_index: Zero-based index in current career's course list.
-                Ignored if course_code is provided.
-            course_code: Course code to search for (e.g., "2016489").
-                If provided, overrides course_index.
-
-        ## Returns
-            CoursePrereqs dataclass with structure:
-                - course_name: str
-                - code: str
-                - credits: int
-                - typology: str
-                - conditions: list[PrereqCondition]
-                    - condition, type, all_required, number_of_courses
-                        - prerequisites: list[Prerequisite]
-                            - course_code, course_name
-
-        ## Raises
-            SiaSessionException.InvalidStatus: If session not on career/course page.
-            ValueError: If course code is not found in the current course list.
-        """
-        course_index = self.get_course_index(course_code) if course_code != "" else course_index
-        xml = self._sia_session.get_course_xml(course_index)
+    async def get_course_prereqs(
+        self, course_index: int = 0, course_code: str = ""
+    ) -> CoursePrereqs:
+        resolved_index = self._resolve_course_index(course_index, course_code)
+        xml = await self._sia_session.get_course_xml(resolved_index)
         return scrape_prereqs(xml)
 
-    def scrape_courses(
-        self, courses_indices: list[int] | None = None, courses_codes: list[str] | None = None
-    ) -> list[CourseInfo]:
-        """Batch scrape multiple courses by index or code.
+    async def _scrape_abort_mode(self, paired: list[tuple[int, str]]) -> list[CourseInfo]:
+        """Scrape courses and abort immediately on first failure."""
+        courses: list[CourseInfo] = []
+        for index, code in paired:
+            course = await self.get_course_info(index)
+            courses.append(course.model_copy(update={"code": code}))
+        return courses
 
-        ## Args
-            courses_indices: List of zero-based indices in course list.
-                If empty, derives from courses_codes.
-            courses_codes: List of course codes to scrape.
-                Used to populate courses_indices if that is empty.
+    async def _scrape_resilient_mode(
+        self,
+        paired: list[tuple[int, str]],
+        error_mode: str,
+        max_retries: int,
+        retry_delay: float,
+        progress_callback: Callable[[int, int, int, int], None] | None,
+    ) -> ScrapeResult:
+        """Scrape courses with skip/retry handling."""
+        successes: list[CourseInfo] = []
+        failures: list[tuple[int, str]] = []
 
-        ## Returns
-            List of CourseInfo dataclasses with code field populated.
+        for i, (index, code) in enumerate(paired):
+            last_error = ""
+            attempts = max_retries if error_mode == ErrorMode.RETRY else 1
 
-        ## Note
-            Sorts indices before scraping for more efficient sequential access.
-            Pairs indices with codes before sorting to prevent misalignment.
-        """
-        if courses_indices is None:
-            courses_indices = []
-        if courses_codes is None:
-            courses_codes = []
+            for attempt in range(attempts):
+                try:
+                    course = await self.get_course_info(index)
+                    successes.append(course.model_copy(update={"code": code}))
+                    last_error = ""
+                    break
+                except (RuntimeError, ValueError, SiaSessionException) as exc:
+                    last_error = str(exc)
+                    if error_mode == ErrorMode.RETRY and attempt < attempts - 1:
+                        await asyncio.sleep(retry_delay)
 
-        if courses_indices == []:
+            if last_error and error_mode == ErrorMode.SKIP:
+                failures.append((index, last_error))
+
+            if progress_callback:
+                progress_callback(i + 1, len(paired), len(successes), len(failures))
+
+        return ScrapeResult.create(successes, failures)
+
+    async def scrape_courses(
+        self,
+        courses_indices: list[int] | None = None,
+        courses_codes: list[str] | None = None,
+        error_mode: str = ErrorMode.ABORT,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+        progress_callback: Callable[[int, int, int, int], None] | None = None,
+    ) -> ScrapeResult | list[CourseInfo]:
+        """Batch scrape multiple courses by index or code."""
+        courses_indices = courses_indices or []
+        courses_codes = courses_codes or []
+
+        if not courses_indices:
             courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
         paired = list(zip(courses_indices, courses_codes, strict=True))
         paired.sort(key=lambda x: x[0])
 
-        courses: list[CourseInfo] = []
-        for index, code in paired:
-            course = self.get_course_info(index)
-            course = course.model_copy(update={"code": code})
-            courses.append(course)
+        if error_mode == ErrorMode.ABORT:
+            return await self._scrape_abort_mode(paired)
 
-        return courses
+        return await self._scrape_resilient_mode(
+            paired,
+            error_mode,
+            max_retries,
+            retry_delay,
+            progress_callback,
+        )
 
 
-def init_sia_scraper(
+async def init_sia_scraper(
     search_code: str,
     is_electives: bool,
-    session_data: dict[str, Any] | None = None,
+    session_data: dict[str, object] | SessionState | None = None,
     timeout: int = http.DEFAULT_TIMEOUT,
 ) -> SiaScraper:
-    """Initialize or restore a SiaScraper with intelligent session management.
-
-    This factory function handles three scenarios:
-    1. No session_data: Creates new session and navigates to career
-    2. Valid session_data: Restores session and reuses it
-    3. Invalid/expired session: Falls back to creating new session
-
-    ## Args
-        search_code: Career search code (e.g., "0-2-8-3").
-        is_electives: Whether to navigate to electives page.
-        session_data: Optional serialized session from get_session_data().
-        timeout: HTTP request timeout in seconds.
-
-    ## Returns
-        SiaScraper instance ready for scraping the specified career.
-
-    ## Note
-        If the career in session_data differs from search_code, automatically
-        navigates to the new career while preserving the session.
-
-    ## Warning
-        Session validation may have false negatives.
-        If session appears invalid, falls back to creating new session.
-    """
+    """Initialize or restore an async scraper with session management."""
     if session_data is None:
         session_data = {}
 
     if session_data == {}:
-        return create_career_session(search_code, is_electives, timeout=timeout)
+        return await create_career_session(search_code, is_electives, timeout=timeout)
 
-    sc = SiaScraper(timeout=timeout, session_data=session_data)
+    sc = await SiaScraper.create(timeout=timeout, session_data=session_data, init_session=False)
 
     if not sc.valid_session():
-        sc.close_session()
-        return create_career_session(search_code, is_electives, timeout=timeout)
+        await sc.close_session()
+        return await create_career_session(search_code, is_electives, timeout=timeout)
 
     if sc.career_code != search_code or sc.sia_session.is_electives != is_electives:
-        sc.set_career(search_code, electives=is_electives)
+        await sc.set_career(search_code, is_electives=is_electives)
 
     return sc
 
 
-def create_career_session(
-    search_code: str, is_electives: bool, timeout: int = http.DEFAULT_TIMEOUT
+async def create_career_session(
+    search_code: str,
+    is_electives: bool,
+    timeout: int = http.DEFAULT_TIMEOUT,
 ) -> SiaScraper:
-    """Create a new SiaScraper with a fresh session and navigate to career.
-
-    ## Args
-        search_code: Career search code (e.g., "0-2-8-3").
-        is_electives: Whether to navigate to electives page.
-        timeout: HTTP request timeout in seconds.
-
-    ## Returns
-        SiaScraper instance with new session, positioned at career page.
-    """
-    sc = SiaScraper(timeout=timeout)
-    sc.set_career(search_code, electives=is_electives)
+    """Create a new async scraper and navigate to the requested career."""
+    sc = await SiaScraper.create(timeout=timeout)
+    await sc.set_career(search_code, is_electives=is_electives)
     return sc

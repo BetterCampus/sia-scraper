@@ -64,6 +64,17 @@ ruff check --fix . && ruff format . && ruff check .
 pyright
 ```
 
+### Local Verification (run before commit)
+```bash
+# Python: lint, format, type check
+ruff check --fix . && ruff format . && ruff check .
+pyright
+
+# Rust: clippy and check
+cargo clippy
+cargo check
+```
+
 ---
 
 ## Code Style Guidelines
@@ -167,6 +178,31 @@ def get_course(self, course_id: str) -> Course:
 - Eliminate unused variables and imports automatically (ruff handles this)
 - No trailing whitespace
 
+#### Mutable Default Arguments
+
+**Never use mutable objects as default argument values.** This is a common Python pitfall that can lead to bugs that are difficult to reproduce.
+
+```python
+# BAD - mutable default argument
+def add_item(item, items=[]):
+    items.append(item)
+    return items
+
+# GOOD - use None and create new list inside
+def add_item(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+
+# GOOD - use default_factory for dataclass fields
+from dataclasses import dataclass, field
+
+@dataclass
+class Example:
+    items: list[str] = field(default_factory=list)
+```
+
 ---
 
 ## Testing Guidelines
@@ -268,3 +304,219 @@ quote-style = "double"
 |---------|---------|
 | `constants/` | Configuration constants and ADF IDs/events |
 | `parsers/` | HTML and course payload parsing |
+
+---
+
+## Rust Extensions (PyO3 + Maturin)
+
+### Overview
+
+- **Rust Version**: 2021 edition (Rust 1.56+)
+- **Structure**: `rust/src/` (Rust code), built into `sia_scraper_rust` Python module
+- **Build System**: Maturin for building Python wheels with Rust extensions
+- **Core Dependencies**: `pyo3`, `scraper`, `quick-xml`, `thiserror`, `log`, `regex`
+
+### Build Commands
+
+#### Building Rust Extensions
+```bash
+# Build in debug mode
+maturin build
+
+# Build in release mode (optimized)
+maturin build --release
+
+# Build and install into current virtualenv
+maturin develop
+
+# Install specific wheel
+pip install target/wheels/sia_scraper-*.whl --force-reinstall
+```
+
+#### Development Workflow
+```bash
+# Check Rust code (fast, no build)
+cargo check --manifest-path Cargo.toml
+
+# Run clippy linter
+cargo clippy --manifest-path Cargo.toml
+
+# Auto-fix clippy warnings
+cargo clippy --manifest-path Cargo.toml --fix
+
+# Build and run Rust tests
+cargo test --manifest-path Cargo.toml
+
+# Build optimized release
+maturin build --release
+
+# Install and test with Python
+pip install target/wheels/sia_scraper-*.whl --force-reinstall
+pytest tests/
+```
+
+### Rust Code Quality Standards
+
+#### Clippy Compliance
+- Code MUST pass `cargo clippy` with zero warnings
+- Use `cargo clippy --fix` to auto-fix common issues
+- Never commit code with unused imports or variables
+- Avoid needless borrows and references
+
+#### Testing Requirements
+- All public functions must have unit tests
+- Test structure: `#[cfg(test)] mod tests { ... }`
+- Minimum coverage: happy path + 2 edge cases + 1 error case per function
+- Use `assert_eq!`, `assert!`, and `Result<T, E>` pattern matching for tests
+
+#### Documentation Standards
+- All public functions MUST have rustdoc comments
+- Format: Triple-slash `///` comments above function declarations
+- Required sections:
+  - Brief description (one-line summary)
+  - `# Arguments` - parameter descriptions
+  - `# Returns` - return value description
+  - `# Errors` - error conditions (if applicable)
+  - `# Examples` - usage examples with ` ```rust ` code blocks
+
+#### Example Documented Function
+```rust
+/// Extracts the ViewState value from Oracle ADF HTML response.
+///
+/// # Arguments
+/// * `html` - Raw HTML string from SIA Oracle ADF response
+///
+/// # Returns
+/// ViewState string value extracted from hidden input element
+///
+/// # Errors
+/// Returns `SiaScraperError::ExtractionError` if ViewState element not found
+///
+/// # Examples
+/// ```rust
+/// let html = r#"<input name="javax.faces.ViewState" value="abc123" />"#;
+/// let view_state = extract_view_state(html)?;
+/// assert_eq!(view_state, "abc123");
+/// ```
+pub fn extract_view_state(html: &str) -> Result<String, SiaScraperError> {
+    // implementation
+}
+```
+
+### Error Handling Patterns
+
+#### Custom Error Types
+- Use `thiserror::Error` derive macro for error enums
+- Implement `From<SiaScraperError> for pyo3::PyErr` for Python exceptions
+- Specific error variants for different failure modes
+
+```rust
+#[derive(Error, Debug)]
+pub enum SiaScraperError {
+    #[error("Parse error: {0}")]
+    ParseError(String),
+    
+    #[error("XML parsing failed: {0}")]
+    XmlError(String),
+    
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+    
+    #[error("Missing element: {element} at selector: {selector}")]
+    MissingElement { element: String, selector: String },
+    
+    #[error("Failed to parse {field}: {value}")]
+    ParseFieldError { field: String, value: String },
+}
+```
+
+#### Result Types
+- All fallible operations return `Result<T, SiaScraperError>`
+- Use `?` operator for error propagation
+- Avoid `.unwrap()` and `.expect()` in production code
+
+### PyO3 Best Practices
+
+#### Python Type Conversions
+- Use `pyo3::types::PyDict` for dictionary returns
+- Use `pyo3::types::PyList` for list returns
+- Explicit type annotations for empty collections: `Vec<Py<PyAny>>`
+- Always use `Python::with_gil(|py| ...)` for GIL-protected operations
+
+#### Common Pitfalls
+1. **Lifetime annotations**: ElementRef requires explicit lifetimes
+2. **ElementRef storage**: Cannot clone or store; extract data immediately
+3. **PyList/PyDict inference**: Compiler needs explicit types for empty collections
+4. **GIL handling**: Never hold GIL across long-running operations
+
+### Testing Strategy
+
+#### Unit Test Structure
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_view_state_valid_input() {
+        let html = r#"<input name="ViewState" value="test123" />"#;
+        let result = extract_view_state(html);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test123");
+    }
+
+    #[test]
+    fn test_extract_view_state_missing() {
+        let html = "<div>No ViewState here</div>";
+        let result = extract_view_state(html);
+        assert!(result.is_err());
+    }
+}
+```
+
+#### Integration with Python Tests
+- Python tests in `tests/` directory test the compiled extension
+- Use `sia_scraper_rust.function_name()` to test Rust functions from Python
+- Compare Rust output with Python implementation for correctness
+
+### Performance Optimization
+
+#### Release Profile Settings
+```toml
+[profile.release]
+opt-level = 3          # Maximum optimization
+lto = true             # Link-time optimization
+codegen-units = 1      # Single codegen unit for better optimization
+```
+
+#### Benchmarking
+- Use `benchmarks/benchmark_parsing.py` for performance comparison
+- Always benchmark Python vs Rust before/after changes
+- Target: Rust should be 2-5x faster than Python for parsing operations
+
+### Common Rust Patterns in This Project
+
+#### CSS Selection Pattern
+```rust
+fn css_select<'a>(root: &'a Html, selector_str: &'a str) -> Vec<ElementRef<'a>> {
+    let selector = Selector::parse(selector_str).ok()?;
+    root.select(&selector).collect()
+}
+```
+
+#### Text Extraction Pattern
+```rust
+fn extract_text_from_elem(elem: &ElementRef) -> String {
+    elem.text().collect::<String>().trim().to_string()
+}
+```
+
+#### PyDict Construction Pattern
+```rust
+Python::with_gil(|py| {
+    let dict = pyo3::types::PyDict::new(py);
+    dict.set_item("key", "value")?;
+    dict.set_item("number", 42)?;
+    Ok(dict.into_py(py))
+})
+```

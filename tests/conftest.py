@@ -2,12 +2,13 @@
 
 import json
 import re
+import socket
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import pytest
-from requests.exceptions import ConnectionError, Timeout
 
 from sia_scraper.constants import SIA_BASE_URL
 
@@ -215,16 +216,18 @@ def _check_sia_connectivity() -> tuple[bool, str]:
         If reachable, error_message is empty string.
         If not reachable, error_message describes the failure.
     """
-    import requests
+    parsed = urlparse(SIA_BASE_URL)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    if host is None:
+        return False, f"Invalid SIA URL: {SIA_BASE_URL}"
 
     try:
-        response = requests.head(SIA_BASE_URL, timeout=5)
-        if response.status_code >= 500:
-            return False, f"Server returned HTTP {response.status_code}"
-        return True, ""
-    except Timeout:
+        with socket.create_connection((host, port), timeout=5):
+            return True, ""
+    except TimeoutError:
         return False, "Connection timed out after 5 seconds"
-    except ConnectionError as e:
+    except OSError as e:
         return False, f"Connection failed: {e}"
     except Exception as e:
         return False, f"Unexpected error: {e}"

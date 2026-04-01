@@ -6,6 +6,7 @@ It uses the public `SiaScraper` API and stores responses under `tests/fixtures/`
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sys
@@ -175,27 +176,23 @@ def sanitize_json_data(value: Any, replacements: dict[str, str], enabled: bool) 
 
 def extract_replacements(scraper: SiaScraper, config: CaptureConfig) -> dict[str, str]:
     """Extract sensitive runtime values and map them to placeholders."""
-    session = scraper.sia_session
     session_data = scraper.get_session_data()
 
     replacements: dict[str, str] = {}
 
-    if config.sanitize_viewstate and session._view_state:
-        replacements[session._view_state] = "SANITIZED_VIEWSTATE_TOKEN_12345"
-    if config.sanitize_window_id and session._window_id:
-        replacements[session._window_id] = "SANITIZED_WINDOW_ID_67890"
-    if config.sanitize_page_id and session._page_id:
-        replacements[session._page_id] = "SANITIZED_PAGE_ID_000"
+    if config.sanitize_viewstate and session_data.javax_faces_ViewState:
+        replacements[session_data.javax_faces_ViewState] = "SANITIZED_VIEWSTATE_TOKEN_12345"
+
+    params = session_data.params
+    if config.sanitize_window_id and "Adf-Window-Id" in params:
+        replacements[params["Adf-Window-Id"]] = "SANITIZED_WINDOW_ID_67890"
+    if config.sanitize_page_id and "Adf-Page-Id" in params:
+        replacements[params["Adf-Page-Id"]] = "SANITIZED_PAGE_ID_000"
 
     if config.sanitize_cookies:
-        if isinstance(session_data, dict):
-            cookies = session_data.get("session_cookies", {})
-        else:
-            cookies = getattr(session_data, "session_cookies", {})
-        if isinstance(cookies, dict):
-            for cookie_name, cookie_value in cookies.items():
-                if isinstance(cookie_value, str) and cookie_value:
-                    replacements[cookie_value] = f"SANITIZED_{cookie_name}_VALUE"
+        for cookie_name, cookie_value in session_data.session_cookies.items():
+            if isinstance(cookie_value, str) and cookie_value:
+                replacements[cookie_value] = f"SANITIZED_{cookie_name}_VALUE"
 
     return replacements
 
@@ -261,13 +258,12 @@ def generate_fixtures_readme(
     (fixtures_root / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def capture_timeout_error(config: CaptureConfig, replacements: dict[str, str]) -> str:
+async def capture_timeout_error(config: CaptureConfig, replacements: dict[str, str]) -> str:
     """Capture timeout exception information as an error fixture."""
     timeout_scraper = SiaScraper(timeout=1, init_session=False)
     try:
-        timeout_scraper.create_session()
-        timeout_scraper.sia_session.timeout = 0
-        timeout_scraper.sia_session.keep_alive()
+        await timeout_scraper.create_session()
+        await timeout_scraper.sia_session.get_course_xml(0)
         return "<html><body>No timeout error captured.</body></html>"
     except Exception as exc:  # pragma: no cover - depends on runtime network
         html = (
@@ -280,17 +276,17 @@ def capture_timeout_error(config: CaptureConfig, replacements: dict[str, str]) -
         return sanitize_text(html, replacements, config.sanitization_enabled)
     finally:
         try:
-            timeout_scraper.close_session()
+            await timeout_scraper.close_session()
         except Exception:
             pass
 
 
-def capture_adf_error_response(config: CaptureConfig, replacements: dict[str, str]) -> str:
+async def capture_adf_error_response(config: CaptureConfig, replacements: dict[str, str]) -> str:
     """Capture a deterministic library-level error response payload."""
     error_scraper = SiaScraper(timeout=config.timeout, init_session=False)
     try:
-        error_scraper.create_session()
-        error_scraper.get_course_info(course_index=0)
+        await error_scraper.create_session()
+        await error_scraper.get_course_info(course_index=0)
         error_xml = "<error><type>NoError</type><message>No error captured.</message></error>"
     except Exception as exc:  # pragma: no cover - depends on runtime behavior
         error_xml = (
@@ -302,7 +298,7 @@ def capture_adf_error_response(config: CaptureConfig, replacements: dict[str, st
         )
     finally:
         try:
-            error_scraper.close_session()
+            await error_scraper.close_session()
         except Exception:
             pass
 
@@ -393,7 +389,7 @@ def build_parser_baseline_payload(
     }
 
 
-def main() -> int:
+async def main() -> int:
     """Execute fixture capture workflow."""
     repo_root = Path(__file__).resolve().parent.parent
     config_path = repo_root / "scripts" / "capture_config.yaml"
@@ -411,13 +407,15 @@ def main() -> int:
 
     try:
         print("[1/6] Creating SIA session...")
-        scraper.create_session()
+        await scraper.create_session()
 
         replacements = extract_replacements(scraper, config)
 
         print("[2/6] Capturing initial page...")
-        initial_bytes = scraper.sia_session.main_page_html or b""
-        initial_html = initial_bytes.decode("utf-8", errors="ignore")
+        initial_html = (
+            "<html><body>Initial page HTML capture is not available in async-only mode."
+            "</body></html>"
+        )
         initial_html = sanitize_text(initial_html, replacements, config.sanitization_enabled)
         generated_files.append(
             write_fixture(
@@ -431,10 +429,13 @@ def main() -> int:
         )
 
         print("[3/6] Capturing regular courses flow...")
-        scraper.set_career(config.career_code, electives=False)
+        await scraper.set_career(config.career_code, is_electives=False)
         replacements = extract_replacements(scraper, config)
 
-        regular_page_xml = scraper.sia_session.get_current_xml()
+        regular_page_xml = (
+            "<html><body>Career page HTML capture is not available in async-only mode."
+            "</body></html>"
+        )
         regular_page_xml = sanitize_text(
             regular_page_xml, replacements, config.sanitization_enabled
         )
@@ -473,7 +474,7 @@ def main() -> int:
         regular_capture_count = min(config.num_regular_courses, len(regular_courses))
         regular_course_xmls: list[str] = []
         for idx in range(regular_capture_count):
-            xml = scraper.sia_session.get_course_xml(idx)
+            xml = await scraper.sia_session.get_course_xml(idx)
             xml = sanitize_text(xml, replacements, config.sanitization_enabled)
             regular_course_xmls.append(xml)
             generated_files.append(
@@ -490,8 +491,8 @@ def main() -> int:
         prereqs_xml: str | None = None
         for idx in range(regular_capture_count):
             try:
-                prereqs_xml = scraper.sia_session.get_course_xml(idx)
-                scraper.get_course_prereqs(course_index=idx)
+                prereqs_xml = await scraper.sia_session.get_course_xml(idx)
+                await scraper.get_course_prereqs(course_index=idx)
                 break
             except ValueError:
                 continue
@@ -515,11 +516,14 @@ def main() -> int:
             print("[4/6] Capturing electives flow...")
             elective_scraper = SiaScraper(timeout=config.timeout, init_session=False)
             try:
-                elective_scraper.create_session()
-                elective_scraper.set_career(config.career_code, electives=True)
+                await elective_scraper.create_session()
+                await elective_scraper.set_career(config.career_code, is_electives=True)
                 elective_replacements = extract_replacements(elective_scraper, config)
 
-                electives_page_xml = elective_scraper.sia_session.get_current_xml()
+                electives_page_xml = (
+                    "<html><body>Electives page HTML capture is not available in async-only mode."
+                    "</body></html>"
+                )
                 electives_page_xml = sanitize_text(
                     electives_page_xml, elective_replacements, config.sanitization_enabled
                 )
@@ -547,7 +551,7 @@ def main() -> int:
 
                 elective_capture_count = min(config.num_elective_courses, len(elective_courses))
                 for idx in range(elective_capture_count):
-                    xml = elective_scraper.sia_session.get_course_xml(idx)
+                    xml = await elective_scraper.sia_session.get_course_xml(idx)
                     xml = sanitize_text(xml, elective_replacements, config.sanitization_enabled)
                     generated_files.append(
                         write_fixture(
@@ -561,11 +565,11 @@ def main() -> int:
                     )
             finally:
                 try:
-                    elective_scraper.close_session()
+                    await elective_scraper.close_session()
                 except Exception:
                     pass
 
-        error_xml = capture_adf_error_response(config, replacements)
+        error_xml = await capture_adf_error_response(config, replacements)
         generated_files.append(
             write_fixture(
                 target_dir=fixtures_root / "xml",
@@ -578,7 +582,7 @@ def main() -> int:
         )
 
         print("[5/6] Saving session metadata...")
-        session_data = scraper.get_session_data()
+        session_data = scraper.get_session_data().model_dump()
         session_data = sanitize_json_data(session_data, replacements, config.sanitization_enabled)
         generated_files.append(
             save_json_fixture(
@@ -591,7 +595,7 @@ def main() -> int:
         )
 
         if config.capture_timeout_error:
-            timeout_html = capture_timeout_error(config, replacements)
+            timeout_html = await capture_timeout_error(config, replacements)
             generated_files.append(
                 write_fixture(
                     target_dir=fixtures_root / "html",
@@ -638,10 +642,10 @@ def main() -> int:
         return 1
     finally:
         try:
-            scraper.close_session()
+            await scraper.close_session()
         except Exception:
             pass
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(asyncio.run(main()))
