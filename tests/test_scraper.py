@@ -373,3 +373,123 @@ class TestSiaScraperSessionState:
         }
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.get_course_index("9999999")
+
+    def test_get_session_data_returns_session_state(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        data = SessionState(
+            session_headers={},
+            session_cookies={},
+            params={"Adf-Page-Id": "0", "Adf-Window-Id": "w"},
+            javax_faces_ViewState="vs",
+            career_code="0-2-8-3",
+            career_name="Ing",
+            is_electives=False,
+            status=SiaSessionStatus.ON_CAREER_PAGE.name,
+        )
+        scraper.load_session(data)
+        mock_session = _mock_session(scraper)
+        mock_session.get_session_data.return_value = data
+        result = scraper.get_session_data()
+        assert result.career_code == "0-2-8-3"
+
+
+@pytest.mark.unit
+class TestSiaScraperScrapeCoursesEdgeCases:
+    """Test scrape_courses edge cases for uncovered lines."""
+
+    @pytest.mark.asyncio
+    async def test_scrape_courses_with_progress_callback(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        sample_course = scrape_info(
+            """
+            <h2>CURSO X</h2>
+            <span class="detass-creditos"><span>3</span></span>
+            <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+            """
+        )
+        scraper.get_course_info = AsyncMock(return_value=sample_course)
+
+        progress_calls = []
+
+        def progress_callback(current, total, successes, failures):
+            progress_calls.append((current, total, successes, failures))
+
+        await scraper.scrape_courses(
+            courses_indices=[0, 1],
+            courses_codes=["A", "B"],
+            error_mode=ErrorMode.SKIP,
+            progress_callback=progress_callback,
+        )
+
+        assert len(progress_calls) == 2
+        assert progress_calls[0] == (1, 2, 1, 0)
+        assert progress_calls[1] == (2, 2, 2, 0)
+
+    @pytest.mark.asyncio
+    async def test_scrape_courses_with_codes_only(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        mock_session = _mock_session(scraper)
+        mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
+        mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
+        sample_course = scrape_info(
+            """
+            <h2>CURSO X</h2>
+            <span class="detass-creditos"><span>3</span></span>
+            <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
+            """
+        )
+        scraper.get_course_info = AsyncMock(return_value=sample_course)
+
+        out = await scraper.scrape_courses(
+            courses_codes=["1000001"],
+            error_mode=ErrorMode.ABORT,
+        )
+
+        assert isinstance(out, list)
+        assert len(out) == 1
+
+
+@pytest.mark.unit
+class TestInitSiaScraperEdgeCases:
+    """Test init_sia_scraper factory edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_init_sia_scraper_with_none_session_data(self):
+        mocked_scraper = MagicMock()
+        mocked_scraper.valid_session.return_value = False
+
+        with patch(
+            "sia_scraper.scraper.create_career_session",
+            AsyncMock(return_value=mocked_scraper),
+        ) as mock_create:
+            out = await init_sia_scraper("0-2-8-3", False, session_data=None)
+
+        assert out is mocked_scraper
+        mock_create.assert_awaited_once_with("0-2-8-3", False, timeout=DEFAULT_TIMEOUT)
+
+    @pytest.mark.asyncio
+    async def test_init_sia_scraper_with_invalid_session_data(self):
+        mocked_scraper = MagicMock()
+        mocked_scraper.valid_session.return_value = False
+
+        with patch(
+            "sia_scraper.scraper.create_career_session",
+            AsyncMock(return_value=mocked_scraper),
+        ) as mock_create:
+            out = await init_sia_scraper(
+                "0-2-8-3",
+                False,
+                session_data={
+                    "session_headers": {},
+                    "session_cookies": {},
+                    "params": {"Adf-Page-Id": "1", "Adf-Window-Id": ""},
+                    "javax_faces_ViewState": "vs",
+                    "career_code": "0-2-8-3",
+                    "career_name": "Test",
+                    "is_electives": False,
+                    "status": "BOGUS_STATUS",
+                },
+            )
+
+        assert out is mocked_scraper
+        mock_create.assert_awaited_once()

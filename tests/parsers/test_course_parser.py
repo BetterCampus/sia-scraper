@@ -446,3 +446,56 @@ class TestScrapePrereqs:
         with patch("sia_scraper.parsers.course_parser.HtmlParser", return_value=parser):
             out = scrape_prereqs("<xml/>")
         assert out.conditions == []
+
+
+@pytest.mark.unit
+class TestSafeTextContent:
+    """Test _safe_text_content helper function edge cases."""
+
+    def test_returns_fallback_for_none(self):
+        """Should return fallback when element is None."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        result = _safe_text_content(None, fallback="DEFAULT")
+        assert result == "DEFAULT"
+
+    def test_returns_fallback_for_missing_text_content_method(self):
+        """Should return fallback when element has no text_content method."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        class NoTextContentMethod:
+            pass
+
+        result = _safe_text_content(NoTextContentMethod(), fallback="FALLBACK")
+        assert result == "FALLBACK"
+
+    def test_returns_fallback_when_text_content_raises_type_error(self):
+        """Should return fallback when text_content raises TypeError."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        class RaisesTypeError:
+            def text_content(self):
+                raise TypeError("cannot get text")
+
+        result = _safe_text_content(RaisesTypeError(), fallback="ERROR_FALLBACK")
+        assert result == "ERROR_FALLBACK"
+
+    def test_returns_stripped_text(self):
+        """Should return stripped text content."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        mock_elem = MagicMock()
+        mock_elem.text_content.return_value = "  hello world  "
+
+        result = _safe_text_content(mock_elem)
+        assert result == "hello world"
+
+    def test_returns_fallback_for_empty_text(self):
+        """Should return fallback when text is empty."""
+        from sia_scraper.parsers.course_parser import _safe_text_content
+
+        mock_elem = MagicMock()
+        mock_elem.text_content.return_value = ""
+
+        result = _safe_text_content(mock_elem, fallback="EMPTY")
+        assert result == "EMPTY"

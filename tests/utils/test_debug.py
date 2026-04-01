@@ -73,3 +73,45 @@ class TestDebugLogWhenEnabled:
     def test_module_logger_configured(self) -> None:
         assert hasattr(debug_module, "logger")
         assert debug_module.logger is logger
+
+    def test_info_log_with_none_data(self, mocker) -> None:
+        logger_info = mocker.patch.object(debug_module.logger, "info")
+
+        debug_module.info_log("INFO_MESSAGE")
+
+        logger_info.assert_called_once_with("INFO_MESSAGE")
+
+    def test_info_log_with_dict_data(self, mocker) -> None:
+        logger_info = mocker.patch.object(debug_module.logger, "info")
+
+        debug_module.info_log("INFO_DICT", data={"key": "value"})
+
+        logger_info.assert_called_once_with("INFO_DICT", key="value")
+
+    def test_info_log_with_non_dict_data(self, mocker) -> None:
+        logger_info = mocker.patch.object(debug_module.logger, "info")
+
+        debug_module.info_log("INFO_STRING", data="some string")
+
+        logger_info.assert_called_once_with("INFO_STRING", extra={"data": "some string"})
+
+    def test_error_log_with_none_data(self, mocker) -> None:
+        logger_error = mocker.patch.object(debug_module.logger, "error")
+
+        debug_module.error_log("ERROR_MESSAGE")
+
+        logger_error.assert_called_once_with("ERROR_MESSAGE")
+
+    def test_error_log_with_dict_data(self, mocker) -> None:
+        logger_error = mocker.patch.object(debug_module.logger, "error")
+
+        debug_module.error_log("ERROR_DICT", data={"code": 500})
+
+        logger_error.assert_called_once_with("ERROR_DICT", code=500)
+
+    def test_error_log_with_non_dict_data(self, mocker) -> None:
+        logger_error = mocker.patch.object(debug_module.logger, "error")
+
+        debug_module.error_log("ERROR_LIST", data=[1, 2, 3])
+
+        logger_error.assert_called_once_with("ERROR_LIST", extra={"data": "[1, 2, 3]"})
