@@ -430,16 +430,19 @@ fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p Py
 
         let state = session.get_state().await;
 
+        let view_state = state.javax_faces_ViewState.ok_or_else(|| {
+            pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "init_sia_session: missing javax_faces_ViewState after init_session".to_string(),
+            )
+        })?;
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("status", state.status)?;
             dict.set_item("career_code", state.career_code)?;
             dict.set_item("career_name", state.career_name)?;
             dict.set_item("is_electives", state.is_electives)?;
-            dict.set_item(
-                "javax_faces_ViewState",
-                state.javax_faces_ViewState.unwrap_or_default(),
-            )?;
+            dict.set_item("javax_faces_ViewState", view_state)?;
             Ok(dict.into_py(py))
         })
     })
@@ -507,6 +510,12 @@ fn set_career<'p>(
         let career_indices: Vec<String> = search_code.split('-').map(|s| s.to_string()).collect();
         let course_list = &state.course_list;
 
+        let view_state = state.javax_faces_ViewState.ok_or_else(|| {
+            pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "set_career: missing javax_faces_ViewState after set_career".to_string(),
+            )
+        })?;
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("career_code", search_code)?;
@@ -519,10 +528,7 @@ fn set_career<'p>(
             )?;
             dict.set_item("is_electives", electives)?;
             dict.set_item("career_name", state.career_name)?;
-            dict.set_item(
-                "javax_faces_ViewState",
-                state.javax_faces_ViewState.unwrap_or_default(),
-            )?;
+            dict.set_item("javax_faces_ViewState", view_state)?;
             dict.set_item("course_list", course_list)?;
             Ok(dict.into_py(py))
         })
