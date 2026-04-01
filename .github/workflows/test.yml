@@ -35,16 +35,8 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install "maturin>=1.0,<2.0"
           maturin --version
-          pip install -e ".[dev]"
+          maturin develop --release --extras dev
           python -c "import sia_scraper_rust; print('Rust extension importable')"
-
-      - name: Build and sync Rust extension
-        run: python scripts/sync_rust_extension.py --build --release --verify
-
-      - name: Install ruff linter
-        # Explicitly install ruff to ensure it is available for lint checks.
-        # It is also pinned in dev dependencies for reproducible local installs.
-        run: pip install "ruff~=0.15.8"
 
       - name: Run Ruff lint checks
         run: ruff check .
