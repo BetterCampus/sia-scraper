@@ -3,6 +3,8 @@
 //! This module provides high-performance Rust implementations of core parsing
 //! functions for extracting academic information from SIA (Sistema de Información Académica).
 
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyString};
 use pyo3::PyTypeInfo;

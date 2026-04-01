@@ -28,11 +28,6 @@ define_regex!(
 const VIEWSTATE_FAST_PREFIX: &str =
     "<input type=\"hidden\" name=\"javax.faces.ViewState\" value=\"";
 
-define_regex!(
-    ADF_WINDOW_ID_RE,
-    r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#
-);
-
 /// Extracts the ViewState value from Oracle ADF HTML response.
 ///
 /// ViewState is a hidden form field used by Oracle ADF for maintaining

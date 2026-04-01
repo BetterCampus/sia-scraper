@@ -51,10 +51,9 @@ define_selector!(ROW_SELECTOR, "tr.af_table_data-row");
 define_selector!(SPAN_SELECTOR, "span.af_column_data-container");
 
 #[inline]
-fn strip_tags(content: &str) -> String {
-    let regex =
-        get_regex(&TAG_REGEX, "table_parser::strip_tags").expect("TAG_REGEX should be valid");
-    regex.replace_all(content, "").trim().to_string()
+fn strip_tags(content: &str) -> Result<String, SiaScraperError> {
+    let regex = get_regex(&TAG_REGEX, "table_parser::strip_tags")?;
+    Ok(regex.replace_all(content, "").trim().to_string())
 }
 
 fn extract_course_list_from_raw_html(
@@ -79,10 +78,12 @@ fn extract_course_list_from_raw_html(
         let mut spans = span_regex.captures_iter(row_inner_html);
         let first_span = spans
             .next()
-            .and_then(|cap| cap.get(1).map(|m| strip_tags(m.as_str())));
+            .and_then(|cap| cap.get(1).map(|m| strip_tags(m.as_str()).ok()))
+            .flatten();
         let second_span = spans
             .next()
-            .and_then(|cap| cap.get(1).map(|m| strip_tags(m.as_str())));
+            .and_then(|cap| cap.get(1).map(|m| strip_tags(m.as_str()).ok()))
+            .flatten();
 
         if let (Some(course_code), Some(course_name)) = (first_span, second_span) {
             if !course_code.is_empty() {
@@ -151,7 +152,7 @@ pub fn get_course_list(
     }
 
     if course_list.is_empty() {
-        return Ok(extract_course_list_from_raw_html(html_content)?);
+        return extract_course_list_from_raw_html(html_content);
     }
 
     Ok(course_list)
