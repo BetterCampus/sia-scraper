@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 use crate::constants::{
-    actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX, SIA_BASE_URL,
+    actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX,
 };
 use crate::http::client::AsyncHttpClient;
 use crate::http::config::HttpClientConfig;
@@ -460,6 +460,7 @@ impl SiaSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::SIA_BASE_URL;
 
     #[tokio::test]
     async fn test_session_creation() {

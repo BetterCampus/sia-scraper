@@ -114,14 +114,14 @@ class TestOracleAdfRequestDict:
         assert result["javax.faces.ViewState"] == "vs123"
 
     def test_init_oracle_adf_request_dict_with_none_values(self):
-        """Request dict initialization should handle None values."""
-        result = sia_scraper_rust.init_oracle_adf_request_dict(
-            tipology_index="",
-            window_id=None,
-            page_id=None,
-            view_state=None,
-        )
-        assert isinstance(result, dict)
+        """Request dict initialization should raise on None values (strict mode)."""
+        with pytest.raises(Exception):
+            sia_scraper_rust.init_oracle_adf_request_dict(
+                tipology_index="",
+                window_id=None,
+                page_id=None,
+                view_state=None,
+            )
 
 
 class TestBuildOracleAdfRequestBody:
