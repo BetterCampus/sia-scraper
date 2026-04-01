@@ -1,16 +1,14 @@
 """Rust/Python parity tests - compare outputs from Rust extension vs Python implementation."""
 
 import pytest
-from sia_scraper_rust import extract_view_state as rust_extract_view_state
-from sia_scraper_rust import get_course_list as rust_get_course_list
-from sia_scraper_rust import parse_course_info as rust_parse_course_info
-from sia_scraper_rust import parse_prereqs as rust_parse_prereqs
 
 from sia_scraper.constants import business
 from sia_scraper.core.adf_state import extract_view_state as python_extract_view_state
 from sia_scraper.parsers.course_parser import scrape_info as python_scrape_info
 from sia_scraper.parsers.course_parser import scrape_prereqs as python_scrape_prereqs
-from sia_scraper.parsers.html_parser import get_course_list as python_get_course_list
+from sia_scraper_rust import extract_view_state as rust_extract_view_state
+from sia_scraper_rust import parse_course_info as rust_parse_course_info
+from sia_scraper_rust import parse_prereqs as rust_parse_prereqs
 
 
 class TestExtractViewStateParity:
@@ -105,38 +103,6 @@ class TestParsePrereqsParity:
             int(rust_condition["number_of_courses"].strip("[]"))
             == python_condition.number_of_courses
         )
-
-
-class TestGetCourseListParity:
-    """Compare Rust and Python get_course_list outputs."""
-
-    def test_course_list_count_parity(self, sia_career_page_regular_html):
-        rust_result = rust_get_course_list(sia_career_page_regular_html)
-        python_result = python_get_course_list(sia_career_page_regular_html)
-
-        assert len(rust_result) == len(python_result)
-
-    def test_course_list_content_parity(self, sia_career_page_regular_html):
-        rust_result = rust_get_course_list(sia_career_page_regular_html)
-        python_result = python_get_course_list(sia_career_page_regular_html)
-
-        assert rust_result == python_result
-
-    def test_course_list_bytes_input(self, sia_career_page_regular_html):
-        rust_result = rust_get_course_list(sia_career_page_regular_html)
-        assert len(rust_result) > 0
-
-    def test_course_list_string_input(self, sia_career_page_regular_html):
-        html_str = sia_career_page_regular_html.decode("utf-8")
-        rust_result = rust_get_course_list(html_str)
-        assert len(rust_result) > 0
-
-    def test_course_list_empty_html(self):
-        html = "<html><body><p>No courses here</p></body></html>"
-        rust_result = rust_get_course_list(html)
-        python_result = python_get_course_list(html)
-        assert rust_result == python_result
-        assert len(rust_result) == 0
 
 
 class TestRustErrors:

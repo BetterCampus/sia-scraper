@@ -22,15 +22,13 @@ pub enum HttpError {
 
 impl From<reqwest::Error> for HttpError {
     fn from(err: reqwest::Error) -> Self {
-        let error_str = err.to_string();
-
-        // Check for timeout in error message (reqwest 0.12+)
-        if error_str.contains("timeout") || error_str.contains("timed out") {
+        // Use structured error detection instead of substring matching
+        if err.is_timeout() {
             return HttpError::Timeout { timeout: 15 };
         }
 
         if err.is_connect() {
-            return HttpError::ConnectionFailed(error_str);
+            return HttpError::ConnectionFailed(err.to_string());
         }
 
         if let Some(status) = err.status() {
@@ -40,6 +38,6 @@ impl From<reqwest::Error> for HttpError {
             };
         }
 
-        HttpError::ConnectionFailed(error_str)
+        HttpError::ConnectionFailed(err.to_string())
     }
 }

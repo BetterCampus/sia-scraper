@@ -471,7 +471,7 @@ class ScrapeResult(BaseModel):
         )
 
 
-class ErrorMode(str):
+class ErrorMode(str, Enum):
     """Error handling mode for batch scraping operations."""
 
     SKIP = "skip"

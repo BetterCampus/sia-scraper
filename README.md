@@ -124,12 +124,15 @@ asyncio.run(main())
 ### Prerequisites
 
 ```python
-prereqs = await scraper.get_course_prereqs(course_code="2016489")
+async def check_prerequisites():
+    prereqs = await scraper.get_course_prereqs(course_code="2016489")
 
-for condition in prereqs.conditions:
-    print(condition.type)
-    for req in condition.prerequisites:
-        print(req.course_code, req.course_name)
+    for condition in prereqs.conditions:
+        print(condition.type)
+        for req in condition.prerequisites:
+            print(req.course_code, req.course_name)
+
+asyncio.run(check_prerequisites())
 ```
 
 ### Session Persistence

@@ -56,7 +56,15 @@ impl RequestStats {
 
     pub fn record_failure(&mut self, mode: FailureMode, attempt: u8) {
         self.total_requests += 1;
-        let mode_name = format!("{:?}", mode).to_lowercase();
+        let mode_name = match mode {
+            FailureMode::Http503 => "http_503".to_string(),
+            FailureMode::Http502 => "http_502".to_string(),
+            FailureMode::Http429 => "http_429".to_string(),
+            FailureMode::Http504 => "http_504".to_string(),
+            FailureMode::Timeout => "timeout".to_string(),
+            FailureMode::ConnectionReset => "connection_reset".to_string(),
+            FailureMode::Success => "success".to_string(),
+        };
         *self.failures_by_mode.entry(mode_name).or_insert(0) += 1;
 
         if attempt == 1 {
@@ -70,8 +78,10 @@ impl RequestStats {
 
     pub fn record_success(&mut self, attempts: u8) {
         self.total_requests += 1;
-        let mode_name = "success".to_string();
-        *self.failures_by_mode.entry(mode_name).or_insert(0) += 1;
+        *self
+            .failures_by_mode
+            .entry("success".to_string())
+            .or_insert(0) += 1;
         *self.retry_counts.entry(attempts).or_insert(0) += 1;
     }
 

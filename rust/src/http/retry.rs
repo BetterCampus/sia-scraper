@@ -67,7 +67,8 @@ impl RetryConfig {
 }
 
 pub fn calculate_delay(attempt: u32, config: &RetryConfig) -> Duration {
-    let base_delay = config.initial_delay_ms * (2_u64.pow(attempt - 1));
+    let exponent = attempt.saturating_sub(1);
+    let base_delay = config.initial_delay_ms * (2_u64.pow(exponent));
     let delay = base_delay.min(config.max_delay_ms);
 
     let jitter_range = (delay as f64 * config.jitter_factor) as i64;
