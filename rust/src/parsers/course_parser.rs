@@ -3,13 +3,15 @@
 //! This module provides functions for extracting course data and prerequisites
 //! from Oracle ADF XML/HTML responses returned by SIA's web interface.
 
-use crate::error::SiaScraperError;
-use crate::parsers::utils::extract_text_from_elem;
+use log::{debug, warn};
 use pyo3::prelude::*;
 use pyo3::Py;
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 use std::sync::LazyLock;
+
+use crate::error::SiaScraperError;
+use crate::parsers::utils::extract_text_from_elem;
 
 static SCHEDULE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})").unwrap());
@@ -93,18 +95,27 @@ pub fn get_plain_text(xml: &str) -> String {
 #[inline]
 fn extract_credits(root: &Html) -> Result<i32, SiaScraperError> {
     let elems = css_select_html(root, &CREDITS_SELECTOR);
-    let _elem = elems
-        .first()
-        .ok_or_else(|| SiaScraperError::ParseError("Credits element not found".to_string()))?;
+    let elem = elems.first().ok_or_else(|| {
+        let all_spans = css_select_html(root, &GENERIC_SPAN_SELECTOR);
+        warn!(
+            "Credits element not found. Found {} span elements total",
+            all_spans.len()
+        );
+        SiaScraperError::ParseError("Credits element not found".to_string())
+    })?;
 
     let spans = css_select_html(root, &CREDITS_SPAN_SELECTOR);
-    let span = spans
-        .last()
-        .ok_or_else(|| SiaScraperError::ParseError("Credits span not found".to_string()))?;
+    let span = spans.last().ok_or_else(|| {
+        let content = extract_text_from_elem(elem);
+        warn!("Credits span not found. Element content: {:?}", content);
+        SiaScraperError::ParseError("Credits span not found".to_string())
+    })?;
 
     let text = extract_text_from_elem(span);
-    text.parse::<i32>()
-        .map_err(|_| SiaScraperError::ParseError("Failed to parse credits".to_string()))
+    text.parse::<i32>().map_err(|e| {
+        warn!("Failed to parse credits value '{}': {}", text, e);
+        SiaScraperError::ParseError(format!("Failed to parse credits: got '{}'", text))
+    })
 }
 
 #[inline]
@@ -189,9 +200,10 @@ fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
 fn extract_group(
     group: &ElementRef<'_>,
     course_name: &str,
+    group_index: usize,
 ) -> Option<(Py<pyo3::types::PyAny>, i64)> {
     let group_name = extract_group_name(group)?;
-    let fields = extract_group_fields(group)?;
+    let fields = extract_group_fields(group, course_name, group_index)?;
     let spots = fields.spots;
 
     let dict = Python::with_gil(|py| {
@@ -226,7 +238,11 @@ struct GroupFields {
     spots: i64,
 }
 
-fn extract_group_fields(group: &ElementRef<'_>) -> Option<GroupFields> {
+fn extract_group_fields(
+    group: &ElementRef<'_>,
+    course_name: &str,
+    group_index: usize,
+) -> Option<GroupFields> {
     let panel_elems = css_select_elem(group, &PANEL_GROUP_SELECTOR);
     if panel_elems.is_empty() {
         return None;
@@ -236,42 +252,87 @@ fn extract_group_fields(group: &ElementRef<'_>) -> Option<GroupFields> {
     let group_data: Vec<ElementRef<'_>> = css_select_elem(panel, &DIV_SELECTOR);
 
     if group_data.is_empty() {
+        warn!(
+            "Group {} in course '{}' has no divs",
+            group_index, course_name
+        );
         return None;
     }
 
-    let teacher_elems = css_select_elem(&group_data[GROUP_TEACHER_INDEX], &GENERIC_SPAN_SELECTOR);
-    let teacher = teacher_elems
-        .last()
-        .map(|e| extract_text_from_elem(e))
-        .unwrap_or_default();
+    let actual_count = group_data.len();
 
-    let faculty = if group_data.len() > GROUP_FACULTY_INDEX {
-        extract_label_value(&group_data[GROUP_FACULTY_INDEX])
+    // Log structure deviations for debugging
+    if actual_count < MIN_GROUP_DATA_LENGTH_WITH_SPOTS {
+        debug!(
+            "Group {} in course '{}' has {} divs (expected {} for full data). Fields: {:?}",
+            group_index,
+            course_name,
+            actual_count,
+            MIN_GROUP_DATA_LENGTH_WITH_SPOTS,
+            group_data
+                .iter()
+                .map(|d| extract_text_from_elem(d)
+                    .chars()
+                    .take(30)
+                    .collect::<String>())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    // Extract teacher with bounds checking
+    let teacher = if actual_count > GROUP_TEACHER_INDEX {
+        let teacher_elems =
+            css_select_elem(&group_data[GROUP_TEACHER_INDEX], &GENERIC_SPAN_SELECTOR);
+        teacher_elems
+            .last()
+            .map(|e| extract_text_from_elem(e))
+            .unwrap_or_else(|| "Unknown".to_string())
+    } else {
+        warn!(
+            "Cannot extract teacher from group {} in course '{}': only {} divs present",
+            group_index, course_name, actual_count
+        );
+        "Unknown".to_string()
+    };
+
+    let faculty = if actual_count > GROUP_FACULTY_INDEX {
+        let fac = extract_label_value(&group_data[GROUP_FACULTY_INDEX]);
+        if fac == "Unknown" {
+            debug!(
+                "Faculty field missing in group {} of course '{}' (div count: {})",
+                group_index, course_name, actual_count
+            );
+        }
+        fac
     } else {
         "Unknown".to_string()
     };
 
-    let schedules = if group_data.len() > GROUP_SCHEDULES_INDEX {
+    let schedules = if actual_count > GROUP_SCHEDULES_INDEX {
         extract_schedules(&group_data[GROUP_SCHEDULES_INDEX])
     } else {
         vec![]
     };
 
-    let duration = if group_data.len() > GROUP_DURATION_INDEX {
+    let duration = if actual_count > GROUP_DURATION_INDEX {
         extract_label_value(&group_data[GROUP_DURATION_INDEX])
     } else {
         "Unknown".to_string()
     };
 
-    let schedule_type = if group_data.len() > GROUP_SCHEDULE_TYPE_INDEX {
+    let schedule_type = if actual_count > GROUP_SCHEDULE_TYPE_INDEX {
         extract_label_value(&group_data[GROUP_SCHEDULE_TYPE_INDEX])
     } else {
         "Unknown".to_string()
     };
 
-    let spots = if group_data.len() >= MIN_GROUP_DATA_LENGTH_WITH_SPOTS {
+    let spots = if actual_count >= MIN_GROUP_DATA_LENGTH_WITH_SPOTS {
         extract_spots(&group_data[GROUP_SPOTS_INDEX]).unwrap_or(0)
     } else {
+        debug!(
+            "Spots info missing in group {} of course '{}' (div count: {})",
+            group_index, course_name, actual_count
+        );
         0
     };
 
@@ -313,8 +374,8 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
     let mut group_list: Vec<Py<pyo3::types::PyAny>> = Vec::new();
     let mut available_spots: i64 = 0;
 
-    for group in &group_elems {
-        if let Some((group_dict, spots)) = extract_group(group, &course_name) {
+    for (idx, group) in group_elems.iter().enumerate() {
+        if let Some((group_dict, spots)) = extract_group(group, &course_name, idx) {
             available_spots += spots;
             group_list.push(group_dict);
         }

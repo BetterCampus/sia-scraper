@@ -157,7 +157,7 @@ class TestCourseParserEdgeCases:
         )
         group = parser.find("div", class_="af_showDetailHeader_content0")
         assert group is not None
-        result = _extract_group(group, "CURSO X")
+        result = _extract_group(group, "CURSO X", group_index=0)
         assert result is None
 
 
@@ -279,6 +279,39 @@ class TestMalformedInputEdgeCases:
 
 
 @pytest.mark.unit
+class TestDiagnosticErrorMessages:
+    """Verify error messages contain useful diagnostic information."""
+
+    def test_missing_credits_error_includes_context(self):
+        """Missing credits error should include what was found."""
+        xml = "<h2>COURSE</h2><div>No credits here</div>"
+
+        with pytest.raises(ValueError) as exc_info:
+            scrape_info(xml)
+
+        error_msg = str(exc_info.value)
+        assert "credits" in error_msg.lower()
+        assert "not found" in error_msg.lower()
+        # Should include what was found
+        assert "span" in error_msg.lower() or "element" in error_msg.lower()
+
+    def test_missing_credits_span_error_includes_content(self):
+        """Credits element without span should include element content."""
+        xml = """
+        <h2>COURSE</h2>
+        <span class="detass-creditos">3</span>
+        <span class="detass-tipologia"><span>OBLIGATORIA</span></span>
+        """
+
+        with pytest.raises(ValueError) as exc_info:
+            scrape_info(xml)
+
+        error_msg = str(exc_info.value)
+        assert "credits" in error_msg.lower()
+        assert "span" in error_msg.lower()
+        assert "not found" in error_msg.lower()
+
+
 class TestFixtureEdgeCases:
     """Test parser behavior with edge case fixtures."""
 
@@ -362,6 +395,36 @@ class TestFixtureEdgeCases:
         error_msg = str(exc_info.value)
         assert "credits" in error_msg.lower()
         assert "span" in error_msg.lower()
+        assert "not found" in error_msg.lower()
+
+    def test_credits_parse_error_includes_value(self):
+        """Credits parse error should include the invalid value."""
+        xml = """
+        <h2>COURSE</h2>
+        <span class="detass-creditos"><span>invalid</span></span>
+        <span class="detass-tipologia"><span>OBLIGATORIA</span></span>
+        """
+
+        with pytest.raises(ValueError) as exc_info:
+            scrape_info(xml)
+
+        error_msg = str(exc_info.value)
+        assert "invalid" in error_msg.lower() or "parse" in error_msg.lower()
+        assert "expected integer" in error_msg.lower()
+
+    def test_missing_course_name_error_is_descriptive(self):
+        """Missing course name error should be descriptive."""
+        xml = """
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia"><span>OBLIGATORIA</span></span>
+        """
+
+        with pytest.raises(ValueError) as exc_info:
+            scrape_info(xml)
+
+        error_msg = str(exc_info.value)
+        assert "course name" in error_msg.lower()
+        assert "not found" in error_msg.lower()
 
 
 @pytest.mark.unit

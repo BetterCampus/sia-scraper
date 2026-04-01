@@ -4,9 +4,12 @@ This module provides functions for extracting course data from Oracle ADF XML/HT
 responses returned by SIA's web interface.
 """
 
+import os
 import re
 from datetime import datetime
 from typing import Any
+
+from loguru import logger
 
 import sia_scraper_rust
 
@@ -39,6 +42,12 @@ from .models import (
     Schedule,
 )
 
+# Enable logging only when SIA_DEBUG=1
+if os.environ.get("SIA_DEBUG", "0") == "1":
+    logger.enable("sia_scraper.parsers.course_parser")
+else:
+    logger.disable("sia_scraper.parsers.course_parser")
+
 _SCHEDULE_REGEX = re.compile(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})")
 
 
@@ -68,11 +77,43 @@ def _extract_credits(parser: HtmlParser) -> int:
     """
     credits_elem = parser.find("span", class_="detass-creditos")
     if credits_elem is None:
-        raise ValueError("Credits element not found in XML")
+        all_spans = parser.find_all("span")
+        span_classes = list(set(span.get("class", "") for span in all_spans[:20]))
+
+        logger.warning(
+            "Credits element not found. Found {} span elements with classes: {}",
+            len(all_spans),
+            span_classes,
+        )
+
+        raise ValueError(
+            f"Credits element not found in XML.\n"
+            f"Searched for: <span class='detass-creditos'>\n"
+            f"Found {len(all_spans)} span elements with classes: {span_classes}"
+        )
+
     credits_spans = credits_elem.findall(".//span")
     if not credits_spans:
-        raise ValueError("Credits span not found in XML")
-    return int(credits_spans[-1].text_content().strip())
+        logger.warning(
+            "Credits span not found inside credits element. Content: {}",
+            credits_elem.text_content()[:100],
+        )
+
+        raise ValueError(
+            f"Credits span not found in XML.\n"
+            f"Found credits element but no inner <span>.\n"
+            f"Element content: {credits_elem.text_content()}"
+        )
+
+    credits_text = credits_spans[-1].text_content().strip()
+    try:
+        return int(credits_text)
+    except ValueError as e:
+        raise ValueError(
+            f"Failed to parse credits value.\n"
+            f"Expected integer, got: '{credits_text}'\n"
+            f"Parse error: {e}"
+        ) from e
 
 
 def _extract_typology(parser: HtmlParser) -> str:
@@ -167,8 +208,17 @@ def _extract_spots(group_data: list[HtmlElement]) -> int | None:
         return None
 
 
-def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
-    """Extract one group from a group container."""
+def _extract_group(group: HtmlElement, course_name: str, group_index: int = 0) -> Group | None:
+    """Extract one group from a group container.
+
+    ## Args
+        group: HTML element containing group data.
+        course_name: Name of the course for diagnostic context.
+        group_index: Index of this group in the course for diagnostics.
+
+    ## Returns
+        Group dataclass or None if panel not found.
+    """
     parent_group = group.parent
     group_name: str | None = None
     if parent_group is not None:
@@ -184,13 +234,48 @@ def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
     if not group_data:
         return None
 
-    teacher_spans = group_data[GROUP_TEACHER_INDEX].findall(".//span")
-    teacher: str | None = teacher_spans[-1].text_content() if teacher_spans else None
+    actual_count = len(group_data)
+
+    # Log structure deviations for debugging
+    if actual_count < MIN_GROUP_DATA_LENGTH_WITH_SPOTS:
+        logger.debug(
+            "Group {} in course '{}' has {} divs (expected {} for full data). Fields: {}",
+            group_index,
+            course_name,
+            actual_count,
+            MIN_GROUP_DATA_LENGTH_WITH_SPOTS,
+            [d.text_content()[:30].strip() for d in group_data],
+        )
+
+    # Extract teacher with bounds checking and diagnostics
+    if actual_count <= GROUP_TEACHER_INDEX:
+        logger.warning(
+            "Cannot extract teacher from group {} in course '{}': only {} divs present (expected at index {})",
+            group_index,
+            course_name,
+            actual_count,
+            GROUP_TEACHER_INDEX,
+        )
+        teacher = DEFAULT_TEACHER
+    else:
+        teacher_spans = group_data[GROUP_TEACHER_INDEX].findall(".//span")
+        teacher = teacher_spans[-1].text_content() if teacher_spans else DEFAULT_TEACHER
+
+    # Extract other fields with bounds checking
     faculty: str | None = (
         _extract_label_value(group_data[GROUP_FACULTY_INDEX])
         if len(group_data) > GROUP_FACULTY_INDEX
         else None
     )
+
+    if faculty is None:
+        logger.debug(
+            "Faculty field missing in group {} of course '{}' (div count: {})",
+            group_index,
+            course_name,
+            actual_count,
+        )
+
     schedules = _extract_schedules(group_data)
     duration: str | None = (
         _extract_label_value(group_data[GROUP_DURATION_INDEX])
@@ -203,6 +288,14 @@ def _extract_group(group: HtmlElement, course_name: str) -> Group | None:
         else None
     )
     spots = _extract_spots(group_data)
+
+    if spots is None:
+        logger.debug(
+            "Spots info missing in group {} of course '{}' (div count: {})",
+            group_index,
+            course_name,
+            actual_count,
+        )
 
     return Group(
         group_name=group_name or DEFAULT_GROUP_NAME,
@@ -236,8 +329,19 @@ def _extract_condition_values(condition_info_div: HtmlElement) -> list[str] | No
     condition_values_spans = [header.getnext() for header in condition_headers_spans]
 
     if len(condition_headers_spans) != len(condition_values_spans):
+        logger.warning(
+            "Condition header/value count mismatch: {} headers, {} values",
+            len(condition_headers_spans),
+            len(condition_values_spans),
+        )
         return None
     if len(condition_headers_spans) < REQUIRED_CONDITION_HEADERS:
+        logger.warning(
+            "Condition has only {} headers (expected {}): {}",
+            len(condition_headers_spans),
+            REQUIRED_CONDITION_HEADERS,
+            [h.text_content() for h in condition_headers_spans],
+        )
         return None
 
     return [
@@ -314,8 +418,8 @@ def scrape_info(xml: str) -> CourseInfo:
     available_spots = 0
 
     groups = parser.css_select(".af_showDetailHeader_content0")
-    for group in groups:
-        extracted_group = _extract_group(group, course_name)
+    for idx, group in enumerate(groups):
+        extracted_group = _extract_group(group, course_name, group_index=idx)
         if extracted_group is None:
             continue
         group_list.append(extracted_group)
