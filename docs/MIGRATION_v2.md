@@ -10,7 +10,26 @@ This guide focuses on practical migration steps with concise examples.
 
 ## Breaking Changes
 
-### 1) Session and scraper workflows are async
+### 1) Strict parsing for course and prerequisite data
+
+All parsing endpoints now enforce strict validation. Previously, malformed groups and prerequisite conditions were silently skipped.
+
+**Behavioral changes:**
+- Empty group panels now cause parse errors instead of being skipped
+- Prerequisite conditions with insufficient headers now fail parsing
+- Malformed group data is no longer silently ignored
+
+**Impact:**
+- If your SIA HTML responses contain malformed data, parsing will now fail with descriptive errors
+- This catches data quality issues early rather than producing incomplete results
+- No code changes needed, but be prepared to handle parsing errors
+
+**Rationale:**
+- Ensures data completeness and consistency
+- Prevents silent data loss from malformed HTML
+- Aligns with typed JSON endpoint expectations
+
+### 2) Session and scraper workflows are async
 
 Most public operations that touch SIA now return awaitables.
 
@@ -45,12 +64,12 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### 2) Rust-first HTTP stack (no Python fallback)
+### 3) Rust-first HTTP stack (no Python fallback)
 
 The `requests` transport fallback is removed. HTTP/session behavior is handled by
 Rust code exposed through PyO3 bindings.
 
-### 3) Python version and runtime expectations
+### 4) Python version and runtime expectations
 
 - Python `3.10+` remains required.
 - Async-aware execution context is required (`asyncio.run`, framework event loop,

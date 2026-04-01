@@ -288,7 +288,7 @@ fn test_parse_course_xml_extract_label_value_without_span_uses_extracted_text() 
 }
 
 #[test]
-fn test_parse_course_xml_group_without_panel_is_skipped() {
+fn test_parse_course_xml_group_without_panel_fails_strict_validation() {
     let xml = r#"
         <html>
             <body>
@@ -307,7 +307,7 @@ fn test_parse_course_xml_group_without_panel_is_skipped() {
 }
 
 #[test]
-fn test_parse_course_xml_group_with_empty_panel_data_is_skipped() {
+fn test_parse_course_xml_group_with_empty_panel_data_fails_strict_validation() {
     let xml = r#"
         <html>
             <body>
