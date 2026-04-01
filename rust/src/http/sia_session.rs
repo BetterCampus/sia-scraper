@@ -1,8 +1,6 @@
 //! Async SIA Session manager with retry logic.
 
-use regex::Regex;
 use std::sync::Arc;
-use std::sync::LazyLock;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
@@ -17,11 +15,18 @@ use crate::http::session::SessionState;
 use crate::http::types::HttpResponse;
 use crate::parsers::adf_request::OracleAdfRequestBuilderState;
 use crate::parsers::table_parser::get_course_list;
+use crate::patterns::get_regex;
 
-static ADF_WINDOW_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?is)<input[^>]*name\s*=\s*[\"']Adf-Window-Id[\"'][^>]*value\s*=\s*[\"']([^\"']*)[\"'][^>]*>"#)
-        .expect("Adf-Window-Id regex must compile")
-});
+macro_rules! define_regex {
+    ($name:ident, $pattern:expr) => {
+        static $name: std::sync::LazyLock<Result<regex::Regex, String>> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new($pattern).map_err(|e| format!("{}: {:?}", stringify!($name), e))
+            });
+    };
+}
+
+define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
 pub struct SiaSession {
     client: AsyncHttpClient,
@@ -93,7 +98,9 @@ impl SiaSession {
             state.update_view_state(view_state);
         }
 
-        if let Some(captures) = ADF_WINDOW_ID_RE.captures(&resp.body) {
+        let window_id_re = get_regex(&ADF_WINDOW_ID_RE, "sia_session::do_init_session")
+            .map_err(|e| HttpError::ParseError(format!("ADF_WINDOW_ID_RE init failed: {}", e)))?;
+        if let Some(captures) = window_id_re.captures(&resp.body) {
             if let Some(window_id) = captures.get(1) {
                 state.update_params("Adf-Window-Id", window_id.as_str().to_string());
             }
@@ -434,13 +441,6 @@ impl SiaSession {
     }
 }
 
-impl Default for SiaSession {
-    fn default() -> Self {
-        Self::new(15, SIA_BASE_URL.to_string())
-            .expect("SiaSession::default() should never fail with standard config")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -453,7 +453,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_default_session() {
-        let session = SiaSession::default();
+        let session = SiaSession::new(15, SIA_BASE_URL.to_string()).expect("default session should create");
         let state = session.get_state().await;
         assert_eq!(state.status, "CREATED");
     }

@@ -71,12 +71,6 @@ impl AsyncHttpClient {
     }
 }
 
-impl Default for AsyncHttpClient {
-    fn default() -> Self {
-        Self::new(15, String::new()).unwrap()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
