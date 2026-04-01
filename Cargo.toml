@@ -37,6 +37,8 @@ proptest = "1.6"
 
 [build-dependencies]
 scraper = "0.20"
+syn = { version = "2.0", features = ["full", "parsing"] }
+quote = "1.0"
 
 [profile.release]
 opt-level = 3
