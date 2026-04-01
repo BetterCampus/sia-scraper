@@ -34,7 +34,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install "maturin>=1.0,<2.0"
-          python -c "import maturin; print(f'maturin {maturin.__version__} available')"
+          maturin --version
           pip install -e ".[dev]"
           python -c "import sia_scraper_rust; print('Rust extension importable')"
 
