@@ -1,11 +1,13 @@
 [build-system]
 requires = ["setuptools>=61.0", "maturin>=1.0,<2.0"]
-build-backend = "maturin.build_backend"
+build-backend = "maturin"
 
 [tool.maturin]
 features = ["extension-module"]
 module-name = "sia_scraper_rust"
 manifest-path = "Cargo.toml"
+python-source = "src"
+python-packages = ["sia_scraper", "sia_scraper_rust"]
 
 [project]
 name = "sia-scraper"
