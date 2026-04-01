@@ -26,7 +26,9 @@ class SessionStateTyped(BaseModel):
 
     session_headers: dict[str, str] = Field(default_factory=dict)
     session_cookies: dict[str, str] = Field(default_factory=dict)
-    params: dict[str, str] = Field(default_factory=dict)
+    params: dict[str, str] = Field(
+        default_factory=lambda: {"Adf-Page-Id": "1", "Adf-Window-Id": ""}
+    )
     javax_faces_ViewState: str | None = None
     career_code: str = ""
     career_name: str = "N/A"
