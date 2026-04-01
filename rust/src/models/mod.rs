@@ -2,3 +2,4 @@
 
 pub mod course;
 pub mod prerequisite;
+pub mod session;

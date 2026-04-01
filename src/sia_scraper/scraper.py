@@ -6,8 +6,9 @@ from collections.abc import Callable
 from .constants import http, status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
+from .models.session import SessionStateTyped
 from .parsers import CourseInfo, CoursePrereqs, scrape_info, scrape_prereqs
-from .parsers.models import ErrorMode, ScrapeResult, SessionState
+from .parsers.models import ErrorMode, ScrapeResult
 from .session import SiaSession
 
 
@@ -17,7 +18,7 @@ class SiaScraper:
     def __init__(
         self,
         timeout: int = http.DEFAULT_TIMEOUT,
-        session_data: dict[str, object] | SessionState | None = None,
+        session_data: dict[str, object] | SessionStateTyped | None = None,
         init_session: bool = False,
     ) -> None:
         self._timeout = timeout
@@ -31,7 +32,7 @@ class SiaScraper:
     async def create(
         cls,
         timeout: int = http.DEFAULT_TIMEOUT,
-        session_data: dict[str, object] | SessionState | None = None,
+        session_data: dict[str, object] | SessionStateTyped | None = None,
         init_session: bool = True,
     ) -> "SiaScraper":
         """Factory to create and optionally initialize an async scraper."""
@@ -66,9 +67,9 @@ class SiaScraper:
         await self._sia_session.init_session()
         return self
 
-    def load_session(self, session_data: dict[str, object] | SessionState) -> "SiaScraper":
+    def load_session(self, session_data: dict[str, object] | SessionStateTyped) -> "SiaScraper":
         """Restore lightweight async session state from serialized data."""
-        state = SessionState.model_validate(session_data)
+        state = SessionStateTyped.model_validate(session_data)
 
         self._sia_session._career_code = state.career_code
         self._sia_session._career_name = state.career_name or DEFAULT_CAREER_NAME
@@ -77,20 +78,17 @@ class SiaScraper:
             state.career_code.split("-") if state.career_code else []
         )
 
-        try:
-            restored_status = status.SiaSessionStatus[state.status]
-        except KeyError:
-            restored_status = status.SiaSessionStatus.NO_SESSION
-        self._sia_session._status = restored_status
+        self._sia_session._status = status.SiaSessionStatus[state.status]
 
         self._sia_session._session_state = {
             "javax_faces_ViewState": state.javax_faces_ViewState,
-            "course_list": self._sia_session._session_state.get("course_list", []),
+            "course_list": state.course_list_as_dicts(),
         }
+        self._sia_session._typed_state = state
 
         return self
 
-    def get_session_data(self) -> SessionState:
+    def get_session_data(self) -> SessionStateTyped:
         return self._sia_session.get_session_data()
 
     async def close_session(self) -> "SiaScraper":
@@ -220,7 +218,7 @@ class SiaScraper:
 async def init_sia_scraper(
     search_code: str,
     is_electives: bool,
-    session_data: dict[str, object] | SessionState | None = None,
+    session_data: dict[str, object] | SessionStateTyped | None = None,
     timeout: int = http.DEFAULT_TIMEOUT,
 ) -> SiaScraper:
     """Initialize or restore an async scraper with session management."""

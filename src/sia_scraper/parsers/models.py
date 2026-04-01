@@ -11,7 +11,6 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 
 from ..constants.defaults import (
-    DEFAULT_CAREER_NAME,
     DEFAULT_DURATION,
     DEFAULT_FACULTY,
     DEFAULT_GROUP_NAME,
@@ -386,48 +385,6 @@ class CoursePrereqs(BaseModel):
         if ": " in cleaned:
             cleaned = cleaned.split(": ")[-1]
         return cleaned
-
-
-class SessionState(BaseModel):
-    """Session state for serialization and persistence.
-
-    This model encapsulates all data required to restore a SIA session,
-    including HTTP headers, cookies, Oracle ADF tokens, and career context.
-
-    Attributes:
-        session_headers: HTTP headers from the session
-        session_cookies: HTTP cookies from the session
-        params: URL parameters including Oracle ADF identifiers
-        javax_faces_ViewState: JSF ViewState token for Oracle ADF requests
-        career_code: Hyphen-delimited career code (level-campus-faculty-career)
-        career_name: Name of the academic program
-        is_electives: Whether the current view shows elective courses
-        status: Current session status as string
-    """
-
-    model_config = {"frozen": True, "populate_by_name": True}
-
-    session_headers: dict[str, str] = Field(..., description="HTTP session headers")
-    session_cookies: dict[str, str] = Field(..., description="HTTP session cookies")
-    params: dict[str, str] = Field(..., description="URL parameters including ADF IDs")
-    javax_faces_ViewState: str | None = Field(default=None, description="JSF ViewState token")
-    career_code: str = Field(default="", description="Career code (empty if no career set)")
-    career_name: str = Field(
-        default=DEFAULT_CAREER_NAME,
-        description="Career name (default if no career set)",
-    )
-    is_electives: bool = Field(..., description="Whether viewing elective courses")
-    status: str = Field(..., description="Session status name")
-
-    @field_validator("params")
-    @classmethod
-    def validate_params(cls, v: dict[str, str]) -> dict[str, str]:
-        """Ensure required ADF parameters are present."""
-        required_keys = ["Adf-Page-Id", "Adf-Window-Id"]
-        missing = [key for key in required_keys if key not in v]
-        if missing:
-            raise ValueError(f"Missing required ADF parameters: {missing}")
-        return v
 
 
 class ScrapeResult(BaseModel):

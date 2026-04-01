@@ -9,6 +9,9 @@ use pyo3::PyTypeInfo;
 
 use pyo3_asyncio::tokio::future_into_py;
 
+use crate::error::SiaScraperError;
+use crate::models::session::SessionStateModel;
+
 pub mod constants;
 mod error;
 pub mod http;
@@ -115,6 +118,12 @@ fn parse_prereqs(xml: &str) -> Result<Py<PyAny>, error::SiaScraperError> {
 #[pyfunction]
 fn parse_prereqs_json(xml: &str) -> Result<String, error::SiaScraperError> {
     parsers::course_parser::parse_prereqs_model_json(xml)
+}
+
+/// Convert internal session state to typed JSON payload.
+fn session_state_json(state: &http::session::SessionState) -> Result<String, error::SiaScraperError> {
+    let typed = SessionStateModel::from_session_state(state);
+    serde_json::to_string(&typed).map_err(|e| SiaScraperError::ParseError(e.to_string()))
 }
 
 /// Extract course list from Oracle ADF table HTML.
@@ -417,6 +426,28 @@ fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p Py
     })
 }
 
+/// Initialize SIA session and return typed JSON state payload.
+#[pyfunction]
+#[pyo3(signature = (timeout,))]
+fn init_sia_session_json<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p PyAny> {
+    use crate::constants::SIA_BASE_URL;
+    use crate::http::sia_session::SiaSession;
+
+    let timeout = timeout.unwrap_or(15);
+    let base_url = SIA_BASE_URL.to_string();
+
+    future_into_py(py, async move {
+        let session = SiaSession::new(timeout, base_url)
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        session
+            .init_session()
+            .await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        let state = session.get_state().await;
+        session_state_json(&state).map_err(pyo3::PyErr::from)
+    })
+}
+
 /// Navigate to career and load course list.
 ///
 /// # Arguments
@@ -476,6 +507,37 @@ fn set_career<'p>(
             dict.set_item("course_list", course_list)?;
             Ok(dict.into_py(py))
         })
+    })
+}
+
+/// Navigate to career and return typed JSON session payload.
+#[pyfunction]
+#[pyo3(signature = (timeout, search_code, electives))]
+fn set_career_json<'p>(
+    py: Python<'p>,
+    timeout: Option<u64>,
+    search_code: String,
+    electives: Option<bool>,
+) -> PyResult<&'p PyAny> {
+    use crate::constants::SIA_BASE_URL;
+    use crate::http::sia_session::SiaSession;
+
+    let timeout = timeout.unwrap_or(15);
+    let electives = electives.unwrap_or(false);
+    let base_url = SIA_BASE_URL.to_string();
+
+    future_into_py(py, async move {
+        let session = SiaSession::new(timeout, base_url)
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        session
+            .init_session()
+            .await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        let state = session
+            .set_career(&search_code, electives)
+            .await
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        session_state_json(&state).map_err(pyo3::PyErr::from)
     })
 }
 
@@ -539,7 +601,9 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(async_post, m)?)?;
     m.add_function(wrap_pyfunction!(async_get_with_config, m)?)?;
     m.add_function(wrap_pyfunction!(init_sia_session, m)?)?;
+    m.add_function(wrap_pyfunction!(init_sia_session_json, m)?)?;
     m.add_function(wrap_pyfunction!(set_career, m)?)?;
+    m.add_function(wrap_pyfunction!(set_career_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_course_xml, m)?)?;
     m.add(
         "SiaScraperException",
