@@ -3,18 +3,20 @@
 //! This module provides functions for extracting course data and prerequisites
 //! from Oracle ADF XML/HTML responses returned by SIA's web interface.
 
-use log::{debug, warn};
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 use pyo3::Py;
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 use std::sync::LazyLock;
 
 use crate::error::SiaScraperError;
+use crate::models::course::{CourseInfoModel, GroupModel, ScheduleModel};
 use crate::parsers::utils::extract_text_from_elem;
 
-static SCHEDULE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})").unwrap());
+static SCHEDULE_REGEX: LazyLock<Result<Regex, String>> = LazyLock::new(|| {
+    Regex::new(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})").map_err(|e| e.to_string())
+});
 
 static H2_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("h2").expect("h2 selector must parse"));
@@ -22,9 +24,6 @@ static CREDITS_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("span.detass-creditos").expect("credits selector must parse"));
 static CREDITS_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.detass-creditos span").expect("credits span selector must parse")
-});
-static TYPOLOGY_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("span.detass-tipologia").expect("typology selector must parse")
 });
 static TYPOLOGY_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.detass-tipologia span").expect("typology span selector must parse")
@@ -54,7 +53,7 @@ static PREREQ_STRONG_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
 });
 static PREREQ_VALUE_SIBLING_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.strong.af_panelGroupLayout + span")
-        .expect("prereq sibling value selector must parse")
+        .expect("prereq value sibling selector must parse")
 });
 static PREREQ_HEADER_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.strong.af_panelGroupLayout > span.margin-l")
@@ -64,374 +63,548 @@ static PREREQ_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("span.af_panelGroupLayout > span").expect("prereq span selector must parse")
 });
 
-const GROUP_TEACHER_INDEX: usize = 0;
-const GROUP_FACULTY_INDEX: usize = 1;
-const GROUP_SCHEDULES_INDEX: usize = 2;
-const GROUP_DURATION_INDEX: usize = 3;
-const GROUP_SCHEDULE_TYPE_INDEX: usize = 4;
-const GROUP_SPOTS_INDEX: usize = 5;
-const MIN_GROUP_DATA_LENGTH_WITH_SPOTS: usize = 6;
+const REQUIRED_PREREQ_HEADERS: usize = 4;
 
-fn css_select_html<'a>(root: &'a Html, selector: &Selector) -> Vec<ElementRef<'a>> {
-    root.select(selector).collect()
+const TEACHER_LABELS: [&str; 4] = ["profesor", "teacher", "docente", "prof."];
+const FACULTY_LABELS: [&str; 2] = ["facultad", "faculty"];
+const DURATION_LABELS: [&str; 2] = ["duración", "duracion"];
+const SCHEDULE_TYPE_LABELS: [&str; 2] = ["jornada", "schedule type"];
+const SPOTS_LABELS: [&str; 2] = ["cupos", "spots"];
+
+fn schedule_regex() -> Result<&'static Regex, SiaScraperError> {
+    match &*SCHEDULE_REGEX {
+        Ok(regex) => Ok(regex),
+        Err(msg) => Err(SiaScraperError::ParseError(format!(
+            "Schedule regex initialization failed: {msg}"
+        ))),
+    }
 }
 
-#[inline]
-fn css_select_elem<'a>(root: &'a ElementRef<'a>, selector: &Selector) -> Vec<ElementRef<'a>> {
-    root.select(selector).collect()
+fn html_snippet(html: &str) -> String {
+    html.chars().take(220).collect()
+}
+
+fn elem_snippet(elem: &ElementRef<'_>) -> String {
+    extract_text_from_elem(elem).chars().take(120).collect()
+}
+
+fn parse_error_with_context(
+    field: &str,
+    selector: &str,
+    context: &str,
+    snippet: &str,
+    stack_context: &[&str],
+) -> SiaScraperError {
+    let stack = if stack_context.is_empty() {
+        String::from("[]")
+    } else {
+        format!("[{}]", stack_context.join(" -> "))
+    };
+    SiaScraperError::ParseError(format!(
+        "Field '{field}' parse failure\nSelector: {selector}\nContext: {context}\nHTML snippet: {snippet}\nStack: {stack}"
+    ))
+}
+
+fn parse_error_with_elem_context(
+    field: &str,
+    selector: &str,
+    context: &str,
+    elem: &ElementRef<'_>,
+    stack_context: &[&str],
+) -> SiaScraperError {
+    parse_error_with_context(field, selector, context, &elem_snippet(elem), stack_context)
 }
 
 #[inline]
 pub fn get_plain_text(xml: &str) -> String {
     let document = Html::parse_document(xml);
     let full_text = document.root_element().text().collect::<String>();
-    full_text
-        .split("\u{00A0}\u{00A0}\u{00A0}")
-        .next()
-        .unwrap_or_default()
-        .to_string()
+    match full_text.split("\u{00A0}\u{00A0}\u{00A0}").next() {
+        Some(text) => text.to_string(),
+        None => String::new(),
+    }
 }
 
-#[inline]
-fn extract_credits(root: &Html) -> Result<i32, SiaScraperError> {
-    let elems = css_select_html(root, &CREDITS_SELECTOR);
+fn extract_credits(root: &Html, xml: &str) -> Result<i32, SiaScraperError> {
+    let elems: Vec<ElementRef> = root.select(&CREDITS_SELECTOR).collect();
     let elem = elems.first().ok_or_else(|| {
-        let all_spans = css_select_html(root, &GENERIC_SPAN_SELECTOR);
-        warn!(
-            "Credits element not found. Found {} span elements total",
-            all_spans.len()
-        );
-        SiaScraperError::ParseError("Credits element not found".to_string())
+        parse_error_with_context(
+            "credits",
+            "span.detass-creditos",
+            "Required credits container was not found",
+            &html_snippet(xml),
+            &["parse_course_model", "extract_credits"],
+        )
     })?;
 
-    let spans = css_select_html(root, &CREDITS_SPAN_SELECTOR);
+    let spans: Vec<ElementRef> = root.select(&CREDITS_SPAN_SELECTOR).collect();
     let span = spans.last().ok_or_else(|| {
-        let content = extract_text_from_elem(elem);
-        warn!("Credits span not found. Element content: {:?}", content);
-        SiaScraperError::ParseError("Credits span not found".to_string())
+        parse_error_with_elem_context(
+            "credits",
+            "span.detass-creditos span",
+            "Credits container exists but has no nested <span>",
+            elem,
+            &["parse_course_model", "extract_credits"],
+        )
     })?;
 
     let text = extract_text_from_elem(span);
     text.parse::<i32>().map_err(|e| {
-        warn!("Failed to parse credits value '{}': {}", text, e);
-        SiaScraperError::ParseError(format!("Failed to parse credits: got '{}'", text))
+        parse_error_with_context(
+            "credits",
+            "span.detass-creditos span",
+            &format!("Expected integer credits, got '{text}'. Parse error: {e}"),
+            &html_snippet(xml),
+            &["parse_course_model", "extract_credits"],
+        )
     })
 }
 
-#[inline]
-fn extract_typology(root: &Html) -> String {
-    let elems = css_select_html(root, &TYPOLOGY_SELECTOR);
-    match elems.first() {
-        Some(_elem) => {
-            let spans = css_select_html(root, &TYPOLOGY_SPAN_SELECTOR);
-            spans
-                .last()
-                .map(|s| extract_text_from_elem(s))
-                .unwrap_or_else(|| "Unknown".to_string())
-        }
-        None => "Unknown".to_string(),
-    }
-}
-
-#[inline]
-fn extract_label_value(elem: &ElementRef<'_>) -> String {
-    let spans = css_select_elem(elem, &GENERIC_SPAN_SELECTOR);
+fn extract_typology(root: &Html) -> Result<String, SiaScraperError> {
+    let spans: Vec<ElementRef> = root.select(&TYPOLOGY_SPAN_SELECTOR).collect();
     match spans.last() {
-        Some(s) => {
-            let text = extract_text_from_elem(s);
+        Some(span) => {
+            let text = extract_text_from_elem(span);
             if text.is_empty() {
-                "Unknown".to_string()
+                Ok("Unknown".to_string())
             } else {
-                text
+                Ok(text)
             }
         }
-        None => "Unknown".to_string(),
+        None => Ok("Unknown".to_string()),
     }
 }
 
-fn extract_schedules(elem: &ElementRef<'_>) -> Vec<Py<pyo3::types::PyAny>> {
-    let mut schedules: Vec<Py<pyo3::types::PyAny>> = Vec::new();
+fn row_texts(panel: &ElementRef<'_>) -> Vec<String> {
+    panel
+        .select(&DIV_SELECTOR)
+        .map(|e| extract_text_from_elem(&e))
+        .collect()
+}
 
-    let lista_spans = css_select_elem(elem, &LISTA_ELEMENTO_SELECTOR);
+fn extract_labeled_or_inferred_value(
+    panel: &ElementRef<'_>,
+    labels: &[&str],
+    field_name: &str,
+    required: bool,
+) -> Result<Option<String>, SiaScraperError> {
+    let rows: Vec<ElementRef> = panel.select(&DIV_SELECTOR).collect();
+    for row in rows {
+        let text = extract_text_from_elem(&row);
+        let lowered = text.to_lowercase();
+        if labels.iter().any(|label| lowered.contains(label)) {
+            let spans: Vec<ElementRef> = row.select(&GENERIC_SPAN_SELECTOR).collect();
+            if spans.len() >= 2 {
+                if let Some(last_span) = spans.last() {
+                    let value = extract_text_from_elem(last_span);
+                    if !value.is_empty() {
+                        return Ok(Some(value));
+                    }
+                }
+            }
+            let mut cleaned = text;
+            for label in labels {
+                cleaned = cleaned.replace(label, "");
+                cleaned = cleaned.replace(&label.to_uppercase(), "");
+            }
+            let value = cleaned.trim().trim_matches(':').trim().to_string();
+            if !value.is_empty() {
+                return Ok(Some(value));
+            }
+        }
+    }
+
+    if field_name == "teacher" {
+        let rows_text = row_texts(panel);
+        for row_text in rows_text {
+            let lowered = row_text.to_lowercase();
+            if lowered.contains("prof") || lowered.contains("docente") {
+                let inferred = row_text.trim().to_string();
+                if !inferred.is_empty() {
+                    return Ok(Some(inferred));
+                }
+            }
+        }
+    }
+
+    if required {
+        return Err(parse_error_with_elem_context(
+            field_name,
+            "label-based field extraction",
+            &format!(
+                "Missing required field. Tried labels: {}",
+                labels.join(", ")
+            ),
+            panel,
+            &["parse_course_model", "extract_group_model"],
+        ));
+    }
+
+    Ok(None)
+}
+
+fn extract_schedules(panel: &ElementRef<'_>) -> Result<Vec<ScheduleModel>, SiaScraperError> {
+    let mut schedules: Vec<ScheduleModel> = Vec::new();
+    let regex = schedule_regex()?;
+    let lista_spans: Vec<ElementRef> = panel.select(&LISTA_ELEMENTO_SELECTOR).collect();
 
     for lista_span in lista_spans {
-        let nested_classroom = css_select_elem(&lista_span, &LISTA_ELEMENTO_SELECTOR);
-        if nested_classroom.is_empty() {
-            continue;
-        }
-
         let schedule_txt = extract_text_from_elem(&lista_span);
+        if let Some(captures) = regex.captures(&schedule_txt) {
+            let day = if let Some(match_value) = captures.get(1) {
+                match_value.as_str().to_string()
+            } else {
+                continue;
+            };
+            let start_time = if let Some(match_value) = captures.get(2) {
+                match_value.as_str().to_string()
+            } else {
+                continue;
+            };
+            let end_time = if let Some(match_value) = captures.get(3) {
+                match_value.as_str().to_string()
+            } else {
+                continue;
+            };
 
-        if let Some(captures) = SCHEDULE_REGEX.captures(&schedule_txt) {
-            let day = captures.get(1).map_or("", |m| m.as_str());
-            let start_time = captures.get(2).map_or("", |m| m.as_str());
-            let end_time = captures.get(3).map_or("", |m| m.as_str());
+            if day.is_empty() || start_time.is_empty() || end_time.is_empty() {
+                continue;
+            }
 
-            let classroom = nested_classroom
-                .last()
-                .map(|c| extract_text_from_elem(c))
-                .unwrap_or_default();
+            let nested_classroom: Vec<ElementRef> =
+                lista_span.select(&LISTA_ELEMENTO_SELECTOR).collect();
+            let classroom = if let Some(classroom_elem) = nested_classroom.last() {
+                extract_text_from_elem(classroom_elem)
+            } else {
+                String::new()
+            };
 
-            Python::with_gil(|py| {
-                let dict = pyo3::types::PyDict::new(py);
-                let _ = dict.set_item("day", day);
-                let _ = dict.set_item("start_time", start_time);
-                let _ = dict.set_item("end_time", end_time);
-                let _ = dict.set_item("classroom", classroom);
-                schedules.push(dict.into_py(py));
+            schedules.push(ScheduleModel {
+                day,
+                start_time,
+                end_time,
+                classroom,
             });
         }
     }
 
-    schedules
+    Ok(schedules)
 }
 
-#[inline]
-fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
-    let spans = css_select_elem(elem, &GENERIC_SPAN_SELECTOR);
-    if spans.is_empty() {
-        return None;
-    }
-    let last_span = spans.last()?;
-    let text = extract_text_from_elem(last_span);
-    text.trim().parse::<i64>().ok()
-}
-
-fn extract_group(
-    group: &ElementRef<'_>,
-    course_name: &str,
-    group_index: usize,
-) -> Option<(Py<pyo3::types::PyAny>, i64)> {
-    let group_name = extract_group_name(group)?;
-    let fields = extract_group_fields(group, course_name, group_index)?;
-    let spots = fields.spots;
-
-    let dict = Python::with_gil(|py| {
-        let dict = pyo3::types::PyDict::new(py);
-        let _ = dict.set_item("group_name", &group_name);
-        let _ = dict.set_item("teacher", &fields.teacher);
-        let _ = dict.set_item("faculty", &fields.faculty);
-        let _ = dict.set_item("course_name", course_name);
-        let _ = dict.set_item("schedules", pyo3::types::PyList::new(py, &fields.schedules));
-        let _ = dict.set_item("duration", &fields.duration);
-        let _ = dict.set_item("schedule_type", &fields.schedule_type);
-        let _ = dict.set_item("spots", fields.spots);
-        let _ = dict.set_item("code", py.None());
-        dict.into_py(py)
-    });
-
-    Some((dict, spots))
-}
-
-fn extract_group_name(group: &ElementRef<'_>) -> Option<String> {
-    let parent_ref = group.parent().and_then(ElementRef::wrap).unwrap_or(*group);
-    let h2_elems = css_select_elem(&parent_ref, &GROUP_TITLE_SELECTOR);
-    h2_elems.first().map(|e| extract_text_from_elem(e))
-}
-
-struct GroupFields {
-    teacher: String,
-    faculty: String,
-    schedules: Vec<Py<pyo3::types::PyAny>>,
-    duration: String,
-    schedule_type: String,
-    spots: i64,
-}
-
-fn extract_group_fields(
-    group: &ElementRef<'_>,
-    course_name: &str,
-    group_index: usize,
-) -> Option<GroupFields> {
-    let panel_elems = css_select_elem(group, &PANEL_GROUP_SELECTOR);
-    if panel_elems.is_empty() {
-        return None;
-    }
-
-    let panel = &panel_elems[0];
-    let group_data: Vec<ElementRef<'_>> = css_select_elem(panel, &DIV_SELECTOR);
-
-    if group_data.is_empty() {
-        warn!(
-            "Group {} in course '{}' has no divs",
-            group_index, course_name
-        );
-        return None;
-    }
-
-    let actual_count = group_data.len();
-
-    // Log structure deviations for debugging
-    if actual_count < MIN_GROUP_DATA_LENGTH_WITH_SPOTS {
-        debug!(
-            "Group {} in course '{}' has {} divs (expected {} for full data). Fields: {:?}",
-            group_index,
-            course_name,
-            actual_count,
-            MIN_GROUP_DATA_LENGTH_WITH_SPOTS,
-            group_data
-                .iter()
-                .map(|d| extract_text_from_elem(d)
-                    .chars()
-                    .take(30)
-                    .collect::<String>())
-                .collect::<Vec<_>>()
-        );
-    }
-
-    // Extract teacher with bounds checking
-    let teacher = if actual_count > GROUP_TEACHER_INDEX {
-        let teacher_elems =
-            css_select_elem(&group_data[GROUP_TEACHER_INDEX], &GENERIC_SPAN_SELECTOR);
-        teacher_elems
-            .last()
-            .map(|e| extract_text_from_elem(e))
-            .unwrap_or_else(|| "Unknown".to_string())
-    } else {
-        warn!(
-            "Cannot extract teacher from group {} in course '{}': only {} divs present",
-            group_index, course_name, actual_count
-        );
-        "Unknown".to_string()
+fn extract_spots(panel: &ElementRef<'_>) -> Result<Option<i64>, SiaScraperError> {
+    let field = extract_labeled_or_inferred_value(panel, &SPOTS_LABELS, "spots", false)?;
+    let Some(spots_text) = field else {
+        return Ok(None);
     };
 
-    let faculty = if actual_count > GROUP_FACULTY_INDEX {
-        let fac = extract_label_value(&group_data[GROUP_FACULTY_INDEX]);
-        if fac == "Unknown" {
-            debug!(
-                "Faculty field missing in group {} of course '{}' (div count: {})",
-                group_index, course_name, actual_count
-            );
+    let digits_only = spots_text
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>();
+
+    if digits_only.is_empty() {
+        return Ok(None);
+    }
+
+    match digits_only.parse::<i64>() {
+        Ok(value) => Ok(Some(value)),
+        Err(_) => Ok(None),
+    }
+}
+
+fn extract_group_name(group: &ElementRef<'_>) -> Result<Option<String>, SiaScraperError> {
+    if let Some(parent_ref) = group.parent().and_then(ElementRef::wrap) {
+        let h2_elems: Vec<ElementRef> = parent_ref.select(&GROUP_TITLE_SELECTOR).collect();
+        if let Some(title_elem) = h2_elems.first() {
+            let value = extract_text_from_elem(title_elem);
+            if !value.is_empty() {
+                return Ok(Some(value));
+            }
         }
-        fac
-    } else {
-        "Unknown".to_string()
-    };
+    }
+    Ok(None)
+}
 
-    let schedules = if actual_count > GROUP_SCHEDULES_INDEX {
-        extract_schedules(&group_data[GROUP_SCHEDULES_INDEX])
-    } else {
-        vec![]
-    };
+fn extract_group_model(
+    group: &ElementRef<'_>,
+    course_name: &str,
+    group_index: usize,
+) -> Result<GroupModel, SiaScraperError> {
+    let panel_elems: Vec<ElementRef> = group.select(&PANEL_GROUP_SELECTOR).collect();
+    let panel = panel_elems.first().ok_or_else(|| {
+        parse_error_with_elem_context(
+            "group_panel",
+            "div.af_panelGroupLayout",
+            &format!("Group {group_index} has no panel container"),
+            group,
+            &[
+                "parse_course_model",
+                "extract_groups",
+                "extract_group_model",
+            ],
+        )
+    })?;
 
-    let duration = if actual_count > GROUP_DURATION_INDEX {
-        extract_label_value(&group_data[GROUP_DURATION_INDEX])
-    } else {
-        "Unknown".to_string()
-    };
+    let group_name = extract_group_name(group)?.unwrap_or_else(|| "Unknown".to_string());
+    let teacher = extract_labeled_or_inferred_value(panel, &TEACHER_LABELS, "teacher", true)?
+        .ok_or_else(|| {
+            parse_error_with_elem_context(
+                "teacher",
+                "teacher labels",
+                &format!("Group {group_index} has no teacher value"),
+                panel,
+                &[
+                    "parse_course_model",
+                    "extract_groups",
+                    "extract_group_model",
+                ],
+            )
+        })?;
 
-    let schedule_type = if actual_count > GROUP_SCHEDULE_TYPE_INDEX {
-        extract_label_value(&group_data[GROUP_SCHEDULE_TYPE_INDEX])
-    } else {
-        "Unknown".to_string()
-    };
+    let faculty = extract_labeled_or_inferred_value(panel, &FACULTY_LABELS, "faculty", false)?
+        .unwrap_or_else(|| "Unknown".to_string());
+    let duration = extract_labeled_or_inferred_value(panel, &DURATION_LABELS, "duration", false)?
+        .unwrap_or_else(|| "Unknown".to_string());
+    let schedule_type =
+        extract_labeled_or_inferred_value(panel, &SCHEDULE_TYPE_LABELS, "schedule_type", false)?
+            .unwrap_or_else(|| "Unknown".to_string());
+    let schedules = extract_schedules(panel)?;
+    let spots = extract_spots(panel)?;
 
-    let spots = if actual_count >= MIN_GROUP_DATA_LENGTH_WITH_SPOTS {
-        extract_spots(&group_data[GROUP_SPOTS_INDEX]).unwrap_or(0)
-    } else {
-        debug!(
-            "Spots info missing in group {} of course '{}' (div count: {})",
-            group_index, course_name, actual_count
-        );
-        0
-    };
-
-    Some(GroupFields {
+    Ok(GroupModel {
+        group_name,
         teacher,
         faculty,
+        course_name: course_name.to_string(),
         schedules,
         duration,
         schedule_type,
         spots,
+        code: None,
     })
 }
 
-/// Parse comprehensive course information from Oracle ADF course detail page.
-///
-/// # Arguments
-/// * `xml` - Raw XML/HTML string from SIA course detail page
-/// * `py` - Python interpreter GIL handle
-///
-/// # Returns
-/// Python dictionary with course_name, credits, typology, available_spots, groups, scrape_timestamp, code
-///
-/// # Errors
-/// Returns SiaScraperError if course name or credits not found
-pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
-    let document = Html::parse_document(xml);
-
-    let h2_elems = css_select_html(&document, &H2_SELECTOR);
-    let course_name = h2_elems
-        .first()
-        .map(|e| extract_text_from_elem(e))
-        .ok_or_else(|| SiaScraperError::ParseError("Course name not found".to_string()))?;
-
-    let credits = extract_credits(&document)?;
-    let typology = extract_typology(&document);
-
-    let group_elems = css_select_html(&document, &GROUP_CONTENT_SELECTOR);
-
-    let mut group_list: Vec<Py<pyo3::types::PyAny>> = Vec::new();
-    let mut available_spots: i64 = 0;
+fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, SiaScraperError> {
+    let group_elems: Vec<ElementRef> = root.select(&GROUP_CONTENT_SELECTOR).collect();
+    let mut groups = Vec::with_capacity(group_elems.len());
+    let mut errors: Vec<SiaScraperError> = Vec::new();
 
     for (idx, group) in group_elems.iter().enumerate() {
-        if let Some((group_dict, spots)) = extract_group(group, &course_name, idx) {
-            available_spots += spots;
-            group_list.push(group_dict);
+        match extract_group_model(group, course_name, idx) {
+            Ok(model) => groups.push(model),
+            Err(err) => errors.push(err),
         }
     }
 
-    let result = pyo3::types::PyDict::new(py);
-    let _ = result.set_item("course_name", &course_name);
-    let _ = result.set_item("credits", credits);
-    let _ = result.set_item("typology", &typology);
-    let _ = result.set_item("available_spots", available_spots);
-    let _ = result.set_item("groups", pyo3::types::PyList::new(py, &group_list));
-    let _ = result.set_item("scrape_timestamp", "");
-    let _ = result.set_item("code", py.None());
+    if !errors.is_empty() {
+        let combined = errors
+            .into_iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        return Err(SiaScraperError::ParseError(format!(
+            "One or more groups failed strict parsing:\n{combined}"
+        )));
+    }
 
+    Ok(groups)
+}
+
+#[cfg(all(feature = "fail-fast", not(feature = "full-error-collection")))]
+fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
+    let document = Html::parse_document(xml);
+    let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
+    let course_name = h2_elems
+        .first()
+        .map(extract_text_from_elem)
+        .ok_or_else(|| {
+            parse_error_with_context(
+                "course_name",
+                "h2",
+                "Course title <h2> not found",
+                &html_snippet(xml),
+                &["parse_course_model"],
+            )
+        })?;
+
+    let credits = extract_credits(&document, xml)?;
+    let typology = extract_typology(&document)?;
+    let groups = extract_groups(&document, &course_name)?;
+    let available_spots = groups.iter().filter_map(|g| g.spots).sum::<i64>();
+
+    Ok(CourseInfoModel {
+        course_name,
+        credits,
+        typology,
+        available_spots,
+        scrape_timestamp: String::new(),
+        groups,
+        code: None,
+    })
+}
+
+#[cfg(any(not(feature = "fail-fast"), feature = "full-error-collection"))]
+fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
+    let document = Html::parse_document(xml);
+    let mut errors: Vec<SiaScraperError> = Vec::new();
+
+    let course_name = {
+        let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
+        match h2_elems.first().map(extract_text_from_elem) {
+            Some(value) if !value.is_empty() => Some(value),
+            _ => {
+                errors.push(parse_error_with_context(
+                    "course_name",
+                    "h2",
+                    "Course title <h2> not found",
+                    &html_snippet(xml),
+                    &["parse_course_model"],
+                ));
+                None
+            }
+        }
+    };
+
+    let credits = match extract_credits(&document, xml) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    let typology = match extract_typology(&document) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    if !errors.is_empty() {
+        let combined = errors
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        return Err(SiaScraperError::ParseError(format!(
+            "Course parsing failed with aggregated errors:\n{combined}"
+        )));
+    }
+
+    let course_name_value = course_name.ok_or_else(|| {
+        SiaScraperError::ParseError("Course parsing failed: course_name missing".to_string())
+    })?;
+    let credits_value = credits.ok_or_else(|| {
+        SiaScraperError::ParseError("Course parsing failed: credits missing".to_string())
+    })?;
+    let typology_value = typology.ok_or_else(|| {
+        SiaScraperError::ParseError("Course parsing failed: typology missing".to_string())
+    })?;
+
+    let groups = extract_groups(&document, &course_name_value)?;
+    let available_spots = groups.iter().filter_map(|g| g.spots).sum::<i64>();
+
+    Ok(CourseInfoModel {
+        course_name: course_name_value,
+        credits: credits_value,
+        typology: typology_value,
+        available_spots,
+        scrape_timestamp: String::new(),
+        groups,
+        code: None,
+    })
+}
+
+/// Parse comprehensive course information from Oracle ADF course detail page and return JSON.
+pub fn parse_course_model_json(xml: &str) -> Result<String, SiaScraperError> {
+    let model = parse_course_model(xml)?;
+    serde_json::to_string(&model)
+        .map_err(|e| SiaScraperError::ParseError(format!("Course JSON serialization failed: {e}")))
+}
+
+/// Parse comprehensive course information from Oracle ADF course detail page.
+pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
+    let model = parse_course_model(xml)?;
+
+    let result = PyDict::new(py);
+    result.set_item("course_name", &model.course_name)?;
+    result.set_item("credits", model.credits)?;
+    result.set_item("typology", &model.typology)?;
+    result.set_item("available_spots", model.available_spots)?;
+    result.set_item("scrape_timestamp", &model.scrape_timestamp)?;
+    result.set_item("code", py.None())?;
+
+    let groups_list = PyList::empty(py);
+    for group in model.groups {
+        let group_dict = PyDict::new(py);
+        group_dict.set_item("group_name", group.group_name)?;
+        group_dict.set_item("teacher", group.teacher)?;
+        group_dict.set_item("faculty", group.faculty)?;
+        group_dict.set_item("course_name", group.course_name)?;
+        group_dict.set_item("duration", group.duration)?;
+        group_dict.set_item("schedule_type", group.schedule_type)?;
+        match group.spots {
+            Some(spots) => group_dict.set_item("spots", spots)?,
+            None => group_dict.set_item("spots", py.None())?,
+        }
+        group_dict.set_item("code", py.None())?;
+
+        let schedules_list = PyList::empty(py);
+        for schedule in group.schedules {
+            let schedule_dict = PyDict::new(py);
+            schedule_dict.set_item("day", schedule.day)?;
+            schedule_dict.set_item("start_time", schedule.start_time)?;
+            schedule_dict.set_item("end_time", schedule.end_time)?;
+            schedule_dict.set_item("classroom", schedule.classroom)?;
+            schedules_list.append(schedule_dict)?;
+        }
+
+        group_dict.set_item("schedules", schedules_list)?;
+        groups_list.append(group_dict)?;
+    }
+
+    result.set_item("groups", groups_list)?;
     Ok(result.into())
 }
 
 /// Parse course prerequisites and enrollment conditions from Oracle ADF XML.
-///
-/// # Arguments
-/// * `xml` - Raw XML/HTML string from SIA course prerequisites page
-/// * `py` - Python interpreter GIL handle
-///
-/// # Returns
-/// Python dictionary with course_name, code, credits, typology, conditions
-///
-/// # Errors
-/// Returns SiaScraperError if course name or credits not found
 pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
     let document = Html::parse_document(xml);
 
-    let h2_elems = css_select_html(&document, &H2_SELECTOR);
+    let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
     let course_name = h2_elems
         .first()
-        .map(|e| extract_text_from_elem(e))
-        .ok_or_else(|| SiaScraperError::ParseError("Course name not found".to_string()))?;
+        .map(extract_text_from_elem)
+        .ok_or_else(|| {
+            parse_error_with_context(
+                "course_name",
+                "h2",
+                "Course name not found",
+                &html_snippet(xml),
+                &["parse_prereqs_xml"],
+            )
+        })?;
 
-    let credits = extract_credits(&document)?;
-    let typology = extract_typology(&document);
+    let credits = extract_credits(&document, xml)?;
+    let typology = extract_typology(&document)?;
 
-    let condition_divs = css_select_html(&document, &PREREQ_CONDITION_SELECTOR);
+    let condition_divs: Vec<ElementRef> = document.select(&PREREQ_CONDITION_SELECTOR).collect();
 
-    let mut conditions: Vec<Py<pyo3::types::PyAny>> = Vec::new();
+    let conditions = PyList::empty(py);
 
     for condition_div in condition_divs {
-        let sub_divs: Vec<ElementRef<'_>> = css_select_elem(&condition_div, &DIV_SELECTOR);
-
+        let sub_divs: Vec<ElementRef> = condition_div.select(&DIV_SELECTOR).collect();
         if sub_divs.len() < 2 {
             continue;
         }
 
         let info_div = &sub_divs[0];
-        let strong_spans = css_select_elem(info_div, &PREREQ_STRONG_SELECTOR);
-        let mut all_spans: Vec<ElementRef<'_>> = Vec::new();
+        let strong_spans: Vec<ElementRef> = info_div.select(&PREREQ_STRONG_SELECTOR).collect();
+
+        let mut all_spans: Vec<ElementRef> = Vec::new();
         if let Some(strong_span) = strong_spans.first() {
-            for nested_span in css_select_elem(strong_span, &GENERIC_SPAN_SELECTOR) {
+            for nested_span in strong_span.select(&GENERIC_SPAN_SELECTOR) {
                 let is_header = nested_span
                     .value()
                     .classes()
@@ -442,29 +615,28 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             }
         }
 
-        let header_spans = css_select_elem(info_div, &PREREQ_HEADER_SELECTOR);
+        let header_spans: Vec<ElementRef> = info_div.select(&PREREQ_HEADER_SELECTOR).collect();
         let header_count = header_spans.len();
-
-        if header_count < 4 {
+        if header_count < REQUIRED_PREREQ_HEADERS {
             continue;
         }
 
         if all_spans.len() < header_count {
-            all_spans = css_select_elem(info_div, &PREREQ_VALUE_SIBLING_SELECTOR);
+            all_spans = info_div.select(&PREREQ_VALUE_SIBLING_SELECTOR).collect();
         }
 
-        let mut header_values: Vec<String> = Vec::new();
-        for i in 0..header_count {
-            if let Some(value_span) = all_spans.get(i) {
+        let mut header_values: Vec<String> = Vec::with_capacity(header_count);
+        for index in 0..header_count {
+            if let Some(value_span) = all_spans.get(index) {
                 header_values.push(extract_text_from_elem(value_span));
             } else {
                 header_values.push(String::new());
             }
         }
 
-        let mut prereqs: Vec<Py<pyo3::types::PyAny>> = Vec::new();
+        let prereqs = PyList::empty(py);
         for prereq_div in &sub_divs[1..] {
-            let prereq_spans = css_select_elem(prereq_div, &PREREQ_SPAN_SELECTOR);
+            let prereq_spans: Vec<ElementRef> = prereq_div.select(&PREREQ_SPAN_SELECTOR).collect();
             if prereq_spans.len() < 2 {
                 continue;
             }
@@ -472,31 +644,27 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             let course_code = extract_text_from_elem(&prereq_spans[0]);
             let course_name_prereq = extract_text_from_elem(&prereq_spans[1]);
 
-            Python::with_gil(|py| {
-                let dict = pyo3::types::PyDict::new(py);
-                let _ = dict.set_item("course_code", &course_code);
-                let _ = dict.set_item("course_name", &course_name_prereq);
-                prereqs.push(dict.into_py(py));
-            });
+            let prereq_dict = PyDict::new(py);
+            prereq_dict.set_item("course_code", course_code)?;
+            prereq_dict.set_item("course_name", course_name_prereq)?;
+            prereqs.append(prereq_dict)?;
         }
 
-        Python::with_gil(|py| {
-            let dict = pyo3::types::PyDict::new(py);
-            let _ = dict.set_item("condition", &header_values[0]);
-            let _ = dict.set_item("type", &header_values[1]);
-            let _ = dict.set_item("all_required", &header_values[2]);
-            let _ = dict.set_item("number_of_courses", &header_values[3]);
-            let _ = dict.set_item("prerequisites", pyo3::types::PyList::new(py, &prereqs));
-            conditions.push(dict.into_py(py));
-        });
+        let condition_dict = PyDict::new(py);
+        condition_dict.set_item("condition", &header_values[0])?;
+        condition_dict.set_item("type", &header_values[1])?;
+        condition_dict.set_item("all_required", &header_values[2])?;
+        condition_dict.set_item("number_of_courses", &header_values[3])?;
+        condition_dict.set_item("prerequisites", prereqs)?;
+        conditions.append(condition_dict)?;
     }
 
-    let result = pyo3::types::PyDict::new(py);
-    let _ = result.set_item("course_name", course_name.trim());
-    let _ = result.set_item("code", py.None());
-    let _ = result.set_item("credits", credits);
-    let _ = result.set_item("typology", typology);
-    let _ = result.set_item("conditions", pyo3::types::PyList::new(py, &conditions));
+    let result = PyDict::new(py);
+    result.set_item("course_name", course_name.trim())?;
+    result.set_item("code", py.None())?;
+    result.set_item("credits", credits)?;
+    result.set_item("typology", typology)?;
+    result.set_item("conditions", conditions)?;
 
     Ok(result.into())
 }

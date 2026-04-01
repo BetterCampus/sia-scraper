@@ -31,6 +31,7 @@ from ..constants.defaults import (
     DEFAULT_TEACHER,
     DEFAULT_TYPOLOGY,
 )
+from ..models.course import CourseInfoTyped
 from ..utils import format_date
 from .html_parser import HtmlElement, HtmlParser
 from .models import (
@@ -434,6 +435,22 @@ def scrape_info(xml: str) -> CourseInfo:
         scrape_timestamp=format_date(datetime.now()),
         groups=group_list,
     )
+
+
+def scrape_info_typed(xml: str) -> CourseInfoTyped:
+    """Parse course information using Rust typed JSON contract.
+
+    This function uses the Rust Phase 3 typed endpoint and validates the
+    resulting payload with strict Pydantic models.
+
+    Args:
+        xml: Raw XML/HTML from SIA course detail page response.
+
+    Returns:
+        Strictly validated typed course payload.
+    """
+    typed_json = sia_scraper_rust.parse_course_info_json(xml)  # type: ignore[attr-defined]
+    return CourseInfoTyped.model_validate_json(typed_json)
 
 
 def scrape_prereqs(xml: str) -> CoursePrereqs:

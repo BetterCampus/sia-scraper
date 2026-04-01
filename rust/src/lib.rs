@@ -12,6 +12,7 @@ use pyo3_asyncio::tokio::future_into_py;
 pub mod constants;
 mod error;
 pub mod http;
+mod models;
 mod parsers;
 pub mod testing;
 #[cfg(test)]
@@ -47,6 +48,14 @@ mod tests;
 #[pyfunction]
 fn parse_course_info(xml: &str) -> Result<Py<PyAny>, error::SiaScraperError> {
     Python::with_gil(|py| parsers::course_parser::parse_course_xml(xml, py))
+}
+
+/// Parse course information from Oracle ADF XML/HTML and return typed JSON.
+///
+/// This is the Phase 3 typed contract endpoint used by Python wrappers.
+#[pyfunction]
+fn parse_course_info_json(xml: &str) -> Result<String, error::SiaScraperError> {
+    parsers::course_parser::parse_course_model_json(xml)
 }
 
 /// Extract the ViewState value from Oracle ADF HTML response.
@@ -511,6 +520,7 @@ fn get_course_xml<'p>(
 #[pymodule]
 fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_course_info, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_course_info_json, m)?)?;
     m.add_function(wrap_pyfunction!(extract_view_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_prereqs, m)?)?;
     m.add_function(wrap_pyfunction!(get_course_list, m)?)?;
