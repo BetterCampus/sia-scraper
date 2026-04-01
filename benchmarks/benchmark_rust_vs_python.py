@@ -10,6 +10,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from sia_scraper.core import extract_view_state as python_extract_view_state
+from sia_scraper.parsers import scrape_info, scrape_prereqs
+from sia_scraper.parsers.html_parser import HtmlParser
 from sia_scraper_rust import (
     extract_view_state as rust_extract_view_state,
 )
@@ -25,10 +28,6 @@ from sia_scraper_rust import (
 from sia_scraper_rust import (
     parse_prereqs as rust_parse_prereqs,
 )
-
-from sia_scraper.core import extract_view_state as python_extract_view_state
-from sia_scraper.parsers import scrape_info, scrape_prereqs
-from sia_scraper.parsers.html_parser import HtmlParser
 
 FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
 
