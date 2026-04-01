@@ -1,6 +1,15 @@
 """SIA System HTTP Configuration.
 
 This module defines HTTP-related constants for connecting to SIA's Oracle ADF backend.
+
+IMPORTANT: These constants must remain synchronized with Rust constants in
+`rust/src/constants.rs`. Any changes to URLs, headers, or ADF IDs should be
+reflected in both locations. A CI check (`.github/workflows/constants-sync-check.yml`)
+verifies this synchronization.
+
+See also:
+    - rust/src/constants.rs: Centralized Rust constants
+    - scripts/check_constants_sync.py: Local validation script
 """
 
 import re
