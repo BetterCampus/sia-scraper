@@ -43,8 +43,8 @@ impl FailureMode {
 pub struct RequestStats {
     pub total_requests: u64,
     pub failures_by_mode: HashMap<String, u64>,
-    pub successful_retries: u64,
-    pub failed_after_retries: u64,
+    pub failures_on_first_attempt: u64,
+    pub failures_after_retry: u64,
     pub retry_counts: HashMap<u8, u64>,
     pub request_durations_ms: Vec<u64>,
 }
@@ -59,10 +59,10 @@ impl RequestStats {
         let mode_name = format!("{:?}", mode).to_lowercase();
         *self.failures_by_mode.entry(mode_name).or_insert(0) += 1;
 
-        if attempt > 1 {
-            self.successful_retries += 1;
+        if attempt == 1 {
+            self.failures_on_first_attempt += 1;
         } else {
-            self.failed_after_retries += 1;
+            self.failures_after_retry += 1;
         }
 
         *self.retry_counts.entry(attempt).or_insert(0) += 1;
@@ -88,11 +88,11 @@ impl RequestStats {
     }
 
     pub fn retry_success_rate(&self) -> f64 {
-        if self.successful_retries + self.failed_after_retries == 0 {
+        let total_retry_failures = self.failures_on_first_attempt + self.failures_after_retry;
+        if total_retry_failures == 0 {
             return 0.0;
         }
-        self.successful_retries as f64
-            / (self.successful_retries + self.failed_after_retries) as f64
+        self.failures_after_retry as f64 / total_retry_failures as f64
     }
 
     pub fn avg_attempts(&self) -> f64 {

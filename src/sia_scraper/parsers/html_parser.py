@@ -260,5 +260,5 @@ def get_course_list(content: bytes | str) -> list[dict[str, str]]:
     )
 
     if isinstance(content, bytes):
-        content = content.decode("utf-8")
+        content = content.decode("utf-8", errors="ignore")
     return rust_get_course_list(content)

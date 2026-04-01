@@ -11,14 +11,6 @@ pub struct HttpClientConfig {
     pub enable_cookies: bool,
     pub pool_idle_timeout_secs: u64,
     pub pool_max_idle_per_host: usize,
-    pub tls_backend: TlsBackend,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum TlsBackend {
-    #[default]
-    NativeCerts,
-    WebPkiRoots,
 }
 
 impl Default for HttpClientConfig {
@@ -31,7 +23,6 @@ impl Default for HttpClientConfig {
             enable_cookies: true,
             pool_idle_timeout_secs: 90,
             pool_max_idle_per_host: 16,
-            tls_backend: TlsBackend::NativeCerts,
         }
     }
 }
@@ -46,7 +37,6 @@ impl HttpClientConfig {
             enable_cookies: true,
             pool_idle_timeout_secs: 90,
             pool_max_idle_per_host: 16,
-            tls_backend: TlsBackend::NativeCerts,
         }
     }
 
@@ -64,11 +54,6 @@ impl HttpClientConfig {
         self.user_agent = user_agent.to_string();
         self
     }
-
-    pub fn with_tls_backend(mut self, backend: TlsBackend) -> Self {
-        self.tls_backend = backend;
-        self
-    }
 }
 
 #[cfg(test)]
@@ -79,7 +64,6 @@ mod tests {
     fn test_default_config() {
         let config = HttpClientConfig::default();
         assert_eq!(config.timeout_secs, 15);
-        assert_eq!(config.tls_backend, TlsBackend::NativeCerts);
     }
 
     #[test]
@@ -93,11 +77,9 @@ mod tests {
     fn test_config_builder() {
         let config = HttpClientConfig::default()
             .with_timeout(30)
-            .with_connect_timeout(10)
-            .with_tls_backend(TlsBackend::WebPkiRoots);
+            .with_connect_timeout(10);
 
         assert_eq!(config.timeout_secs, 30);
         assert_eq!(config.connect_timeout_secs, 10);
-        assert_eq!(config.tls_backend, TlsBackend::WebPkiRoots);
     }
 }

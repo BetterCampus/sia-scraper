@@ -16,7 +16,7 @@ impl AsyncHttpClient {
         let connect_timeout = Duration::from_secs(config.connect_timeout_secs);
         let pool_idle_timeout = Duration::from_secs(config.pool_idle_timeout_secs);
 
-        let mut builder = reqwest::Client::builder()
+        let builder = reqwest::Client::builder()
             .http1_only()
             .timeout(timeout)
             .connect_timeout(connect_timeout)
@@ -24,16 +24,8 @@ impl AsyncHttpClient {
             .user_agent(&config.user_agent)
             .cookie_store(config.enable_cookies)
             .pool_idle_timeout(pool_idle_timeout)
-            .pool_max_idle_per_host(config.pool_max_idle_per_host);
-
-        builder = match config.tls_backend {
-            crate::http::config::TlsBackend::NativeCerts => {
-                builder.use_rustls_tls()
-            }
-            crate::http::config::TlsBackend::WebPkiRoots => {
-                builder.use_rustls_tls()
-            }
-        };
+            .pool_max_idle_per_host(config.pool_max_idle_per_host)
+            .use_rustls_tls();
 
         let client = builder.build().map_err(HttpError::from)?;
 

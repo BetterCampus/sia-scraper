@@ -77,7 +77,11 @@ class TestParserRegression:
         assert isinstance(first_condition, dict)
         assert parsed.conditions[0].condition == int(str(first_condition["condition"]).strip("[]"))
         assert parsed.conditions[0].type == PrereqType(str(first_condition["type"]).strip("[]"))
-        assert parsed.conditions[0].all_required is False
+        raw_all_required = (
+            str(first_condition.get("all_required", "")).strip("[]").upper().replace(" ", "")
+        )
+        expected_all_required = raw_all_required in {"S", "SI"}
+        assert parsed.conditions[0].all_required is expected_all_required
         assert parsed.conditions[0].number_of_courses == int(
             str(first_condition["number_of_courses"]).strip("[]")
         )

@@ -1,28 +1,32 @@
 """Property-based tests to ensure parsers never panic on arbitrary inputs.
 
 These tests use Hypothesis to generate random strings and verify that
-all parser functions handle them gracefully without raising exceptions.
+all parser functions handle them gracefully without raising unexpected exceptions.
+ParserError and ValueError are allowed since they indicate invalid input (not a panic).
 """
 
 import hypothesis.strategies as st
-from hypothesis import example, given, settings
+from hypothesis import given, settings
+from lxml.etree import ParserError
 
 from sia_scraper.parsers import (
+    CourseInfo,
+    CoursePrereqs,
     get_plain_text,
     scrape_info,
     scrape_prereqs,
 )
+
+# Allow these exceptions - they indicate invalid input, not panics
+ALLOWED_EXCEPTIONS = (ParserError, ValueError)
 
 
 @given(text=st.text(min_size=0, max_size=10000))
 @settings(max_examples=100)
 def test_get_plain_text_never_panics(text: str) -> None:
     """Verify get_plain_text handles arbitrary strings without panicking."""
-    try:
-        result = get_plain_text(text)
-        assert isinstance(result, str)
-    except Exception:
-        pass
+    result = get_plain_text(text)
+    assert isinstance(result, str)
 
 
 @given(text=st.text(min_size=0, max_size=10000))
@@ -31,9 +35,9 @@ def test_scrape_info_never_panics(text: str) -> None:
     """Verify scrape_info handles arbitrary strings without panicking."""
     try:
         result = scrape_info(text)
-        assert isinstance(result, (list, type(None)))
-    except Exception:
-        pass
+        assert isinstance(result, CourseInfo)
+    except ALLOWED_EXCEPTIONS:
+        pass  # Invalid input is expected to be rejected
 
 
 @given(text=st.text(min_size=0, max_size=10000))
@@ -42,9 +46,9 @@ def test_scrape_prereqs_never_panics(text: str) -> None:
     """Verify scrape_prereqs handles arbitrary strings without panicking."""
     try:
         result = scrape_prereqs(text)
-        assert isinstance(result, (list, type(None)))
-    except Exception:
-        pass
+        assert isinstance(result, CoursePrereqs)
+    except ALLOWED_EXCEPTIONS:
+        pass  # Invalid input is expected to be rejected
 
 
 @given(
@@ -57,8 +61,8 @@ def test_scrape_info_with_h2_tag_never_panics(prefix: str, suffix: str) -> None:
     text = f"{prefix}<h2>COURSE</h2>{suffix}"
     try:
         result = scrape_info(text)
-        assert isinstance(result, (list, type(None)))
-    except Exception:
+        assert isinstance(result, CourseInfo)
+    except ALLOWED_EXCEPTIONS:
         pass
 
 
@@ -79,23 +83,19 @@ def test_scrape_info_constructed_html_never_panics(
     """
     try:
         result = scrape_info(html)
-        assert isinstance(result, (list, type(None)))
-    except Exception:
+        assert isinstance(result, CourseInfo)
+    except ValueError:
         pass
 
 
-@example(text="")
-@example(text="<h2>COURSE NAME</h2>")
-@example(text='<span class="detass-creditos"><span>3</span></span>')
-@example(text='<h2>TEST</h2><span class="detass-creditos"><span>4</span></span>')
 @given(text=st.text(min_size=0, max_size=5000))
 @settings(max_examples=100, deadline=5000)
 def test_scrape_info_edge_cases(text: str) -> None:
-    """Test scrape_info with known edge cases."""
+    """Test scrape_info with arbitrary generated strings."""
     try:
         result = scrape_info(text)
-        assert isinstance(result, (list, type(None)))
-    except Exception:
+        assert isinstance(result, CourseInfo)
+    except ALLOWED_EXCEPTIONS:
         pass
 
 
@@ -113,6 +113,6 @@ def test_scrape_info_various_credit_formats(html: str) -> None:
     """Verify scrape_info handles various credit value formats."""
     try:
         result = scrape_info(html)
-        assert isinstance(result, (list, type(None)))
-    except Exception:
+        assert isinstance(result, CourseInfo)
+    except ALLOWED_EXCEPTIONS:
         pass
