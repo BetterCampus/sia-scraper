@@ -14,6 +14,7 @@ pub struct SessionState {
     pub career_name: String,
     pub is_electives: bool,
     pub status: String,
+    pub course_list: Vec<HashMap<String, String>>,
 }
 
 impl Default for SessionState {
@@ -30,6 +31,7 @@ impl Default for SessionState {
             career_name: String::new(),
             is_electives: false,
             status: "CREATED".to_string(),
+            course_list: Vec::new(),
         }
     }
 }
@@ -112,6 +114,29 @@ mod tests {
         assert_eq!(
             state.javax_faces_ViewState,
             Some("new_viewstate".to_string())
+        );
+    }
+
+    #[test]
+    fn test_default_state_has_empty_course_list() {
+        let state = SessionState::default();
+        assert!(state.course_list.is_empty());
+    }
+
+    #[test]
+    fn test_course_list_is_serializable() {
+        let mut state = SessionState::default();
+        let mut course = HashMap::new();
+        course.insert("2019454".to_string(), "CALCULO DIFERENCIAL".to_string());
+        state.course_list.push(course);
+
+        let serialized = serde_json::to_string(&state).unwrap();
+        let deserialized: SessionState = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.course_list.len(), 1);
+        assert_eq!(
+            deserialized.course_list[0].get("2019454"),
+            Some(&"CALCULO DIFERENCIAL".to_string())
         );
     }
 }

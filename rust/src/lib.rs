@@ -9,6 +9,7 @@ use pyo3::PyTypeInfo;
 
 use pyo3_asyncio::tokio::future_into_py;
 
+pub mod constants;
 mod error;
 pub mod http;
 mod parsers;
@@ -363,10 +364,11 @@ fn async_get_with_config<'p>(
 #[pyfunction]
 #[pyo3(signature = (timeout,))]
 fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p PyAny> {
+    use crate::constants::SIA_BASE_URL;
     use crate::http::sia_session::SiaSession;
 
     let timeout = timeout.unwrap_or(15);
-    let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
+    let base_url = SIA_BASE_URL.to_string();
 
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
@@ -406,11 +408,12 @@ fn set_career<'p>(
     search_code: String,
     electives: Option<bool>,
 ) -> PyResult<&'p PyAny> {
+    use crate::constants::SIA_BASE_URL;
     use crate::http::sia_session::SiaSession;
 
     let timeout = timeout.unwrap_or(15);
     let electives = electives.unwrap_or(false);
-    let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
+    let base_url = SIA_BASE_URL.to_string();
 
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
@@ -424,13 +427,7 @@ fn set_career<'p>(
             .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         let career_indices: Vec<String> = search_code.split('-').map(|s| s.to_string()).collect();
-        let course_list_json = state
-            .params
-            .get("course_list_json")
-            .cloned()
-            .unwrap_or_default();
-        let course_list: Vec<std::collections::HashMap<String, String>> =
-            serde_json::from_str(&course_list_json).unwrap_or_default();
+        let course_list = &state.course_list;
         
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
@@ -466,11 +463,12 @@ fn get_course_xml<'p>(
     career_indices: Vec<String>,
     electives: Option<bool>,
 ) -> PyResult<&'p PyAny> {
+    use crate::constants::SIA_BASE_URL;
     use crate::http::sia_session::SiaSession;
 
     let timeout = timeout.unwrap_or(15);
     let electives = electives.unwrap_or(false);
-    let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf".to_string();
+    let base_url = SIA_BASE_URL.to_string();
     let search_code = career_indices.join("-");
 
     future_into_py(py, async move {

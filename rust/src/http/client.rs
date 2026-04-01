@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use crate::constants::{headers, SIA_BASE_URL, SIA_ORIGIN};
 use crate::http::{config::HttpClientConfig, errors::HttpError, types::HttpResponse};
 
 pub struct AsyncHttpClient {
@@ -51,16 +52,13 @@ impl AsyncHttpClient {
         let resp = self
             .client
             .post(url)
-            .header("accept", "*/*")
-            .header("accept-language", "es-419,es;q=0.9,en;q=0.8")
-            .header("adf-ads-page-id", "1")
-            .header("adf-rich-message", "true")
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("origin", "https://sia.unal.edu.co")
-            .header(
-                "referer",
-                "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf",
-            )
+            .header("accept", headers::ACCEPT)
+            .header("accept-language", headers::ACCEPT_LANGUAGE)
+            .header("adf-ads-page-id", headers::ADF_ADS_PAGE_ID)
+            .header("adf-rich-message", headers::ADF_RICH_MESSAGE)
+            .header("Content-Type", headers::CONTENT_TYPE)
+            .header("origin", SIA_ORIGIN)
+            .header("referer", SIA_BASE_URL)
             .body(body.to_string())
             .send()
             .await?;

@@ -1,0 +1,99 @@
+# Constants Synchronization Check
+#
+# This workflow verifies that Rust and Python SIA constants remain synchronized.
+# It runs when constants files are modified in either language.
+
+name: Constants Sync Check
+
+on:
+  pull_request:
+    paths:
+      - "src/sia_scraper/constants/**"
+      - "rust/src/constants.rs"
+      - "rust/src/http/client.rs"
+      - "rust/src/http/sia_session.rs"
+  push:
+    branches: [main, master]
+    paths:
+      - "src/sia_scraper/constants/**"
+      - "rust/src/constants.rs"
+      - "rust/src/http/client.rs"
+      - "rust/src/http/sia_session.rs"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-constants-sync:
+    name: Verify Constants Match
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Run constants synchronization check
+        run: python scripts/check_constants_sync.py --verbose
+
+      - name: Verify no hardcoded SIA URLs in Rust (except constants.rs)
+        run: |
+          echo "Checking for hardcoded SIA URLs outside constants.rs..."
+          
+          # Search for hardcoded URLs in Rust files, excluding constants.rs
+          # and allowing module docstrings that reference constants
+          if rg -n 'https://sia\.unal\.edu\.co' rust/src --glob '!constants.rs' --glob '!*/target/*' | grep -v '// .*constants' | grep -v '/// .*constants'; then
+            echo ""
+            echo "❌ Found hardcoded SIA URLs outside constants.rs!"
+            echo "Please use crate::constants::SIA_BASE_URL instead."
+            exit 1
+          else
+            echo "✓ No hardcoded SIA URLs found outside constants.rs"
+          fi
+
+      - name: Verify no hardcoded headers in client.rs (except constants)
+        run: |
+          echo "Checking for hardcoded headers in client.rs..."
+          
+          # Check that client.rs uses constants, not hardcoded values
+          if rg -n '"(\*\/|es-419|application/x-www-form-urlencoded|1)"' rust/src/http/client.rs; then
+            echo ""
+            echo "❌ Found hardcoded header values in client.rs!"
+            echo "Please use crate::constants::headers::* instead."
+            exit 1
+          else
+            echo "✓ No hardcoded header values found in client.rs"
+          fi
+
+  rust-check:
+    name: Rust Check (Compilation)
+    runs-on: ubuntu-latest
+    needs: check-constants-sync
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check Rust compilation
+        run: cargo check
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings

@@ -6,6 +6,9 @@ use tokio::sync::RwLock;
 use tokio::time::sleep;
 use regex::Regex;
 
+use crate::constants::{
+    actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX, SIA_BASE_URL,
+};
 use crate::http::client::AsyncHttpClient;
 use crate::http::config::HttpClientConfig;
 use crate::http::errors::HttpError;
@@ -14,25 +17,6 @@ use crate::http::session::SessionState;
 use crate::http::types::HttpResponse;
 use crate::parsers::adf_request::OracleAdfRequestBuilderState;
 use crate::parsers::table_parser::get_course_list;
-
-const STUDY_LEVEL_DD_ID: &str = "pt1:r1:0:soc1";
-const CAMPUS_DD_ID: &str = "pt1:r1:0:soc9";
-const FACULTY_DD_ID: &str = "pt1:r1:0:soc2";
-const CAREER_DD_ID: &str = "pt1:r1:0:soc3";
-const CAREER_DROPDOWN_ID: &str = "pt1:r1:0:soc3::content";
-
-const ACTION_STUDY_LEVEL_DD: &str = "STUDY_LEVEL_DD";
-const ACTION_CAMPUS_DD: &str = "CAMPUS_DD";
-const ACTION_FACULTY_DD: &str = "FACULTY_DD";
-const ACTION_CAREER_DD: &str = "CAREER_DD";
-const ACTION_TIPOLOGY_DD: &str = "TIPOLOGY_DD";
-const ACTION_SHOW_COURSES_BTTN: &str = "SHOW_COURSES_BTTN";
-const ACTION_FACULTY_CAREER_DD: &str = "FACULTY_CAREER_DD";
-const ACTION_CAMPUS_ELECTIVES_DD: &str = "CAMPUS_ELECTIVES_DD";
-const ACTION_SELECT_ROW: &str = "SELECT_ROW";
-const ACTION_COURSE_PAGE_LINK: &str = "COURSE_PAGE_LINK";
-const ELECTIVES_TYPOLOGY_INDEX: &str = "7";
-const DROPDOWN_FIRST_OPTION_OFFSET: usize = 1;
 
 static ADF_WINDOW_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?is)<input[^>]*name\s*=\s*[\"']Adf-Window-Id[\"'][^>]*value\s*=\s*[\"']([^\"']*)[\"'][^>]*>"#)
@@ -91,10 +75,7 @@ impl SiaSession {
     }
 
     async fn do_init_session(&self) -> Result<(), HttpError> {
-        let init_url = format!(
-            "{}?taskflowId=task-flow-AC_CatalogoAsignaturas",
-            self.base_url
-        );
+        let init_url = format!("{}?taskflowId={}", self.base_url, crate::constants::SIA_TASKFLOW_ID);
         let resp = self.client.get(&init_url).await.map_err(|e| {
             HttpError::ConnectionFailed(format!("init_session GET failed: {e}"))
         })?;
@@ -120,7 +101,7 @@ impl SiaSession {
         Ok(())
     }
 
-    async fn request_url_with_params(&self) -> String {
+    async fn request_url_with_params(&self) -> Result<String, HttpError> {
         let state = self.state.read().await;
         let mut params: Vec<(&str, &str)> = vec![];
 
@@ -132,11 +113,15 @@ impl SiaSession {
         }
 
         if params.is_empty() {
-            return self.base_url.clone();
+            return Ok(self.base_url.clone());
         }
 
-        let query = serde_urlencoded::to_string(&params).unwrap_or_default();
-        format!("{}?{}", self.base_url, query)
+        let query = serde_urlencoded::to_string(&params).map_err(|e| {
+            HttpError::InvalidInput(format!(
+                "Failed to build session URL: invalid query parameters ({e})"
+            ))
+        })?;
+        Ok(format!("{}?{}", self.base_url, query))
     }
 
     fn state_as_request_builder(&self, state: &SessionState) -> OracleAdfRequestBuilderState {
@@ -157,7 +142,7 @@ impl SiaSession {
     }
 
     fn extract_career_name(xml: &str, career_index: usize) -> String {
-        let escaped_id = CAREER_DROPDOWN_ID.replace(':', "\\:");
+        let escaped_id = adf_ids::CAREER_DROPDOWN_ID.replace(':', "\\:");
         let selector = format!("select#{escaped_id} option");
 
         let html = scraper::Html::parse_document(xml);
@@ -192,21 +177,21 @@ impl SiaSession {
         state.is_electives = electives;
 
         let mut action_sequence = vec![
-            ACTION_STUDY_LEVEL_DD,
-            ACTION_CAMPUS_DD,
-            ACTION_FACULTY_DD,
-            ACTION_CAREER_DD,
-            ACTION_TIPOLOGY_DD,
+            actions::STUDY_LEVEL_DD,
+            actions::CAMPUS_DD,
+            actions::FACULTY_DD,
+            actions::CAREER_DD,
+            actions::TIPOLOGY_DD,
         ];
 
         if electives {
             action_sequence.extend([
-                ACTION_FACULTY_CAREER_DD,
-                ACTION_CAMPUS_ELECTIVES_DD,
-                ACTION_SHOW_COURSES_BTTN,
+                actions::FACULTY_CAREER_DD,
+                actions::CAMPUS_ELECTIVES_DD,
+                actions::SHOW_COURSES_BTTN,
             ]);
         } else {
-            action_sequence.push(ACTION_SHOW_COURSES_BTTN);
+            action_sequence.push(actions::SHOW_COURSES_BTTN);
         }
 
         let mut last_xml = String::new();
@@ -215,16 +200,16 @@ impl SiaSession {
             let mut builder = self.state_as_request_builder(&state);
             builder
                 .request_dict
-                .insert(STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
+                .insert(adf_ids::STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
             builder
                 .request_dict
-                .insert(CAMPUS_DD_ID.to_string(), career_indices[1].clone());
+                .insert(adf_ids::CAMPUS_DD_ID.to_string(), career_indices[1].clone());
             builder
                 .request_dict
-                .insert(FACULTY_DD_ID.to_string(), career_indices[2].clone());
+                .insert(adf_ids::FACULTY_DD_ID.to_string(), career_indices[2].clone());
             builder
                 .request_dict
-                .insert(CAREER_DD_ID.to_string(), career_indices[3].clone());
+                .insert(adf_ids::CAREER_DD_ID.to_string(), career_indices[3].clone());
 
             let request_body = builder
                 .build_request_body(action, -1, &career_indices, 0)
@@ -238,7 +223,7 @@ impl SiaSession {
             })?;
             last_xml = response.body.clone();
 
-            if action == ACTION_FACULTY_DD {
+            if action == actions::FACULTY_DD {
                 let career_index = career_indices[3]
                     .parse::<usize>()
                     .map_err(|_| HttpError::InvalidInput("career index must be numeric".to_string()))?;
@@ -257,13 +242,11 @@ impl SiaSession {
 
         let course_list =
             get_course_list(&last_xml).map_err(|e| HttpError::ParseError(e.to_string()))?;
+        let course_len = course_list.len();
         let mut current = self.state.write().await;
         current.status = "ON_CAREER_PAGE".to_string();
-        current.update_params("course_list_len", course_list.len().to_string());
-        current.update_params(
-            "course_list_json",
-            serde_json::to_string(&course_list).unwrap_or_default(),
-        );
+        current.course_list = course_list;
+        current.update_params("course_list_len", course_len.to_string());
         Ok(current.clone())
     }
 
@@ -274,13 +257,7 @@ impl SiaSession {
         course_index: i32,
     ) -> Result<String, HttpError> {
         let career_state = self.set_career(search_code, electives).await?;
-        let course_list_json = career_state
-            .params
-            .get("course_list_json")
-            .cloned()
-            .unwrap_or_default();
-        let course_list: Vec<std::collections::HashMap<String, String>> =
-            serde_json::from_str(&course_list_json).unwrap_or_default();
+        let course_list = &career_state.course_list;
 
         let career_indices: Vec<String> = search_code.split('-').map(ToString::to_string).collect();
         if career_indices.len() != 4 {
@@ -292,20 +269,20 @@ impl SiaSession {
         let mut builder = self.state_as_request_builder(&career_state);
         builder
             .request_dict
-            .insert(STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
+            .insert(adf_ids::STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
         builder
             .request_dict
-            .insert(CAMPUS_DD_ID.to_string(), career_indices[1].clone());
+            .insert(adf_ids::CAMPUS_DD_ID.to_string(), career_indices[1].clone());
         builder
             .request_dict
-            .insert(FACULTY_DD_ID.to_string(), career_indices[2].clone());
+            .insert(adf_ids::FACULTY_DD_ID.to_string(), career_indices[2].clone());
         builder
             .request_dict
-            .insert(CAREER_DD_ID.to_string(), career_indices[3].clone());
+            .insert(adf_ids::CAREER_DD_ID.to_string(), career_indices[3].clone());
 
         let select_row = builder
             .build_request_body(
-                ACTION_SELECT_ROW,
+                actions::SELECT_ROW,
                 course_index,
                 &career_indices,
                 course_list.len(),
@@ -318,20 +295,20 @@ impl SiaSession {
         let mut builder = self.state_as_request_builder(&self.get_state().await);
         builder
             .request_dict
-            .insert(STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
+            .insert(adf_ids::STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
         builder
             .request_dict
-            .insert(CAMPUS_DD_ID.to_string(), career_indices[1].clone());
+            .insert(adf_ids::CAMPUS_DD_ID.to_string(), career_indices[1].clone());
         builder
             .request_dict
-            .insert(FACULTY_DD_ID.to_string(), career_indices[2].clone());
+            .insert(adf_ids::FACULTY_DD_ID.to_string(), career_indices[2].clone());
         builder
             .request_dict
-            .insert(CAREER_DD_ID.to_string(), career_indices[3].clone());
+            .insert(adf_ids::CAREER_DD_ID.to_string(), career_indices[3].clone());
 
         let course_page = builder
             .build_request_body(
-                ACTION_COURSE_PAGE_LINK,
+                actions::COURSE_PAGE_LINK,
                 course_index,
                 &career_indices,
                 course_list.len(),
@@ -349,26 +326,24 @@ impl SiaSession {
             "org.apache.myfaces.trinidad.faces.FORM".to_string(),
             "f1".to_string(),
         );
-        back_body.insert(
-            "Adf-Window-Id".to_string(),
-            current_state
-                .params
-                .get("Adf-Window-Id")
-                .cloned()
-                .unwrap_or_default(),
-        );
-        back_body.insert(
-            "Adf-Page-Id".to_string(),
-            current_state
-                .params
-                .get("Adf-Page-Id")
-                .cloned()
-                .unwrap_or_default(),
-        );
-        back_body.insert(
-            "javax.faces.ViewState".to_string(),
-            current_state.javax_faces_ViewState.unwrap_or_default(),
-        );
+        let window_id = current_state
+            .params
+            .get("Adf-Window-Id")
+            .cloned()
+            .ok_or_else(|| HttpError::InvalidInput("Missing Adf-Window-Id in session state".to_string()))?;
+        back_body.insert("Adf-Window-Id".to_string(), window_id);
+
+        let page_id = current_state
+            .params
+            .get("Adf-Page-Id")
+            .cloned()
+            .ok_or_else(|| HttpError::InvalidInput("Missing Adf-Page-Id in session state".to_string()))?;
+        back_body.insert("Adf-Page-Id".to_string(), page_id);
+
+        let view_state = current_state
+            .javax_faces_ViewState
+            .ok_or_else(|| HttpError::InvalidInput("Missing ViewState in session state".to_string()))?;
+        back_body.insert("javax.faces.ViewState".to_string(), view_state);
         back_body.insert("event".to_string(), "pt1:r1:1:cb4".to_string());
         back_body.insert(
             "event.pt1:r1:1:cb4".to_string(),
@@ -413,7 +388,7 @@ impl SiaSession {
     }
 
     async fn do_post_request(&self, body: &str) -> Result<HttpResponse, HttpError> {
-        let url = self.request_url_with_params().await;
+        let url = self.request_url_with_params().await?;
         let resp = self.client.post(&url, body).await?;
 
         if let Ok(view_state) = crate::parsers::adf::extract_view_state(&resp.body) {
@@ -443,9 +418,7 @@ impl SiaSession {
 
 impl Default for SiaSession {
     fn default() -> Self {
-        let base_url = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"
-            .to_string();
-        Self::new(15, base_url)
+        Self::new(15, SIA_BASE_URL.to_string())
             .expect("SiaSession::default() should never fail with standard config")
     }
 }
@@ -534,7 +507,7 @@ mod tests {
             state.update_params("Adf-Window-Id", "win1".to_string());
             state.update_params("Adf-Page-Id", "0".to_string());
         }
-        let url = session.request_url_with_params().await;
+        let url = session.request_url_with_params().await.unwrap();
         assert!(url.contains("Adf-Window-Id=win1"));
         assert!(url.contains("Adf-Page-Id=0"));
     }
@@ -547,7 +520,7 @@ mod tests {
             let mut state = session.state.write().await;
             state.params.clear();
         }
-        let url = session.request_url_with_params().await;
+        let url = session.request_url_with_params().await.unwrap();
         assert_eq!(url, "https://example.com");
     }
 
