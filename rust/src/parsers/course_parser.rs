@@ -18,22 +18,50 @@ static SCHEDULE_REGEX: LazyLock<Result<Regex, String>> = LazyLock::new(|| {
     Regex::new(r"(\w+) de (\d{2}:\d{2}) a (\d{2}:\d{2})").map_err(|e| e.to_string())
 });
 
-const H2_SELECTOR: &str = "h2";
-const CREDITS_SELECTOR: &str = "span.detass-creditos";
-const CREDITS_SPAN_SELECTOR: &str = "span.detass-creditos span";
-const TYPOLOGY_SPAN_SELECTOR: &str = "span.detass-tipologia span";
-const GENERIC_SPAN_SELECTOR: &str = "span";
-const LISTA_ELEMENTO_SELECTOR: &str = "span.lista-elemento";
-const GROUP_TITLE_SELECTOR: &str = "h2.af_showDetailHeader_title-text0";
-const PANEL_GROUP_SELECTOR: &str = "div.af_panelGroupLayout";
-const DIV_SELECTOR: &str = "div";
-const GROUP_CONTENT_SELECTOR: &str = ".af_showDetailHeader_content0";
-const PREREQ_CONDITION_SELECTOR: &str =
-    "span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout";
-const PREREQ_STRONG_SELECTOR: &str = "span.strong.af_panelGroupLayout";
-const PREREQ_VALUE_SIBLING_SELECTOR: &str = "span.strong.af_panelGroupLayout + span";
-const PREREQ_HEADER_SELECTOR: &str = "span.strong.af_panelGroupLayout > span.margin-l";
-const PREREQ_SPAN_SELECTOR: &str = "span.af_panelGroupLayout > span";
+static H2_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("h2").expect("h2 selector must parse"));
+static CREDITS_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("span.detass-creditos").expect("credits selector must parse"));
+static CREDITS_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.detass-creditos span").expect("credits span selector must parse")
+});
+static TYPOLOGY_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.detass-tipologia span").expect("typology span selector must parse")
+});
+static GENERIC_SPAN_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("span").expect("span selector must parse"));
+static LISTA_ELEMENTO_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.lista-elemento").expect("lista-elemento selector must parse")
+});
+static GROUP_TITLE_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("h2.af_showDetailHeader_title-text0").expect("group title selector must parse")
+});
+static PANEL_GROUP_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("div.af_panelGroupLayout").expect("panel group selector must parse")
+});
+static DIV_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("div").expect("div selector must parse"));
+static GROUP_CONTENT_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse(".af_showDetailHeader_content0").expect("group content selector must parse")
+});
+static PREREQ_CONDITION_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.borde.salto.af_panelGroupLayout > div.margin-t.af_panelGroupLayout")
+        .expect("prereq condition selector must parse")
+});
+static PREREQ_STRONG_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.strong.af_panelGroupLayout").expect("prereq strong selector must parse")
+});
+static PREREQ_VALUE_SIBLING_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.strong.af_panelGroupLayout + span")
+        .expect("prereq value sibling selector must parse")
+});
+static PREREQ_HEADER_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.strong.af_panelGroupLayout > span.margin-l")
+        .expect("prereq header selector must parse")
+});
+static PREREQ_SPAN_SELECTOR: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("span.af_panelGroupLayout > span").expect("prereq span selector must parse")
+});
 
 const REQUIRED_PREREQ_HEADERS: usize = 4;
 
@@ -50,30 +78,6 @@ fn schedule_regex() -> Result<&'static Regex, SiaScraperError> {
             "Schedule regex initialization failed: {msg}"
         ))),
     }
-}
-
-fn parse_selector(selector_str: &str) -> Result<Selector, SiaScraperError> {
-    Selector::parse(selector_str).map_err(|e| {
-        SiaScraperError::ParseError(format!(
-            "Invalid selector '{selector_str}': {e:?}. This is a selector registry bug."
-        ))
-    })
-}
-
-fn css_select_html<'a>(
-    root: &'a Html,
-    selector_str: &str,
-) -> Result<Vec<ElementRef<'a>>, SiaScraperError> {
-    let selector = parse_selector(selector_str)?;
-    Ok(root.select(&selector).collect())
-}
-
-fn css_select_elem<'a>(
-    root: &'a ElementRef<'a>,
-    selector_str: &str,
-) -> Result<Vec<ElementRef<'a>>, SiaScraperError> {
-    let selector = parse_selector(selector_str)?;
-    Ok(root.select(&selector).collect())
 }
 
 fn html_snippet(html: &str) -> String {
@@ -122,22 +126,22 @@ pub fn get_plain_text(xml: &str) -> String {
 }
 
 fn extract_credits(root: &Html, xml: &str) -> Result<i32, SiaScraperError> {
-    let elems = css_select_html(root, CREDITS_SELECTOR)?;
+    let elems: Vec<ElementRef> = root.select(&CREDITS_SELECTOR).collect();
     let elem = elems.first().ok_or_else(|| {
         parse_error_with_context(
             "credits",
-            CREDITS_SELECTOR,
+            "span.detass-creditos",
             "Required credits container was not found",
             &html_snippet(xml),
             &["parse_course_model", "extract_credits"],
         )
     })?;
 
-    let spans = css_select_html(root, CREDITS_SPAN_SELECTOR)?;
+    let spans: Vec<ElementRef> = root.select(&CREDITS_SPAN_SELECTOR).collect();
     let span = spans.last().ok_or_else(|| {
         parse_error_with_elem_context(
             "credits",
-            CREDITS_SPAN_SELECTOR,
+            "span.detass-creditos span",
             "Credits container exists but has no nested <span>",
             elem,
             &["parse_course_model", "extract_credits"],
@@ -148,7 +152,7 @@ fn extract_credits(root: &Html, xml: &str) -> Result<i32, SiaScraperError> {
     text.parse::<i32>().map_err(|e| {
         parse_error_with_context(
             "credits",
-            CREDITS_SPAN_SELECTOR,
+            "span.detass-creditos span",
             &format!("Expected integer credits, got '{text}'. Parse error: {e}"),
             &html_snippet(xml),
             &["parse_course_model", "extract_credits"],
@@ -157,7 +161,7 @@ fn extract_credits(root: &Html, xml: &str) -> Result<i32, SiaScraperError> {
 }
 
 fn extract_typology(root: &Html) -> Result<String, SiaScraperError> {
-    let spans = css_select_html(root, TYPOLOGY_SPAN_SELECTOR)?;
+    let spans: Vec<ElementRef> = root.select(&TYPOLOGY_SPAN_SELECTOR).collect();
     match spans.last() {
         Some(span) => {
             let text = extract_text_from_elem(span);
@@ -171,9 +175,11 @@ fn extract_typology(root: &Html) -> Result<String, SiaScraperError> {
     }
 }
 
-fn row_texts(panel: &ElementRef<'_>) -> Result<Vec<String>, SiaScraperError> {
-    let rows = css_select_elem(panel, DIV_SELECTOR)?;
-    Ok(rows.iter().map(extract_text_from_elem).collect())
+fn row_texts(panel: &ElementRef<'_>) -> Vec<String> {
+    panel
+        .select(&DIV_SELECTOR)
+        .map(|e| extract_text_from_elem(&e))
+        .collect()
 }
 
 fn extract_labeled_or_inferred_value(
@@ -182,12 +188,12 @@ fn extract_labeled_or_inferred_value(
     field_name: &str,
     required: bool,
 ) -> Result<Option<String>, SiaScraperError> {
-    let rows = css_select_elem(panel, DIV_SELECTOR)?;
+    let rows: Vec<ElementRef> = panel.select(&DIV_SELECTOR).collect();
     for row in rows {
         let text = extract_text_from_elem(&row);
         let lowered = text.to_lowercase();
         if labels.iter().any(|label| lowered.contains(label)) {
-            let spans = css_select_elem(&row, GENERIC_SPAN_SELECTOR)?;
+            let spans: Vec<ElementRef> = row.select(&GENERIC_SPAN_SELECTOR).collect();
             if spans.len() >= 2 {
                 if let Some(last_span) = spans.last() {
                     let value = extract_text_from_elem(last_span);
@@ -209,7 +215,7 @@ fn extract_labeled_or_inferred_value(
     }
 
     if field_name == "teacher" {
-        let rows_text = row_texts(panel)?;
+        let rows_text = row_texts(panel);
         for row_text in rows_text {
             let lowered = row_text.to_lowercase();
             if lowered.contains("prof") || lowered.contains("docente") {
@@ -240,7 +246,7 @@ fn extract_labeled_or_inferred_value(
 fn extract_schedules(panel: &ElementRef<'_>) -> Result<Vec<ScheduleModel>, SiaScraperError> {
     let mut schedules: Vec<ScheduleModel> = Vec::new();
     let regex = schedule_regex()?;
-    let lista_spans = css_select_elem(panel, LISTA_ELEMENTO_SELECTOR)?;
+    let lista_spans: Vec<ElementRef> = panel.select(&LISTA_ELEMENTO_SELECTOR).collect();
 
     for lista_span in lista_spans {
         let schedule_txt = extract_text_from_elem(&lista_span);
@@ -265,7 +271,8 @@ fn extract_schedules(panel: &ElementRef<'_>) -> Result<Vec<ScheduleModel>, SiaSc
                 continue;
             }
 
-            let nested_classroom = css_select_elem(&lista_span, LISTA_ELEMENTO_SELECTOR)?;
+            let nested_classroom: Vec<ElementRef> =
+                lista_span.select(&LISTA_ELEMENTO_SELECTOR).collect();
             let classroom = if let Some(classroom_elem) = nested_classroom.last() {
                 extract_text_from_elem(classroom_elem)
             } else {
@@ -307,7 +314,7 @@ fn extract_spots(panel: &ElementRef<'_>) -> Result<Option<i64>, SiaScraperError>
 
 fn extract_group_name(group: &ElementRef<'_>) -> Result<Option<String>, SiaScraperError> {
     if let Some(parent_ref) = group.parent().and_then(ElementRef::wrap) {
-        let h2_elems = css_select_elem(&parent_ref, GROUP_TITLE_SELECTOR)?;
+        let h2_elems: Vec<ElementRef> = parent_ref.select(&GROUP_TITLE_SELECTOR).collect();
         if let Some(title_elem) = h2_elems.first() {
             let value = extract_text_from_elem(title_elem);
             if !value.is_empty() {
@@ -323,11 +330,11 @@ fn extract_group_model(
     course_name: &str,
     group_index: usize,
 ) -> Result<GroupModel, SiaScraperError> {
-    let panel_elems = css_select_elem(group, PANEL_GROUP_SELECTOR)?;
+    let panel_elems: Vec<ElementRef> = group.select(&PANEL_GROUP_SELECTOR).collect();
     let panel = panel_elems.first().ok_or_else(|| {
         parse_error_with_elem_context(
             "group_panel",
-            PANEL_GROUP_SELECTOR,
+            "div.af_panelGroupLayout",
             &format!("Group {group_index} has no panel container"),
             group,
             &[
@@ -378,7 +385,7 @@ fn extract_group_model(
 }
 
 fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, SiaScraperError> {
-    let group_elems = css_select_html(root, GROUP_CONTENT_SELECTOR)?;
+    let group_elems: Vec<ElementRef> = root.select(&GROUP_CONTENT_SELECTOR).collect();
     let mut groups = Vec::with_capacity(group_elems.len());
     let mut errors: Vec<SiaScraperError> = Vec::new();
 
@@ -403,17 +410,105 @@ fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, Sia
     Ok(groups)
 }
 
+fn extract_groups_tolerant(root: &Html, course_name: &str) -> Vec<GroupModel> {
+    let group_elems: Vec<ElementRef> = root.select(&GROUP_CONTENT_SELECTOR).collect();
+    let mut groups = Vec::with_capacity(group_elems.len());
+
+    for (idx, group) in group_elems.iter().enumerate() {
+        match extract_group_model(group, course_name, idx) {
+            Ok(model) => groups.push(model),
+            Err(err) => {
+                log::warn!("Skipping invalid group {idx}: {err}");
+            }
+        }
+    }
+
+    groups
+}
+
+fn parse_course_model_tolerant(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
+    let document = Html::parse_document(xml);
+    let mut errors: Vec<SiaScraperError> = Vec::new();
+
+    let course_name = {
+        let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
+        match h2_elems.first().map(extract_text_from_elem) {
+            Some(value) if !value.is_empty() => Some(value),
+            _ => {
+                errors.push(parse_error_with_context(
+                    "course_name",
+                    "h2",
+                    "Course title <h2> not found",
+                    &html_snippet(xml),
+                    &["parse_course_model_tolerant"],
+                ));
+                None
+            }
+        }
+    };
+
+    let credits = match extract_credits(&document, xml) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    let typology = match extract_typology(&document) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    if !errors.is_empty() {
+        let combined = errors
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        return Err(SiaScraperError::ParseError(format!(
+            "Course parsing failed with aggregated errors:\n{combined}"
+        )));
+    }
+
+    let course_name_value = course_name.ok_or_else(|| {
+        SiaScraperError::ParseError("Course parsing failed: course_name missing".to_string())
+    })?;
+    let credits_value = credits.ok_or_else(|| {
+        SiaScraperError::ParseError("Course parsing failed: credits missing".to_string())
+    })?;
+    let typology_value = typology.ok_or_else(|| {
+        SiaScraperError::ParseError("Course parsing failed: typology missing".to_string())
+    })?;
+
+    let groups = extract_groups_tolerant(&document, &course_name_value);
+    let available_spots = groups.iter().filter_map(|g| g.spots).sum::<i64>();
+
+    Ok(CourseInfoModel {
+        course_name: course_name_value,
+        credits: credits_value,
+        typology: typology_value,
+        available_spots,
+        scrape_timestamp: String::new(),
+        groups,
+        code: None,
+    })
+}
+
 #[cfg(all(feature = "fail-fast", not(feature = "full-error-collection")))]
 fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let document = Html::parse_document(xml);
-    let h2_elems = css_select_html(&document, H2_SELECTOR)?;
+    let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
     let course_name = h2_elems
         .first()
         .map(extract_text_from_elem)
         .ok_or_else(|| {
             parse_error_with_context(
                 "course_name",
-                H2_SELECTOR,
+                "h2",
                 "Course title <h2> not found",
                 &html_snippet(xml),
                 &["parse_course_model"],
@@ -442,13 +537,13 @@ fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let mut errors: Vec<SiaScraperError> = Vec::new();
 
     let course_name = {
-        let h2_elems = css_select_html(&document, H2_SELECTOR)?;
+        let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
         match h2_elems.first().map(extract_text_from_elem) {
             Some(value) if !value.is_empty() => Some(value),
             _ => {
                 errors.push(parse_error_with_context(
                     "course_name",
-                    H2_SELECTOR,
+                    "h2",
                     "Course title <h2> not found",
                     &html_snippet(xml),
                     &["parse_course_model"],
@@ -518,7 +613,7 @@ pub fn parse_course_model_json(xml: &str) -> Result<String, SiaScraperError> {
 
 /// Parse comprehensive course information from Oracle ADF course detail page.
 pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
-    let model = parse_course_model(xml)?;
+    let model = parse_course_model_tolerant(xml)?;
 
     let result = PyDict::new(py);
     result.set_item("course_name", &model.course_name)?;
@@ -539,7 +634,7 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
         group_dict.set_item("schedule_type", group.schedule_type)?;
         match group.spots {
             Some(spots) => group_dict.set_item("spots", spots)?,
-            None => group_dict.set_item("spots", 0_i64)?,
+            None => group_dict.set_item("spots", py.None())?,
         }
         group_dict.set_item("code", py.None())?;
 
@@ -565,14 +660,14 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
 pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
     let document = Html::parse_document(xml);
 
-    let h2_elems = css_select_html(&document, H2_SELECTOR)?;
+    let h2_elems: Vec<ElementRef> = document.select(&H2_SELECTOR).collect();
     let course_name = h2_elems
         .first()
         .map(extract_text_from_elem)
         .ok_or_else(|| {
             parse_error_with_context(
                 "course_name",
-                H2_SELECTOR,
+                "h2",
                 "Course name not found",
                 &html_snippet(xml),
                 &["parse_prereqs_xml"],
@@ -582,22 +677,22 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
     let credits = extract_credits(&document, xml)?;
     let typology = extract_typology(&document)?;
 
-    let condition_divs = css_select_html(&document, PREREQ_CONDITION_SELECTOR)?;
+    let condition_divs: Vec<ElementRef> = document.select(&PREREQ_CONDITION_SELECTOR).collect();
 
     let conditions = PyList::empty(py);
 
     for condition_div in condition_divs {
-        let sub_divs: Vec<ElementRef<'_>> = css_select_elem(&condition_div, DIV_SELECTOR)?;
+        let sub_divs: Vec<ElementRef> = condition_div.select(&DIV_SELECTOR).collect();
         if sub_divs.len() < 2 {
             continue;
         }
 
         let info_div = &sub_divs[0];
-        let strong_spans = css_select_elem(info_div, PREREQ_STRONG_SELECTOR)?;
+        let strong_spans: Vec<ElementRef> = info_div.select(&PREREQ_STRONG_SELECTOR).collect();
 
-        let mut all_spans: Vec<ElementRef<'_>> = Vec::new();
+        let mut all_spans: Vec<ElementRef> = Vec::new();
         if let Some(strong_span) = strong_spans.first() {
-            for nested_span in css_select_elem(strong_span, GENERIC_SPAN_SELECTOR)? {
+            for nested_span in strong_span.select(&GENERIC_SPAN_SELECTOR) {
                 let is_header = nested_span
                     .value()
                     .classes()
@@ -608,14 +703,14 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             }
         }
 
-        let header_spans = css_select_elem(info_div, PREREQ_HEADER_SELECTOR)?;
+        let header_spans: Vec<ElementRef> = info_div.select(&PREREQ_HEADER_SELECTOR).collect();
         let header_count = header_spans.len();
         if header_count < REQUIRED_PREREQ_HEADERS {
             continue;
         }
 
         if all_spans.len() < header_count {
-            all_spans = css_select_elem(info_div, PREREQ_VALUE_SIBLING_SELECTOR)?;
+            all_spans = info_div.select(&PREREQ_VALUE_SIBLING_SELECTOR).collect();
         }
 
         let mut header_values: Vec<String> = Vec::with_capacity(header_count);
@@ -629,7 +724,7 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
 
         let prereqs = PyList::empty(py);
         for prereq_div in &sub_divs[1..] {
-            let prereq_spans = css_select_elem(prereq_div, PREREQ_SPAN_SELECTOR)?;
+            let prereq_spans: Vec<ElementRef> = prereq_div.select(&PREREQ_SPAN_SELECTOR).collect();
             if prereq_spans.len() < 2 {
                 continue;
             }

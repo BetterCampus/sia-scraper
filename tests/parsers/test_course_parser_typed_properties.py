@@ -5,6 +5,7 @@ import json
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
 from sia_scraper.models.course import CourseInfoTyped
 
@@ -71,5 +72,5 @@ def test_typed_model_credit_bounds(value):
         model = CourseInfoTyped.model_validate_json(serialized)
         assert model.credits == value
     else:
-        with pytest.raises(Exception):  # noqa: B017 - Pydantic validation errors are runtime exceptions
+        with pytest.raises(ValidationError):
             CourseInfoTyped.model_validate_json(serialized)
