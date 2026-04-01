@@ -12,6 +12,7 @@ use std::sync::LazyLock;
 
 use crate::error::SiaScraperError;
 use crate::models::course::{CourseInfoModel, GroupModel, ScheduleModel};
+use crate::models::prerequisite::{CoursePrereqsModel, PrereqConditionModel, PrerequisiteModel};
 use crate::parsers::utils::extract_text_from_elem;
 
 static SCHEDULE_REGEX: LazyLock<Result<Regex, String>> = LazyLock::new(|| {
@@ -109,6 +110,53 @@ fn parse_error_with_elem_context(
     stack_context: &[&str],
 ) -> SiaScraperError {
     parse_error_with_context(field, selector, context, &elem_snippet(elem), stack_context)
+}
+
+fn parse_condition_number(raw: &str) -> Result<i32, SiaScraperError> {
+    let digits = raw
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>();
+
+    if digits.is_empty() {
+        return Ok(0);
+    }
+
+    digits.parse::<i32>().map_err(|e| {
+        SiaScraperError::ParseError(format!(
+            "Failed to parse condition number '{raw}' (digits '{digits}'): {e}"
+        ))
+    })
+}
+
+fn normalize_type(raw: &str) -> String {
+    let trimmed = raw.trim().trim_matches(['[', ']']);
+    if trimmed.is_empty() {
+        return "UNKNOWN".to_string();
+    }
+    trimmed.to_uppercase()
+}
+
+fn parse_all_required(raw: &str) -> bool {
+    let value = raw.trim().trim_matches(['[', ']']).to_uppercase();
+    matches!(value.as_str(), "S" | "SI" | "Y" | "YES" | "TRUE")
+}
+
+fn parse_number_of_courses(raw: &str) -> Result<i32, SiaScraperError> {
+    let digits = raw
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>();
+
+    if digits.is_empty() {
+        return Ok(0);
+    }
+
+    digits.parse::<i32>().map_err(|e| {
+        SiaScraperError::ParseError(format!(
+            "Failed to parse number_of_courses '{raw}' (digits '{digits}'): {e}"
+        ))
+    })
 }
 
 #[inline]
@@ -561,8 +609,7 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
     Ok(result.into())
 }
 
-/// Parse course prerequisites and enrollment conditions from Oracle ADF XML.
-pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
+fn parse_prereqs_model(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
     let document = Html::parse_document(xml);
 
     let h2_elems = css_select_html(&document, H2_SELECTOR)?;
@@ -575,7 +622,7 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
                 H2_SELECTOR,
                 "Course name not found",
                 &html_snippet(xml),
-                &["parse_prereqs_xml"],
+                &["parse_prereqs_model"],
             )
         })?;
 
@@ -583,11 +630,11 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
     let typology = extract_typology(&document)?;
 
     let condition_divs = css_select_html(&document, PREREQ_CONDITION_SELECTOR)?;
+    let mut conditions = Vec::new();
+    let mut errors: Vec<SiaScraperError> = Vec::new();
 
-    let conditions = PyList::empty(py);
-
-    for condition_div in condition_divs {
-        let sub_divs: Vec<ElementRef<'_>> = css_select_elem(&condition_div, DIV_SELECTOR)?;
+    for (condition_index, condition_div) in condition_divs.iter().enumerate() {
+        let sub_divs: Vec<ElementRef<'_>> = css_select_elem(condition_div, DIV_SELECTOR)?;
         if sub_divs.len() < 2 {
             continue;
         }
@@ -610,7 +657,15 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
 
         let header_spans = css_select_elem(info_div, PREREQ_HEADER_SELECTOR)?;
         let header_count = header_spans.len();
+
         if header_count < REQUIRED_PREREQ_HEADERS {
+            errors.push(parse_error_with_elem_context(
+                "prereq_headers",
+                PREREQ_HEADER_SELECTOR,
+                &format!("Condition {condition_index} has too few headers: {header_count}"),
+                info_div,
+                &["parse_prereqs_model", "parse_condition"],
+            ));
             continue;
         }
 
@@ -627,7 +682,7 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             }
         }
 
-        let prereqs = PyList::empty(py);
+        let mut prerequisites = Vec::new();
         for prereq_div in &sub_divs[1..] {
             let prereq_spans = css_select_elem(prereq_div, PREREQ_SPAN_SELECTOR)?;
             if prereq_spans.len() < 2 {
@@ -637,26 +692,99 @@ pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScra
             let course_code = extract_text_from_elem(&prereq_spans[0]);
             let course_name_prereq = extract_text_from_elem(&prereq_spans[1]);
 
+            prerequisites.push(PrerequisiteModel {
+                course_code,
+                course_name: course_name_prereq,
+            });
+        }
+
+        let condition_number = parse_condition_number(&header_values[0]).map_err(|e| {
+            parse_error_with_elem_context(
+                "condition",
+                PREREQ_HEADER_SELECTOR,
+                &e.to_string(),
+                info_div,
+                &["parse_prereqs_model", "parse_condition"],
+            )
+        })?;
+
+        let number_of_courses = parse_number_of_courses(&header_values[3]).map_err(|e| {
+            parse_error_with_elem_context(
+                "number_of_courses",
+                PREREQ_HEADER_SELECTOR,
+                &e.to_string(),
+                info_div,
+                &["parse_prereqs_model", "parse_condition"],
+            )
+        })?;
+
+        conditions.push(PrereqConditionModel {
+            condition: condition_number,
+            prereq_type: normalize_type(&header_values[1]),
+            all_required: parse_all_required(&header_values[2]),
+            number_of_courses,
+            prerequisites,
+        });
+    }
+
+    if !errors.is_empty() {
+        let combined = errors
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        return Err(SiaScraperError::ParseError(format!(
+            "Prerequisite parsing failed with aggregated errors:\n{combined}"
+        )));
+    }
+
+    Ok(CoursePrereqsModel {
+        course_name,
+        code: None,
+        credits,
+        typology,
+        conditions,
+    })
+}
+
+/// Parse prerequisite information and return typed JSON.
+pub fn parse_prereqs_model_json(xml: &str) -> Result<String, SiaScraperError> {
+    let model = parse_prereqs_model(xml)?;
+    serde_json::to_string(&model)
+        .map_err(|e| SiaScraperError::ParseError(format!("Prereqs JSON serialization failed: {e}")))
+}
+
+/// Parse course prerequisites and enrollment conditions from Oracle ADF XML.
+pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
+    let model = parse_prereqs_model(xml)?;
+
+    let conditions = PyList::empty(py);
+    for condition in model.conditions {
+        let prereqs = PyList::empty(py);
+        for prereq in condition.prerequisites {
             let prereq_dict = PyDict::new(py);
-            prereq_dict.set_item("course_code", course_code)?;
-            prereq_dict.set_item("course_name", course_name_prereq)?;
+            prereq_dict.set_item("course_code", prereq.course_code)?;
+            prereq_dict.set_item("course_name", prereq.course_name)?;
             prereqs.append(prereq_dict)?;
         }
 
         let condition_dict = PyDict::new(py);
-        condition_dict.set_item("condition", &header_values[0])?;
-        condition_dict.set_item("type", &header_values[1])?;
-        condition_dict.set_item("all_required", &header_values[2])?;
-        condition_dict.set_item("number_of_courses", &header_values[3])?;
+        condition_dict.set_item("condition", condition.condition.to_string())?;
+        condition_dict.set_item("type", condition.prereq_type)?;
+        condition_dict.set_item(
+            "all_required",
+            if condition.all_required { "S" } else { "N" },
+        )?;
+        condition_dict.set_item("number_of_courses", condition.number_of_courses.to_string())?;
         condition_dict.set_item("prerequisites", prereqs)?;
         conditions.append(condition_dict)?;
     }
 
     let result = PyDict::new(py);
-    result.set_item("course_name", course_name.trim())?;
+    result.set_item("course_name", model.course_name.trim())?;
     result.set_item("code", py.None())?;
-    result.set_item("credits", credits)?;
-    result.set_item("typology", typology)?;
+    result.set_item("credits", model.credits)?;
+    result.set_item("typology", model.typology)?;
     result.set_item("conditions", conditions)?;
 
     Ok(result.into())

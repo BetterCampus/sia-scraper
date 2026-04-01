@@ -111,6 +111,12 @@ fn parse_prereqs(xml: &str) -> Result<Py<PyAny>, error::SiaScraperError> {
     Python::with_gil(|py| parsers::course_parser::parse_prereqs_xml(xml, py))
 }
 
+/// Parse prerequisite information from Oracle ADF XML/HTML and return typed JSON.
+#[pyfunction]
+fn parse_prereqs_json(xml: &str) -> Result<String, error::SiaScraperError> {
+    parsers::course_parser::parse_prereqs_model_json(xml)
+}
+
 /// Extract course list from Oracle ADF table HTML.
 ///
 /// Parses `<tr class="af_table_data-row">` elements and extracts
@@ -523,6 +529,7 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_course_info_json, m)?)?;
     m.add_function(wrap_pyfunction!(extract_view_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_prereqs, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_prereqs_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_course_list, m)?)?;
     m.add_function(wrap_pyfunction!(get_plain_text, m)?)?;
     m.add_function(wrap_pyfunction!(init_oracle_adf_request_dict, m)?)?;
