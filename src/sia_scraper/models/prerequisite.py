@@ -1,7 +1,5 @@
 """Typed prerequisite payload models used for Rust bridge parsing."""
 
-from __future__ import annotations
-
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
@@ -47,14 +45,3 @@ class CoursePrereqsTyped(BaseModel):
         if not value.isdigit() or len(value) != 7:
             raise ValueError(f"Course code must be 7 digits, got '{value}'")
         return value
-
-    def to_dict(self) -> dict[str, object]:
-        """Backward-compatible dict helper during migration window."""
-        import warnings
-
-        warnings.warn(
-            "CoursePrereqsTyped.to_dict() is deprecated; use typed fields directly.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.model_dump(by_alias=True)

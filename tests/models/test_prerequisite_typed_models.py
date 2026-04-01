@@ -47,7 +47,7 @@ class TestCoursePrereqsTyped:
                 }
             )
 
-    def test_to_dict_deprecation(self):
+    def test_model_dump_returns_dict(self):
         model = CoursePrereqsTyped(
             course_name="X",
             code=None,
@@ -55,6 +55,5 @@ class TestCoursePrereqsTyped:
             typology="Y",
             conditions=[],
         )
-        with pytest.warns(DeprecationWarning):
-            dumped = model.to_dict()
+        dumped = model.model_dump()
         assert dumped["course_name"] == "X"
