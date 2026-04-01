@@ -568,4 +568,51 @@ mod tests {
             "vs123"
         );
     }
+
+    #[tokio::test]
+    async fn test_get_state_returns_clone_of_current_state() {
+        let session = SiaSession::new(15, "https://example.com".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.update_view_state("vs_get".to_string());
+            state.career_code = "1-2-3-4".to_string();
+        }
+        let snapshot = session.get_state().await;
+        assert_eq!(snapshot.javax_faces_ViewState.as_deref(), Some("vs_get"));
+        assert_eq!(snapshot.career_code, "1-2-3-4");
+    }
+
+    #[tokio::test]
+    async fn test_update_state_overwrites_entire_state() {
+        let session = SiaSession::new(15, "https://example.com".to_string()).unwrap();
+        let mut new_state = SessionState::default();
+        new_state.career_code = "9-9-9-9".to_string();
+        new_state.status = "CUSTOM".to_string();
+        session.update_state(new_state).await;
+
+        let state = session.get_state().await;
+        assert_eq!(state.career_code, "9-9-9-9");
+        assert_eq!(state.status, "CUSTOM");
+    }
+
+    #[test]
+    fn test_accessors_return_expected_values() {
+        let session = SiaSession::new(10, "https://test.example.com".to_string()).unwrap();
+        assert_eq!(session.base_url(), "https://test.example.com");
+        assert!(session.retry_config().max_attempts >= 1);
+    }
+
+    #[test]
+    fn test_extract_career_name_returns_na_for_empty_html() {
+        let html = "<div>No select here</div>";
+        let name = SiaSession::extract_career_name(html, 0);
+        assert_eq!(name, "N/A");
+    }
+
+    #[test]
+    fn test_extract_career_name_returns_na_for_invalid_selector() {
+        let html = r#"<select id="wrong_id"><option>Test</option></select>"#;
+        let name = SiaSession::extract_career_name(html, 0);
+        assert_eq!(name, "N/A");
+    }
 }

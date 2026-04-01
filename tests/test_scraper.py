@@ -303,3 +303,73 @@ class TestSiaScraperFactories:
 
         assert out is mocked_scraper
         mocked_scraper.set_career.assert_awaited_once_with("0-2-8-3", is_electives=True)
+
+
+@pytest.mark.unit
+class TestSiaScraperSessionState:
+    """Test session state loading, serialization, and validation."""
+
+    def test_constructor_with_session_data(self, mock_async_session_class):
+        data = SessionState(
+            session_headers={},
+            session_cookies={},
+            params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
+            javax_faces_ViewState="vs1",
+            career_code="0-2-8-3",
+            career_name="Ingenieria",
+            is_electives=False,
+            status=SiaSessionStatus.ON_CAREER_PAGE.name,
+        )
+        scraper = SiaScraper(session_data=data, init_session=False)
+        assert scraper.sia_session._career_code == "0-2-8-3"
+        assert scraper.sia_session._career_name == "Ingenieria"
+        assert scraper.sia_session._status == SiaSessionStatus.ON_CAREER_PAGE
+
+    def test_load_session_restores_state(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        data = SessionState(
+            session_headers={},
+            session_cookies={},
+            params={"Adf-Page-Id": "0", "Adf-Window-Id": "win1"},
+            javax_faces_ViewState="vs-restored",
+            career_code="1-0-0-1",
+            career_name="Test Career",
+            is_electives=True,
+            status=SiaSessionStatus.ON_CAREER_PAGE.name,
+        )
+        result = scraper.load_session(data)
+        assert result is scraper
+        assert scraper.sia_session._career_code == "1-0-0-1"
+        assert scraper.sia_session._career_name == "Test Career"
+        assert scraper.sia_session._is_electives is True
+        assert scraper.sia_session._status == SiaSessionStatus.ON_CAREER_PAGE
+
+    def test_load_session_invalid_status_defaults_to_no_session(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        data = SessionState(
+            session_headers={},
+            session_cookies={},
+            params={"Adf-Page-Id": "0", "Adf-Window-Id": ""},
+            javax_faces_ViewState=None,
+            career_code="",
+            career_name="",
+            is_electives=False,
+            status="BOGUS_STATUS",
+        )
+        scraper.load_session(data)
+        assert scraper.sia_session._status == SiaSessionStatus.NO_SESSION
+
+    def test_valid_session_false_when_no_session(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        assert not scraper.valid_session()
+
+    def test_get_course_index_raises_when_code_not_found(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        mock_session = _mock_session(scraper)
+        mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
+        scraper.sia_session._session_state = {
+            "course_list": [{"1000001": "Calculo"}],
+            "javax_faces_ViewState": "vs",
+        }
+        with pytest.raises(ValueError, match="Course code '9999999' not found"):
+            scraper.get_course_index("9999999")
