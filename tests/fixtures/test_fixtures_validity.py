@@ -170,5 +170,6 @@ class TestFixturesStructure:
             "params",
             "session_cookies",
             "session_headers",
+            "course_list",
         }
         assert required_keys.issubset(sia_session_data_json.keys())

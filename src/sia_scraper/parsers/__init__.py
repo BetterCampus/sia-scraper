@@ -28,7 +28,6 @@ from .models import (
     PrereqType,
     Prerequisite,
     Schedule,
-    SessionState,
 )
 
 __all__ = [
@@ -49,5 +48,4 @@ __all__ = [
     "PrereqType",
     "Prerequisite",
     "Schedule",
-    "SessionState",
 ]

@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from sia_scraper.models.session import SessionStateTyped
 from sia_scraper.parsers.models import (
     CourseInfo,
     CoursePrereqs,
@@ -11,7 +12,6 @@ from sia_scraper.parsers.models import (
     PrereqType,
     Prerequisite,
     Schedule,
-    SessionState,
     _clean_string_field,
     _validate_course_code,
 )
@@ -464,12 +464,12 @@ class TestCoursePrereqsValidation:
 
 @pytest.mark.unit
 class TestSessionStateValidation:
-    """Test SessionState validation rules."""
+    """Test SessionStateTyped validation rules."""
 
     def test_session_state_missing_adf_params_raises(self) -> None:
-        """SessionState with missing ADF parameters should raise."""
+        """SessionStateTyped with missing ADF parameters should raise."""
         with pytest.raises(ValidationError) as exc_info:
-            SessionState(
+            SessionStateTyped(
                 session_headers={"User-Agent": "test"},
                 session_cookies={"session": "abc"},
                 params={},
@@ -477,14 +477,15 @@ class TestSessionStateValidation:
                 career_code="1-1-1-1",
                 career_name="Ingenieria",
                 is_electives=False,
-                status="READY",
+                status="CAREER_NOT_SET",
+                course_list=[],
             )
         assert "params" in str(exc_info.value)
 
     def test_session_state_missing_window_id_raises(self) -> None:
-        """SessionState with missing Window-Id should raise."""
+        """SessionStateTyped with missing Window-Id should raise."""
         with pytest.raises(ValidationError):
-            SessionState(
+            SessionStateTyped(
                 session_headers={"User-Agent": "test"},
                 session_cookies={"session": "abc"},
                 params={"Adf-Page-Id": "test"},
@@ -492,12 +493,13 @@ class TestSessionStateValidation:
                 career_code="1-1-1-1",
                 career_name="Ingenieria",
                 is_electives=False,
-                status="READY",
+                status="CAREER_NOT_SET",
+                course_list=[],
             )
 
     def test_session_state_valid_full(self) -> None:
-        """Valid SessionState should work."""
-        state = SessionState(
+        """Valid SessionStateTyped should work."""
+        state = SessionStateTyped(
             session_headers={"User-Agent": "sia-scraper"},
             session_cookies={"JSESSIONID": "abc123"},
             params={"Adf-Page-Id": "page1", "Adf-Window-Id": "win1"},
@@ -505,14 +507,15 @@ class TestSessionStateValidation:
             career_code="1-01-01-1000",
             career_name="Ingenieria de Sistemas",
             is_electives=False,
-            status="READY",
+            status="CAREER_NOT_SET",
+            course_list=[],
         )
         assert state.career_code == "1-01-01-1000"
         assert state.is_electives is False
 
     def test_session_state_viewstate_optional(self) -> None:
-        """SessionState with None ViewState should work."""
-        state = SessionState(
+        """SessionStateTyped with None ViewState should work."""
+        state = SessionStateTyped(
             session_headers={"User-Agent": "sia-scraper"},
             session_cookies={},
             params={"Adf-Page-Id": "page1", "Adf-Window-Id": "win1"},
@@ -521,6 +524,7 @@ class TestSessionStateValidation:
             career_name="Ingenieria",
             is_electives=False,
             status="CAREER_NOT_SET",
+            course_list=[],
         )
         assert state.javax_faces_ViewState is None
 

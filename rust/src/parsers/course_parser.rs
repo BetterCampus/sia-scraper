@@ -237,8 +237,8 @@ fn extract_typology(root: &Html) -> Result<String, SiaScraperError> {
 }
 
 fn row_texts(panel: &ElementRef<'_>) -> Result<Vec<String>, SiaScraperError> {
-    let rows = css_select_elem(panel, &DIV_SELECTOR)?;
-    Ok(rows.iter().map(extract_text_from_elem).collect())
+    let divs = css_select_elem(panel, &DIV_SELECTOR)?;
+    Ok(divs.iter().map(|e| extract_text_from_elem(e)).collect())
 }
 
 fn extract_labeled_or_inferred_value(
@@ -471,7 +471,7 @@ fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, Sia
 #[cfg(all(feature = "fail-fast", not(feature = "full-error-collection")))]
 fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let document = Html::parse_document(xml);
-    let h2_elems = css_select_html(&document, &H2_SELECTOR, "H2_SELECTOR")?;
+    let h2_elems = css_select_html(&document, &H2_SELECTOR)?;
     let course_name = h2_elems
         .first()
         .map(extract_text_from_elem)
@@ -507,11 +507,8 @@ fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let mut errors: Vec<SiaScraperError> = Vec::new();
 
     let course_name = {
-        let h2_elems = css_select_html(&document, &H2_SELECTOR);
-        match h2_elems
-            .ok()
-            .and_then(|elems| elems.first().map(extract_text_from_elem))
-        {
+        let h2_elems = css_select_html(&document, &H2_SELECTOR)?;
+        match h2_elems.first().map(extract_text_from_elem) {
             Some(value) if !value.is_empty() => Some(value),
             _ => {
                 errors.push(parse_error_with_context(

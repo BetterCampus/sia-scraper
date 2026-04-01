@@ -5,6 +5,7 @@ and that sequential operations work correctly.
 """
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -16,19 +17,44 @@ from sia_scraper.session import SiaSession
 @pytest.fixture
 def mock_rust_module():
     """Patch Rust extension calls used by SiaSession."""
-    with patch("sia_scraper.session.sia_scraper_rust") as rust:
-        rust.init_sia_session = AsyncMock(return_value={"javax_faces_ViewState": "vs-1"})
-        rust.set_career = AsyncMock(
-            return_value={
-                "career_name": "Ingenieria de Sistemas",
-                "course_list": [
-                    {"1000001": "Calculo"},
-                    {"2016489": "Estructuras de Datos"},
-                    {"3000003": "Fisica"},
-                ],
-                "javax_faces_ViewState": "vs-2",
+
+    async def init_payload(_: int) -> str:
+        return json.dumps(
+            {
+                "session_headers": {},
+                "session_cookies": {},
+                "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-1"},
+                "javax_faces_ViewState": "vs-1",
+                "career_code": "",
+                "career_name": "N/A",
+                "is_electives": False,
+                "status": "CAREER_NOT_SET",
+                "course_list": [],
             }
         )
+
+    async def career_payload(_: int, search_code: str, is_electives: bool) -> str:
+        return json.dumps(
+            {
+                "session_headers": {},
+                "session_cookies": {},
+                "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-2"},
+                "javax_faces_ViewState": "vs-2",
+                "career_code": search_code,
+                "career_name": "Ingenieria de Sistemas",
+                "is_electives": is_electives,
+                "status": "ON_CAREER_PAGE",
+                "course_list": [
+                    {"course_code": "1000001", "course_name": "Calculo"},
+                    {"course_code": "2016489", "course_name": "Estructuras de Datos"},
+                    {"course_code": "3000003", "course_name": "Fisica"},
+                ],
+            }
+        )
+
+    with patch("sia_scraper.session.sia_scraper_rust") as rust:
+        rust.init_sia_session_json = AsyncMock(side_effect=init_payload)
+        rust.set_career_json = AsyncMock(side_effect=career_payload)
         rust.get_course_xml = AsyncMock(return_value="<xml>course</xml>")
         yield rust
 
@@ -45,13 +71,21 @@ class TestConcurrentAccessDetection:
 
             async def slow_set_career(*args):
                 await asyncio.sleep(0.1)
-                return {
-                    "career_name": "Test Career",
-                    "course_list": [],
-                    "javax_faces_ViewState": "vs-3",
-                }
+                return json.dumps(
+                    {
+                        "session_headers": {},
+                        "session_cookies": {},
+                        "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-3"},
+                        "javax_faces_ViewState": "vs-3",
+                        "career_code": "0-2-8-3",
+                        "career_name": "Test Career",
+                        "is_electives": False,
+                        "status": "ON_CAREER_PAGE",
+                        "course_list": [],
+                    }
+                )
 
-            mock_rust_module.set_career.side_effect = slow_set_career
+            mock_rust_module.set_career_json.side_effect = slow_set_career
 
             task1 = asyncio.create_task(session.set_career("0-2-8-3"))
             await asyncio.sleep(0.01)
@@ -129,9 +163,21 @@ class TestConcurrentAccessDetection:
 
         async def slow_init(*args):
             await asyncio.sleep(0.1)
-            return {"javax_faces_ViewState": "test"}
+            return json.dumps(
+                {
+                    "session_headers": {},
+                    "session_cookies": {},
+                    "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-x"},
+                    "javax_faces_ViewState": "test",
+                    "career_code": "",
+                    "career_name": "N/A",
+                    "is_electives": False,
+                    "status": "CAREER_NOT_SET",
+                    "course_list": [],
+                }
+            )
 
-        mock_rust_module.init_sia_session.side_effect = slow_init
+        mock_rust_module.init_sia_session_json.side_effect = slow_init
 
         task1 = asyncio.create_task(session.init_session())
         await asyncio.sleep(0.01)
@@ -175,13 +221,21 @@ class TestConcurrentAccessDetection:
 
         async def slow_set_career(*args):
             await asyncio.sleep(0.1)
-            return {
-                "career_name": "Test",
-                "course_list": [],
-                "javax_faces_ViewState": "vs",
-            }
+            return json.dumps(
+                {
+                    "session_headers": {},
+                    "session_cookies": {},
+                    "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-z"},
+                    "javax_faces_ViewState": "vs",
+                    "career_code": "0-2-8-3",
+                    "career_name": "Test",
+                    "is_electives": False,
+                    "status": "ON_CAREER_PAGE",
+                    "course_list": [],
+                }
+            )
 
-        mock_rust_module.set_career.side_effect = slow_set_career
+        mock_rust_module.set_career_json.side_effect = slow_set_career
 
         await session.init_session()
 
@@ -237,16 +291,25 @@ class TestSequentialOperationsStillWork:
         session = await SiaSession.create()
 
         try:
-            mock_rust_module.set_career.side_effect = RuntimeError("Simulated error")
+            mock_rust_module.set_career_json.side_effect = RuntimeError("Simulated error")
 
             with pytest.raises(RuntimeError):
                 await session.set_career("0-2-8-3")
 
-            mock_rust_module.set_career.side_effect = {
-                "career_name": "Test",
-                "course_list": [],
-                "javax_faces_ViewState": "vs",
-            }
+            mock_rust_module.set_career_json.side_effect = None
+            mock_rust_module.set_career_json.return_value = json.dumps(
+                {
+                    "session_headers": {},
+                    "session_cookies": {},
+                    "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-recover"},
+                    "javax_faces_ViewState": "vs",
+                    "career_code": "1-2-3-4",
+                    "career_name": "Test",
+                    "is_electives": False,
+                    "status": "ON_CAREER_PAGE",
+                    "course_list": [],
+                }
+            )
 
             await session.set_career("1-2-3-4")
             assert session.career_code == "1-2-3-4"

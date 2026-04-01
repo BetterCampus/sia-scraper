@@ -21,9 +21,7 @@ class PrereqConditionTyped(BaseModel):
 
     condition: int = Field(default=0, ge=0)
     prereq_type: str = Field(
-        default="UNKNOWN",
-        validation_alias=AliasChoices("prereq_type", "type"),
-        serialization_alias="type",
+        default="UNKNOWN", validation_alias=AliasChoices("prereq_type", "type")
     )
     all_required: bool = Field(default=False)
     number_of_courses: int = Field(default=0, ge=0)
