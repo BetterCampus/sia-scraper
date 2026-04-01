@@ -1,5 +1,6 @@
 """Rust-backed async SIA session management."""
 
+from contextlib import asynccontextmanager
 from typing import TypedDict, cast
 
 import sia_scraper_rust
@@ -7,6 +8,7 @@ import sia_scraper_rust
 from .constants import status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
+from .core.exceptions import ConcurrentAccessError
 from .parsers.models import SessionState
 
 
@@ -18,7 +20,32 @@ class _SessionRuntimeState(TypedDict, total=False):
 
 
 class SiaSession:
-    """Async SIA session backed by Rust reqwest/tokio HTTP client."""
+    """Async SIA session backed by Rust reqwest/tokio HTTP client.
+
+    **IMPORTANT: This class does NOT support concurrent operations.**
+
+    SiaSession maintains stateful Oracle ADF navigation context. Methods must
+    be called sequentially. Concurrent calls will raise `ConcurrentAccessError`.
+
+    For parallel scraping, create multiple independent `SiaSession` instances.
+
+    Example (correct sequential usage):
+        >>> session = await SiaSession.create()
+        >>> await session.set_career("0-2-8-3")
+        >>> for i in range(10):
+        ...     xml = await session.get_course_xml(i)  # OK - sequential
+
+    Example (incorrect concurrent usage):
+        >>> # DO NOT DO THIS:
+        >>> tasks = [session.get_course_xml(i) for i in range(10)]
+        >>> await asyncio.gather(*tasks)  # Will raise ConcurrentAccessError!
+
+    Example (correct parallel usage):
+        >>> # Create separate sessions for parallel work:
+        >>> sessions = [await SiaSession.create() for _ in range(5)]
+        >>> tasks = [s.set_career("0-2-8-3") for s in sessions]
+        >>> await asyncio.gather(*tasks)  # OK - different instances
+    """
 
     def __init__(self, timeout: int = 15) -> None:
         self._timeout = timeout
@@ -28,6 +55,7 @@ class SiaSession:
         self._career_indices: list[str] = []
         self._status: status.SiaSessionStatus = status.SiaSessionStatus.NO_SESSION
         self._session_state: _SessionRuntimeState = {}
+        self._active_operation: str | None = None
 
     @classmethod
     async def create(cls, timeout: int = 15) -> "SiaSession":
@@ -35,6 +63,25 @@ class SiaSession:
         session = cls(timeout)
         await session.init_session()
         return session
+
+    @asynccontextmanager
+    async def _operation(self, name: str):
+        """Guard against concurrent operations.
+
+        Args:
+            name: Name of the operation being guarded
+
+        Raises:
+            ConcurrentAccessError: If another operation is already active
+        """
+        if self._active_operation is not None:
+            raise ConcurrentAccessError(active_op=self._active_operation, attempted_op=name)
+
+        self._active_operation = name
+        try:
+            yield
+        finally:
+            self._active_operation = None
 
     @property
     def career_name(self) -> str:
@@ -68,56 +115,60 @@ class SiaSession:
 
     async def init_session(self) -> None:
         """Initialize HTTP session with SIA and fetch initial ViewState."""
-        result = await sia_scraper_rust.init_sia_session(self._timeout)  # type: ignore[attr-defined]
-        self._status = status.SiaSessionStatus.CAREER_NOT_SET
-        self._session_state = cast(_SessionRuntimeState, dict(result))
+        async with self._operation("init_session"):
+            result = await sia_scraper_rust.init_sia_session(self._timeout)  # type: ignore[attr-defined]
+            self._status = status.SiaSessionStatus.CAREER_NOT_SET
+            self._session_state = cast(_SessionRuntimeState, dict(result))
 
     async def set_career(self, search_code: str, is_electives: bool = False) -> None:
         """Navigate to career and load course list."""
-        result = await sia_scraper_rust.set_career(  # type: ignore[attr-defined]
-            self._timeout,
-            search_code,
-            is_electives,
-        )
-        self._career_code = search_code
-        self._career_indices = search_code.split("-")
-        self._is_electives = is_electives
-        if isinstance(result, dict):
-            self._career_name = str(result.get("career_name", self._career_name))
-            course_list = result.get("course_list", [])
-            if isinstance(course_list, list):
-                self._session_state["course_list"] = course_list
-            view_state = result.get("javax_faces_ViewState")
-            if isinstance(view_state, str):
-                self._session_state["javax_faces_ViewState"] = view_state
-        self._status = status.SiaSessionStatus.ON_CAREER_PAGE
+        async with self._operation("set_career"):
+            result = await sia_scraper_rust.set_career(  # type: ignore[attr-defined]
+                self._timeout,
+                search_code,
+                is_electives,
+            )
+            self._career_code = search_code
+            self._career_indices = search_code.split("-")
+            self._is_electives = is_electives
+            if isinstance(result, dict):
+                self._career_name = str(result.get("career_name", self._career_name))
+                course_list = result.get("course_list", [])
+                if isinstance(course_list, list):
+                    self._session_state["course_list"] = course_list
+                view_state = result.get("javax_faces_ViewState")
+                if isinstance(view_state, str):
+                    self._session_state["javax_faces_ViewState"] = view_state
+            self._status = status.SiaSessionStatus.ON_CAREER_PAGE
 
     async def get_course_xml(self, course_index: int) -> str:
         """Get course detail XML for given index."""
-        if self._status not in (
-            status.SiaSessionStatus.ON_CAREER_PAGE,
-            status.SiaSessionStatus.ON_COURSE_PAGE,
-        ):
-            raise SiaSessionException.InvalidStatus from None
+        async with self._operation("get_course_xml"):
+            if self._status not in (
+                status.SiaSessionStatus.ON_CAREER_PAGE,
+                status.SiaSessionStatus.ON_COURSE_PAGE,
+            ):
+                raise SiaSessionException.InvalidStatus from None
 
-        course_list = self.course_list
-        if not 0 <= course_index < len(course_list):
-            raise ValueError(
-                f"Course index {course_index} out of range (0-{max(len(course_list) - 1, 0)})"
+            course_list = self.course_list
+            if not 0 <= course_index < len(course_list):
+                raise ValueError(
+                    f"Course index {course_index} out of range (0-{max(len(course_list) - 1, 0)})"
+                )
+
+            result = await sia_scraper_rust.get_course_xml(  # type: ignore[attr-defined]
+                self._timeout,
+                course_index,
+                self._career_indices,
+                self._is_electives,
             )
-
-        result = await sia_scraper_rust.get_course_xml(  # type: ignore[attr-defined]
-            self._timeout,
-            course_index,
-            self._career_indices,
-            self._is_electives,
-        )
-        return str(result)
+            return str(result)
 
     async def close(self) -> None:
         """Close the session and cleanup resources."""
-        self._status = status.SiaSessionStatus.NO_SESSION
-        self._session_state = {}
+        async with self._operation("close"):
+            self._status = status.SiaSessionStatus.NO_SESSION
+            self._session_state = {}
 
     def get_session_data(self) -> SessionState:
         """Serialize session state for persistence."""

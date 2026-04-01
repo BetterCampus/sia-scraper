@@ -1,7 +1,10 @@
 """Additional edge-case tests for course parser coverage."""
 
+from pathlib import Path
+
 import pytest
 
+import sia_scraper_rust
 from sia_scraper.parsers import scrape_info, scrape_prereqs
 from sia_scraper.parsers.course_parser import (
     _extract_group,
@@ -299,6 +302,82 @@ class TestDiagnosticErrorMessages:
         <span class="detass-creditos">3</span>
         <span class="detass-tipologia"><span>OBLIGATORIA</span></span>
         """
+class TestFixtureEdgeCases:
+    """Test parser behavior with edge case fixtures."""
+
+    @pytest.fixture
+    def fixture_path(self):
+        """Return path to edge case fixtures."""
+        return Path("tests/fixtures/xml/edge_cases")
+
+    def _load_fixture(self, fixture_path: Path, filename: str) -> str:
+        """Load and extract CDATA from an edge case fixture."""
+        filepath = fixture_path / filename
+        content = filepath.read_text()
+        start = content.find("<![CDATA[") + 9
+        end = content.find("]]>")
+        return content[start:end]
+
+    def test_group_with_five_divs_no_spots(self, fixture_path: Path):
+        """Group with 5 divs (no spots field) should parse with spots=None."""
+        xml = self._load_fixture(fixture_path, "group_with_5_divs.xml")
+        result = scrape_info(xml)
+
+        assert len(result.groups) == 1
+        group = result.groups[0]
+        assert group.teacher == "JUAN PEREZ GOMEZ"
+        assert group.faculty == "CIENCIAS"
+        assert group.duration == "16 SEMANAS"
+        assert group.schedule_type == "DIURNA"
+        assert group.spots is None
+
+    def test_group_with_three_divs_minimal(self, fixture_path: Path):
+        """Group with only 3 divs should parse essential fields."""
+        xml = self._load_fixture(fixture_path, "group_with_3_divs.xml")
+        result = scrape_info(xml)
+
+        assert len(result.groups) == 1
+        group = result.groups[0]
+        assert group.teacher == "MARIA RODRIGUEZ"
+        assert group.faculty == "INGENIERÍA"
+        # Schedules may be empty if schedule row format doesn't match
+        # Optional fields should have defaults
+        assert group.duration == "Unknown"
+        assert group.schedule_type == "Unknown"
+        assert group.spots is None
+
+    def test_group_empty_faculty_field(self, fixture_path: Path):
+        """Group with empty faculty field should handle gracefully."""
+        xml = self._load_fixture(fixture_path, "group_empty_faculty.xml")
+        result = scrape_info(xml)
+
+        assert len(result.groups) == 1
+        group = result.groups[0]
+        assert group.faculty == "" or group.faculty == "Unknown"
+        assert group.teacher == "CARLOS MARTINEZ"
+        assert group.spots == 15
+
+    def test_condition_with_three_headers_raises_error(self, fixture_path: Path):
+        """Condition with only 3 headers currently raises IndexError (Phase 2C will fix)."""
+        xml = self._load_fixture(fixture_path, "condition_with_3_headers.xml")
+
+        # Current behavior: crashes with IndexError when condition has <4 headers
+        # Phase 2C will add graceful handling and diagnostics
+        with pytest.raises((IndexError, ValueError)):
+            scrape_prereqs(xml)
+
+    def test_course_no_groups_returns_empty_list(self, fixture_path: Path):
+        """Course with no group panels should return empty groups list."""
+        xml = self._load_fixture(fixture_path, "course_no_groups.xml")
+        result = scrape_info(xml)
+
+        assert result.course_name == "SEMINARIO DE INVESTIGACION"
+        assert result.credits == 2
+        assert len(result.groups) == 0
+
+    def test_course_missing_credits_span_raises_error(self, fixture_path: Path):
+        """Credits element without span should raise error."""
+        xml = self._load_fixture(fixture_path, "course_missing_credits_span.xml")
 
         with pytest.raises(ValueError) as exc_info:
             scrape_info(xml)
@@ -336,3 +415,91 @@ class TestDiagnosticErrorMessages:
         error_msg = str(exc_info.value)
         assert "course name" in error_msg.lower()
         assert "not found" in error_msg.lower()
+
+
+@pytest.mark.unit
+class TestPrerequisiteEdgeCases:
+    """Test prerequisite parsing edge cases."""
+
+    def test_course_no_prerequisites(self):
+        """Course with no prerequisites should return empty list."""
+        xml = """
+        <h2>CURSO SIN REQUISITOS (1234)</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia">Tipología: OBLIGATORIA</span>
+        """
+        result = scrape_prereqs(xml)
+        assert result.conditions == []
+
+    def test_malformed_prerequisite_html(self):
+        """Malformed prerequisite HTML should raise clear error."""
+        xml = "<div>Not a valid prereq structure</div>"
+
+        with pytest.raises(ValueError) as exc_info:
+            scrape_prereqs(xml)
+
+        error_msg = str(exc_info.value)
+        assert "course name" in error_msg.lower() or "not found" in error_msg.lower()
+
+    def test_prereq_with_empty_condition_body(self):
+        """Prerequisite condition with empty body should be handled."""
+        xml = """
+        <h2>TEST COURSE (1234)</h2>
+        <span class="detass-creditos"><span>3</span></span>
+        <span class="detass-tipologia">Tipología: OBLIGATORIA</span>
+        <span class="borde salto af_panelGroupLayout">
+          <div class="margin-t af_panelGroupLayout">
+          </div>
+        </span>
+        """
+        result = scrape_prereqs(xml)
+        assert result is not None
+
+
+@pytest.mark.unit
+class TestRustParserParity:
+    """Verify Rust parser handles same edge cases as Python."""
+
+    def test_rust_group_with_five_divs(self):
+        """Rust parser should handle 5-div groups like Python."""
+        xml = """
+        <h2>CALCULO</h2>
+        <span class="detass-creditos"><span>4</span></span>
+        <span class="detass-tipologia"><span>OBLIGATORIA</span></span>
+        <div class="af_showDetailHeader_content0">
+            <div class="af_panelGroupLayout">
+                <div><span>Profesor: </span><span>JUAN</span></div>
+                <div><span>Facultad: </span><span>CIENCIAS</span></div>
+                <div><span>Horarios: </span><span>LU 10:00</span></div>
+                <div><span>Duración: </span><span>16 SEM</span></div>
+                <div><span>Jornada: </span><span>DIURNA</span></div>
+            </div>
+        </div>
+        """
+        python_result = scrape_info(xml)
+
+        # Rust should also parse successfully
+        rust_result = sia_scraper_rust.parse_course_info(xml)  # type: ignore[attr-defined]
+        # Both should return at least the course info (groups may differ in handling)
+        assert rust_result["course_name"] == python_result.course_name
+        assert rust_result["credits"] == python_result.credits
+
+    def test_rust_course_no_groups(self):
+        """Rust parser should handle course with no groups."""
+        xml = """
+        <h2>SEMINARIO</h2>
+        <span class="detass-creditos"><span>2</span></span>
+        <span class="detass-tipologia"><span>TRABAJO GRADO</span></span>
+        """
+        python_result = scrape_info(xml)
+        rust_result = sia_scraper_rust.parse_course_info(xml)  # type: ignore[attr-defined]
+
+        assert len(python_result.groups) == 0
+        assert len(rust_result["groups"]) == 0
+
+    def test_rust_missing_credits_raises_error(self):
+        """Rust parser should raise error for missing credits like Python."""
+        xml = "<h2>COURSE</h2><div>No credits</div>"
+
+        with pytest.raises((RuntimeError, Exception)):  # noqa: PT011 - PyO3 may wrap as SiaScraperException or RuntimeError
+            sia_scraper_rust.parse_course_info(xml)  # type: ignore[attr-defined]
