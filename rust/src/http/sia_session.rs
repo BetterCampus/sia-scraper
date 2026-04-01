@@ -1,10 +1,10 @@
 //! Async SIA Session manager with retry logic.
 
+use regex::Regex;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
-use regex::Regex;
 
 use crate::constants::{
     actions, adf_ids, DROPDOWN_FIRST_OPTION_OFFSET, ELECTIVES_TYPOLOGY_INDEX, SIA_BASE_URL,
@@ -59,7 +59,8 @@ impl SiaSession {
                 Ok(()) => return Ok(()),
                 Err(e) => {
                     last_error = Some(e.clone());
-                    if !should_retry(&e, &self.retry_config) || attempt == self.retry_config.max_attempts
+                    if !should_retry(&e, &self.retry_config)
+                        || attempt == self.retry_config.max_attempts
                     {
                         return Err(e);
                     }
@@ -69,16 +70,19 @@ impl SiaSession {
             }
         }
 
-        Err(last_error.unwrap_or(HttpError::ConnectionFailed(
-            "Unknown error".to_string(),
-        )))
+        Err(last_error.unwrap_or(HttpError::ConnectionFailed("Unknown error".to_string())))
     }
 
     async fn do_init_session(&self) -> Result<(), HttpError> {
-        let init_url = format!("{}?taskflowId={}", self.base_url, crate::constants::SIA_TASKFLOW_ID);
-        let resp = self.client.get(&init_url).await.map_err(|e| {
-            HttpError::ConnectionFailed(format!("init_session GET failed: {e}"))
-        })?;
+        let init_url = format!(
+            "{}?taskflowId={}",
+            self.base_url,
+            crate::constants::SIA_TASKFLOW_ID
+        );
+        let resp =
+            self.client.get(&init_url).await.map_err(|e| {
+                HttpError::ConnectionFailed(format!("init_session GET failed: {e}"))
+            })?;
         resp.raise_for_status().map_err(|e| {
             HttpError::ConnectionFailed(format!("init_session returned error status: {e}"))
         })?;
@@ -198,24 +202,29 @@ impl SiaSession {
 
         for action in action_sequence {
             let mut builder = self.state_as_request_builder(&state);
-            builder
-                .request_dict
-                .insert(adf_ids::STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
+            builder.request_dict.insert(
+                adf_ids::STUDY_LEVEL_DD_ID.to_string(),
+                career_indices[0].clone(),
+            );
             builder
                 .request_dict
                 .insert(adf_ids::CAMPUS_DD_ID.to_string(), career_indices[1].clone());
-            builder
-                .request_dict
-                .insert(adf_ids::FACULTY_DD_ID.to_string(), career_indices[2].clone());
+            builder.request_dict.insert(
+                adf_ids::FACULTY_DD_ID.to_string(),
+                career_indices[2].clone(),
+            );
             builder
                 .request_dict
                 .insert(adf_ids::CAREER_DD_ID.to_string(), career_indices[3].clone());
 
             let request_body = builder
                 .build_request_body(action, -1, &career_indices, 0)
-                .map_err(|e| HttpError::InvalidInput(format!("build_request_body({action}): {e}")))?;
-            let encoded = serde_urlencoded::to_string(request_body)
-                .map_err(|e| HttpError::InvalidInput(format!("encode request for {action}: {e}")))?;
+                .map_err(|e| {
+                    HttpError::InvalidInput(format!("build_request_body({action}): {e}"))
+                })?;
+            let encoded = serde_urlencoded::to_string(request_body).map_err(|e| {
+                HttpError::InvalidInput(format!("encode request for {action}: {e}"))
+            })?;
 
             let response = self.post_request(&encoded).await?;
             response.raise_for_status().map_err(|e| {
@@ -224,9 +233,9 @@ impl SiaSession {
             last_xml = response.body.clone();
 
             if action == actions::FACULTY_DD {
-                let career_index = career_indices[3]
-                    .parse::<usize>()
-                    .map_err(|_| HttpError::InvalidInput("career index must be numeric".to_string()))?;
+                let career_index = career_indices[3].parse::<usize>().map_err(|_| {
+                    HttpError::InvalidInput("career index must be numeric".to_string())
+                })?;
                 state.career_name = Self::extract_career_name(&last_xml, career_index);
             }
 
@@ -261,21 +270,24 @@ impl SiaSession {
 
         let career_indices: Vec<String> = search_code.split('-').map(ToString::to_string).collect();
         if career_indices.len() != 4 {
-            return Err(HttpError::InvalidInput(
-                format!("career code '{}' must have 4 indices separated by '-'", search_code),
-            ));
+            return Err(HttpError::InvalidInput(format!(
+                "career code '{}' must have 4 indices separated by '-'",
+                search_code
+            )));
         }
 
         let mut builder = self.state_as_request_builder(&career_state);
-        builder
-            .request_dict
-            .insert(adf_ids::STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
+        builder.request_dict.insert(
+            adf_ids::STUDY_LEVEL_DD_ID.to_string(),
+            career_indices[0].clone(),
+        );
         builder
             .request_dict
             .insert(adf_ids::CAMPUS_DD_ID.to_string(), career_indices[1].clone());
-        builder
-            .request_dict
-            .insert(adf_ids::FACULTY_DD_ID.to_string(), career_indices[2].clone());
+        builder.request_dict.insert(
+            adf_ids::FACULTY_DD_ID.to_string(),
+            career_indices[2].clone(),
+        );
         builder
             .request_dict
             .insert(adf_ids::CAREER_DD_ID.to_string(), career_indices[3].clone());
@@ -288,20 +300,22 @@ impl SiaSession {
                 course_list.len(),
             )
             .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
-        let select_row_encoded =
-            serde_urlencoded::to_string(select_row).map_err(|e| HttpError::InvalidInput(e.to_string()))?;
+        let select_row_encoded = serde_urlencoded::to_string(select_row)
+            .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
         let _ = self.post_request(&select_row_encoded).await?;
 
         let mut builder = self.state_as_request_builder(&self.get_state().await);
-        builder
-            .request_dict
-            .insert(adf_ids::STUDY_LEVEL_DD_ID.to_string(), career_indices[0].clone());
+        builder.request_dict.insert(
+            adf_ids::STUDY_LEVEL_DD_ID.to_string(),
+            career_indices[0].clone(),
+        );
         builder
             .request_dict
             .insert(adf_ids::CAMPUS_DD_ID.to_string(), career_indices[1].clone());
-        builder
-            .request_dict
-            .insert(adf_ids::FACULTY_DD_ID.to_string(), career_indices[2].clone());
+        builder.request_dict.insert(
+            adf_ids::FACULTY_DD_ID.to_string(),
+            career_indices[2].clone(),
+        );
         builder
             .request_dict
             .insert(adf_ids::CAREER_DD_ID.to_string(), career_indices[3].clone());
@@ -314,8 +328,8 @@ impl SiaSession {
                 course_list.len(),
             )
             .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
-        let course_page_encoded =
-            serde_urlencoded::to_string(course_page).map_err(|e| HttpError::InvalidInput(e.to_string()))?;
+        let course_page_encoded = serde_urlencoded::to_string(course_page)
+            .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
         let response = self.post_request(&course_page_encoded).await?;
         response.raise_for_status()?;
         let xml = response.body.clone();
@@ -330,32 +344,37 @@ impl SiaSession {
             .params
             .get("Adf-Window-Id")
             .cloned()
-            .ok_or_else(|| HttpError::InvalidInput("Missing Adf-Window-Id in session state".to_string()))?;
+            .ok_or_else(|| {
+                HttpError::InvalidInput("Missing Adf-Window-Id in session state".to_string())
+            })?;
         back_body.insert("Adf-Window-Id".to_string(), window_id);
 
         let page_id = current_state
             .params
             .get("Adf-Page-Id")
             .cloned()
-            .ok_or_else(|| HttpError::InvalidInput("Missing Adf-Page-Id in session state".to_string()))?;
+            .ok_or_else(|| {
+                HttpError::InvalidInput("Missing Adf-Page-Id in session state".to_string())
+            })?;
         back_body.insert("Adf-Page-Id".to_string(), page_id);
 
-        let view_state = current_state
-            .javax_faces_ViewState
-            .ok_or_else(|| HttpError::InvalidInput("Missing ViewState in session state".to_string()))?;
+        let view_state = current_state.javax_faces_ViewState.ok_or_else(|| {
+            HttpError::InvalidInput("Missing ViewState in session state".to_string())
+        })?;
         back_body.insert("javax.faces.ViewState".to_string(), view_state);
         back_body.insert("event".to_string(), "pt1:r1:1:cb4".to_string());
         back_body.insert(
             "event.pt1:r1:1:cb4".to_string(),
-            r#"<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>"#.to_string(),
+            r#"<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>"#
+                .to_string(),
         );
         back_body.insert(
             "oracle.adf.view.rich.PROCESS".to_string(),
             "pt1:r1,pt1:r1:1:cb44".to_string(),
         );
 
-        let back_encoded =
-            serde_urlencoded::to_string(back_body).map_err(|e| HttpError::InvalidInput(e.to_string()))?;
+        let back_encoded = serde_urlencoded::to_string(back_body)
+            .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
         let _ = self.post_request(&back_encoded).await?;
 
         let mut state = self.state.write().await;
@@ -372,7 +391,8 @@ impl SiaSession {
                 Ok(resp) => return Ok(resp),
                 Err(e) => {
                     last_error = Some(e.clone());
-                    if !should_retry(&e, &self.retry_config) || attempt == self.retry_config.max_attempts
+                    if !should_retry(&e, &self.retry_config)
+                        || attempt == self.retry_config.max_attempts
                     {
                         return Err(e);
                     }
@@ -382,9 +402,7 @@ impl SiaSession {
             }
         }
 
-        Err(last_error.unwrap_or(HttpError::ConnectionFailed(
-            "Unknown error".to_string(),
-        )))
+        Err(last_error.unwrap_or(HttpError::ConnectionFailed("Unknown error".to_string())))
     }
 
     async fn do_post_request(&self, body: &str) -> Result<HttpResponse, HttpError> {

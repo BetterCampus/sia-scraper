@@ -21,9 +21,10 @@ impl HttpResponse {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
-        let body = resp.text().await.map_err(|e| {
-            crate::http::errors::HttpError::ParseError(e.to_string())
-        })?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| crate::http::errors::HttpError::ParseError(e.to_string()))?;
 
         Ok(Self {
             status,

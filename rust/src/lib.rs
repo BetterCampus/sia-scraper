@@ -265,10 +265,12 @@ fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let client = AsyncHttpClient::new(15, url_clone.clone())
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
-        let resp = client.get(&url_clone).await
+
+        let resp = client
+            .get(&url_clone)
+            .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("status", resp.status)?;
@@ -296,10 +298,12 @@ fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyA
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let client = AsyncHttpClient::new(15, url_clone.clone())
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
-        let resp = client.post(&url_clone, &body_clone).await
+
+        let resp = client
+            .post(&url_clone, &body_clone)
+            .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("status", resp.status)?;
@@ -337,13 +341,15 @@ fn async_get_with_config<'p>(
         let config = HttpClientConfig::default()
             .with_timeout(timeout)
             .with_user_agent(&user_agent);
-        
+
         let client = AsyncHttpClient::with_config(config)
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
-        let resp = client.get(&url_clone).await
+
+        let resp = client
+            .get(&url_clone)
+            .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("status", resp.status)?;
@@ -373,19 +379,24 @@ fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p Py
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
-        session.init_session().await
+
+        session
+            .init_session()
+            .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         let state = session.get_state().await;
-        
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("status", state.status)?;
             dict.set_item("career_code", state.career_code)?;
             dict.set_item("career_name", state.career_name)?;
             dict.set_item("is_electives", state.is_electives)?;
-            dict.set_item("javax_faces_ViewState", state.javax_faces_ViewState.unwrap_or_default())?;
+            dict.set_item(
+                "javax_faces_ViewState",
+                state.javax_faces_ViewState.unwrap_or_default(),
+            )?;
             Ok(dict.into_py(py))
         })
     })
@@ -418,21 +429,29 @@ fn set_career<'p>(
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
-        session.init_session().await
+
+        session
+            .init_session()
+            .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         let state = session
             .set_career(&search_code, electives)
             .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         let career_indices: Vec<String> = search_code.split('-').map(|s| s.to_string()).collect();
         let course_list = &state.course_list;
-        
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("career_code", search_code)?;
-            dict.set_item("career_indices", career_indices.iter().map(|s| s.as_str()).collect::<Vec<&str>>())?;
+            dict.set_item(
+                "career_indices",
+                career_indices
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<&str>>(),
+            )?;
             dict.set_item("is_electives", electives)?;
             dict.set_item("career_name", state.career_name)?;
             dict.set_item(
@@ -474,15 +493,17 @@ fn get_course_xml<'p>(
     future_into_py(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
-        session.init_session().await
+
+        session
+            .init_session()
+            .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         let xml = session
             .get_course_xml(&search_code, electives, course_index)
             .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         Ok::<String, pyo3::PyErr>(xml)
     })
 }
