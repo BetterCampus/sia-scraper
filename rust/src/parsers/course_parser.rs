@@ -186,11 +186,15 @@ fn extract_spots(elem: &ElementRef<'_>) -> Option<i64> {
     text.trim().parse::<i64>().ok()
 }
 
-fn extract_group(group: &ElementRef<'_>, course_name: &str) -> Option<Py<pyo3::types::PyAny>> {
+fn extract_group(
+    group: &ElementRef<'_>,
+    course_name: &str,
+) -> Option<(Py<pyo3::types::PyAny>, i64)> {
     let group_name = extract_group_name(group)?;
     let fields = extract_group_fields(group)?;
+    let spots = fields.spots;
 
-    Some(Python::with_gil(|py| {
+    let dict = Python::with_gil(|py| {
         let dict = pyo3::types::PyDict::new(py);
         let _ = dict.set_item("group_name", &group_name);
         let _ = dict.set_item("teacher", &fields.teacher);
@@ -202,7 +206,9 @@ fn extract_group(group: &ElementRef<'_>, course_name: &str) -> Option<Py<pyo3::t
         let _ = dict.set_item("spots", fields.spots);
         let _ = dict.set_item("code", py.None());
         dict.into_py(py)
-    }))
+    });
+
+    Some((dict, spots))
 }
 
 fn extract_group_name(group: &ElementRef<'_>) -> Option<String> {
@@ -308,15 +314,7 @@ pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScrap
     let mut available_spots: i64 = 0;
 
     for group in &group_elems {
-        if let Some(group_dict) = extract_group(group, &course_name) {
-            let spots = Python::with_gil(|py| {
-                let dict_ref = group_dict.as_ref(py);
-                dict_ref
-                    .get_item("spots")
-                    .ok()
-                    .and_then(|v| v.extract::<i64>().ok())
-                    .unwrap_or(0)
-            });
+        if let Some((group_dict, spots)) = extract_group(group, &course_name) {
             available_spots += spots;
             group_list.push(group_dict);
         }
