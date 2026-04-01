@@ -2,6 +2,7 @@
 
 import pytest
 
+import sia_scraper_rust
 from sia_scraper.models.course import CourseInfoTyped
 from sia_scraper.parsers.course_parser import scrape_info_typed
 
@@ -32,7 +33,7 @@ class TestTypedCourseBridge:
         </html>
         """
 
-        with pytest.raises(Exception) as exc_info:  # noqa: B017 - PyO3 raises runtime-like error
+        with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
             scrape_info_typed(xml)
 
         error_msg = str(exc_info.value)

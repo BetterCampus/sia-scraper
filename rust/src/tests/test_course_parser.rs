@@ -234,9 +234,9 @@ fn test_parse_course_xml_group_defaults_and_group_name_extraction() {
                 .unwrap(),
             "Unknown"
         );
-        assert_eq!(
-            group.get_item("spots").unwrap().extract::<i64>().unwrap(),
-            0
+        assert!(
+            group.get_item("spots").unwrap().is_none(),
+            "spots should be None when not provided"
         );
     });
 }
@@ -373,9 +373,9 @@ fn test_parse_course_xml_schedule_non_matching_pattern_is_ignored() {
                 .unwrap(),
             "Unknown"
         );
-        assert_eq!(
-            group.get_item("spots").unwrap().extract::<i64>().unwrap(),
-            0
+        assert!(
+            group.get_item("spots").unwrap().is_none(),
+            "spots should be None when not provided"
         );
     });
 }

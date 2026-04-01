@@ -2,7 +2,7 @@ use scraper::Selector;
 use std::fs;
 use std::path::Path;
 use syn::{
-    Expr, ExprCall, ExprClosure, ExprLit, ExprMethodCall, File, Item, ItemStatic, Lit, Stmt,
+    Expr, ExprCall, ExprClosure, ExprLit, ExprMethodCall, File, Item, ItemStatic, Lit, Macro, Stmt,
 };
 
 fn main() {
@@ -22,33 +22,49 @@ fn main() {
     let mut selector_count = 0;
 
     for item in syntax_tree.items {
-        if let Item::Static(item_static) = item {
-            if is_selector_static(&item_static) {
-                let selector_name = item_static.ident.to_string();
+        match item {
+            Item::Static(item_static) => {
+                if is_selector_static(&item_static) {
+                    let selector_name = item_static.ident.to_string();
 
-                if let Some(selector_str) = extract_selector_string(&item_static) {
-                    if let Err(e) = Selector::parse(&selector_str) {
+                    if let Some(selector_str) = extract_selector_string(&item_static) {
+                        if let Err(e) = Selector::parse(&selector_str) {
+                            panic!(
+                                "Invalid CSS selector in {}: '{}'\nError: {:?}",
+                                selector_name, selector_str, e
+                            );
+                        }
+
+                        println!(
+                            "cargo:warning=Validated selector {}: '{}'",
+                            selector_name, selector_str
+                        );
+                        selector_count += 1;
+                    } else {
+                        panic!("Failed to extract selector string from {}", selector_name);
+                    }
+                }
+            }
+            Item::Macro(macro_item) => {
+                if let Some((name, pattern)) = extract_define_selector(&macro_item.mac) {
+                    if let Err(e) = Selector::parse(&pattern) {
                         panic!(
                             "Invalid CSS selector in {}: '{}'\nError: {:?}",
-                            selector_name, selector_str, e
+                            name, pattern, e
                         );
                     }
 
-                    println!(
-                        "cargo:warning=Validated selector {}: '{}'",
-                        selector_name, selector_str
-                    );
+                    println!("cargo:warning=Validated selector {}: '{}'", name, pattern);
                     selector_count += 1;
-                } else {
-                    panic!("Failed to extract selector string from {}", selector_name);
                 }
             }
+            _ => {}
         }
     }
 
     if selector_count == 0 {
         panic!(
-            "No selectors found in {}! Expected LazyLock<Selector> statics.",
+            "No selectors found in {}! Expected define_selector! macro or LazyLock<Result<Selector, String>> statics.",
             parser_path.display()
         );
     }
@@ -59,6 +75,7 @@ fn main() {
     );
     println!("cargo:rerun-if-changed={}", parser_path.display());
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=rust/src/parsers/course_parser.rs");
 }
 
 fn is_selector_static(item: &ItemStatic) -> bool {
@@ -90,7 +107,7 @@ fn extract_from_expr(expr: &Expr) -> Option<String> {
 }
 
 fn extract_from_method_call(method_call: &ExprMethodCall) -> Option<String> {
-    if method_call.method == "unwrap" {
+    if method_call.method == "map_err" {
         if let Expr::Call(inner_call) = &*method_call.receiver {
             if let Some(Expr::Lit(ExprLit {
                 lit: Lit::Str(lit_str),
@@ -102,4 +119,23 @@ fn extract_from_method_call(method_call: &ExprMethodCall) -> Option<String> {
         }
     }
     None
+}
+
+fn extract_define_selector(mac: &Macro) -> Option<(String, String)> {
+    let mac_str = quote::quote!(#mac).to_string();
+
+    if !mac_str.starts_with("define_selector !") {
+        return None;
+    }
+
+    let mac_string = mac.tokens.to_string();
+    let tokens: Vec<_> = mac_string.split(',').collect();
+    if tokens.len() != 2 {
+        return None;
+    }
+
+    let name = tokens[0].trim().to_string();
+    let pattern = tokens[1].trim().trim_matches('"').trim().to_string();
+
+    Some((name, pattern))
 }
