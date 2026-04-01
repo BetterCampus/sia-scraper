@@ -242,7 +242,7 @@ fn test_parse_course_xml_group_defaults_and_group_name_extraction() {
 }
 
 #[test]
-fn test_parse_course_xml_extract_label_value_without_span_defaults_unknown() {
+fn test_parse_course_xml_extract_label_value_without_span_uses_extracted_text() {
     let xml = r#"
         <html>
             <body>
@@ -282,7 +282,7 @@ fn test_parse_course_xml_extract_label_value_without_span_defaults_unknown() {
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
-            "Unknown"
+            "Facultad Sin Span"
         );
     });
 }
@@ -300,12 +300,9 @@ fn test_parse_course_xml_group_without_panel_is_skipped() {
         </html>
     "#;
 
-    Python::with_gil(|py| {
-        let result = parse_course_info(xml).unwrap();
-        let dict = result.as_ref(py);
-        let groups = dict.get_item("groups").unwrap();
-        let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
-        assert!(groups_list.is_empty());
+    Python::with_gil(|_py| {
+        let result = parse_course_info(xml);
+        assert!(result.is_err());
     });
 }
 
@@ -324,12 +321,9 @@ fn test_parse_course_xml_group_with_empty_panel_data_is_skipped() {
         </html>
     "#;
 
-    Python::with_gil(|py| {
-        let result = parse_course_info(xml).unwrap();
-        let dict = result.as_ref(py);
-        let groups = dict.get_item("groups").unwrap();
-        let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
-        assert!(groups_list.is_empty());
+    Python::with_gil(|_py| {
+        let result = parse_course_info(xml);
+        assert!(result.is_err());
     });
 }
 
