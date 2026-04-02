@@ -1,6 +1,6 @@
 //! Unit tests for course parsing functions.
 
-use crate::parsers::course_parser::{get_plain_text as rust_get_plain_text, parse_prereqs_xml};
+use crate::parsers::course_parser::get_plain_text as rust_get_plain_text;
 use crate::{parse_course_info, parse_prereqs};
 use pyo3::Python;
 
@@ -801,7 +801,7 @@ fn test_parse_prereqs_xml_missing_credits_errors() {
         </html>
     "#;
 
-    let result = Python::with_gil(|py| parse_prereqs_xml(xml, py));
+    let result = Python::with_gil(|py| parse_prereqs(py, xml));
     assert!(result.is_err());
 }
 

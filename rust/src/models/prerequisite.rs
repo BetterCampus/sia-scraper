@@ -1,5 +1,7 @@
 //! Typed prerequisite parsing models.
 
+#![allow(non_local_definitions)]
+
 use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -47,8 +49,8 @@ impl PrerequisiteModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("course_code", &self.course_code)?;
-        dict.set_item("course_name", &self.course_name)?;
+        dict.set_item("course_code", self.course_code.clone())?;
+        dict.set_item("course_name", self.course_name.clone())?;
         Ok(dict.into())
     }
 
@@ -117,10 +119,10 @@ impl PrereqConditionModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("condition", &self.condition)?;
-        dict.set_item("prereq_type", &self.prereq_type)?;
-        dict.set_item("all_required", &self.all_required)?;
-        dict.set_item("number_of_courses", &self.number_of_courses)?;
+        dict.set_item("condition", self.condition)?;
+        dict.set_item("prereq_type", self.prereq_type.clone())?;
+        dict.set_item("all_required", self.all_required)?;
+        dict.set_item("number_of_courses", self.number_of_courses)?;
 
         let prereqs = PyList::empty(py);
         for prereq in &self.prerequisites {
@@ -217,10 +219,10 @@ impl CoursePrereqsModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("course_name", &self.course_name)?;
-        dict.set_item("code", &self.code)?;
-        dict.set_item("credits", &self.credits)?;
-        dict.set_item("typology", &self.typology)?;
+        dict.set_item("course_name", self.course_name.clone())?;
+        dict.set_item("code", self.code.clone())?;
+        dict.set_item("credits", self.credits)?;
+        dict.set_item("typology", self.typology.clone())?;
 
         let conditions = PyList::empty(py);
         for condition in &self.conditions {

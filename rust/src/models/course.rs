@@ -1,5 +1,7 @@
 //! Typed course parsing models.
 
+#![allow(non_local_definitions)]
+
 use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -9,6 +11,28 @@ fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
     dict.get_item(key)?
         .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
 }
+
+type GroupModelPickleState = (
+    String,
+    String,
+    String,
+    String,
+    Vec<ScheduleModel>,
+    String,
+    String,
+    Option<i64>,
+    Option<String>,
+);
+
+type CourseInfoModelPickleState = (
+    String,
+    i32,
+    String,
+    i64,
+    String,
+    Vec<GroupModel>,
+    Option<String>,
+);
 
 /// Class schedule entry.
 #[pyclass(module = "sia_scraper_rust")]
@@ -53,10 +77,10 @@ impl ScheduleModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("day", &self.day)?;
-        dict.set_item("start_time", &self.start_time)?;
-        dict.set_item("end_time", &self.end_time)?;
-        dict.set_item("classroom", &self.classroom)?;
+        dict.set_item("day", self.day.clone())?;
+        dict.set_item("start_time", self.start_time.clone())?;
+        dict.set_item("end_time", self.end_time.clone())?;
+        dict.set_item("classroom", self.classroom.clone())?;
         Ok(dict.into())
     }
 
@@ -135,19 +159,7 @@ impl GroupModel {
         format!("{} - {}", self.group_name, self.teacher)
     }
 
-    fn __getnewargs__(
-        &self,
-    ) -> (
-        String,
-        String,
-        String,
-        String,
-        Vec<ScheduleModel>,
-        String,
-        String,
-        Option<i64>,
-        Option<String>,
-    ) {
+    fn __getnewargs__(&self) -> GroupModelPickleState {
         (
             String::new(),
             String::new(),
@@ -163,14 +175,14 @@ impl GroupModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("group_name", &self.group_name)?;
-        dict.set_item("teacher", &self.teacher)?;
-        dict.set_item("faculty", &self.faculty)?;
-        dict.set_item("course_name", &self.course_name)?;
-        dict.set_item("duration", &self.duration)?;
-        dict.set_item("schedule_type", &self.schedule_type)?;
-        dict.set_item("spots", &self.spots)?;
-        dict.set_item("code", &self.code)?;
+        dict.set_item("group_name", self.group_name.clone())?;
+        dict.set_item("teacher", self.teacher.clone())?;
+        dict.set_item("faculty", self.faculty.clone())?;
+        dict.set_item("course_name", self.course_name.clone())?;
+        dict.set_item("duration", self.duration.clone())?;
+        dict.set_item("schedule_type", self.schedule_type.clone())?;
+        dict.set_item("spots", self.spots)?;
+        dict.set_item("code", self.code.clone())?;
 
         let schedules = PyList::empty(py);
         for schedule in &self.schedules {
@@ -261,17 +273,7 @@ impl CourseInfoModel {
         format!("{} ({} credits)", self.course_name, self.credits)
     }
 
-    fn __getnewargs__(
-        &self,
-    ) -> (
-        String,
-        i32,
-        String,
-        i64,
-        String,
-        Vec<GroupModel>,
-        Option<String>,
-    ) {
+    fn __getnewargs__(&self) -> CourseInfoModelPickleState {
         (
             String::new(),
             0,
@@ -285,12 +287,12 @@ impl CourseInfoModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("course_name", &self.course_name)?;
-        dict.set_item("credits", &self.credits)?;
-        dict.set_item("typology", &self.typology)?;
-        dict.set_item("available_spots", &self.available_spots)?;
-        dict.set_item("scrape_timestamp", &self.scrape_timestamp)?;
-        dict.set_item("code", &self.code)?;
+        dict.set_item("course_name", self.course_name.clone())?;
+        dict.set_item("credits", self.credits)?;
+        dict.set_item("typology", self.typology.clone())?;
+        dict.set_item("available_spots", self.available_spots)?;
+        dict.set_item("scrape_timestamp", self.scrape_timestamp.clone())?;
+        dict.set_item("code", self.code.clone())?;
 
         let groups = PyList::empty(py);
         for group in &self.groups {

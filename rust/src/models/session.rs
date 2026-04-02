@@ -1,5 +1,7 @@
 //! Typed session state models for Rust/Python boundary transport.
 
+#![allow(non_local_definitions)]
+
 use std::collections::HashMap;
 
 use pyo3::exceptions::PyKeyError;
@@ -13,6 +15,18 @@ fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
     dict.get_item(key)?
         .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
 }
+
+type SessionStateModelPickleState = (
+    HashMap<String, String>,
+    HashMap<String, String>,
+    HashMap<String, String>,
+    String,
+    String,
+    bool,
+    String,
+    Vec<CourseListEntryModel>,
+    Option<String>,
+);
 
 /// One course entry from the course list table.
 #[pyclass(module = "sia_scraper_rust")]
@@ -51,8 +65,8 @@ impl CourseListEntryModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("course_code", &self.course_code)?;
-        dict.set_item("course_name", &self.course_name)?;
+        dict.set_item("course_code", self.course_code.clone())?;
+        dict.set_item("course_name", self.course_name.clone())?;
         Ok(dict.into())
     }
 
@@ -146,19 +160,7 @@ impl SessionStateModel {
         )
     }
 
-    fn __getnewargs__(
-        &self,
-    ) -> (
-        HashMap<String, String>,
-        HashMap<String, String>,
-        HashMap<String, String>,
-        String,
-        String,
-        bool,
-        String,
-        Vec<CourseListEntryModel>,
-        Option<String>,
-    ) {
+    fn __getnewargs__(&self) -> SessionStateModelPickleState {
         (
             HashMap::new(),
             HashMap::new(),
@@ -193,11 +195,14 @@ impl SessionStateModel {
         }
         dict.set_item("params", params)?;
 
-        dict.set_item("javax_faces_view_state", &self.javax_faces_view_state)?;
-        dict.set_item("career_code", &self.career_code)?;
-        dict.set_item("career_name", &self.career_name)?;
-        dict.set_item("is_electives", &self.is_electives)?;
-        dict.set_item("status", &self.status)?;
+        dict.set_item(
+            "javax_faces_view_state",
+            self.javax_faces_view_state.clone(),
+        )?;
+        dict.set_item("career_code", self.career_code.clone())?;
+        dict.set_item("career_name", self.career_name.clone())?;
+        dict.set_item("is_electives", self.is_electives)?;
+        dict.set_item("status", self.status.clone())?;
 
         let courses = PyList::empty(py);
         for course in &self.course_list {

@@ -3,7 +3,7 @@
 use proptest::prelude::*;
 
 use crate::parsers::adf::extract_view_state;
-use crate::parsers::course_parser::{get_plain_text, parse_course_xml, parse_prereqs_xml};
+use crate::parsers::course_parser::get_plain_text;
 use crate::parsers::table_parser::get_course_list;
 use crate::{parse_course_info, parse_prereqs};
 
@@ -38,20 +38,6 @@ proptest! {
     fn prop_parse_prereqs_never_panics(input in random_input()) {
         pyo3::Python::with_gil(|py| {
             let _ = parse_prereqs(py, &input);
-        });
-    }
-
-    #[test]
-    fn prop_parse_course_xml_never_panics(input in random_input()) {
-        pyo3::Python::with_gil(|py| {
-            let _ = parse_course_xml(&input, py);
-        });
-    }
-
-    #[test]
-    fn prop_parse_prereqs_xml_never_panics(input in random_input()) {
-        pyo3::Python::with_gil(|py| {
-            let _ = parse_prereqs_xml(&input, py);
         });
     }
 }
