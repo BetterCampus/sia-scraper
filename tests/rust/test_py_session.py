@@ -52,16 +52,39 @@ class TestPySiaSessionErrorHandling:
         with pytest.raises(RuntimeError, match="not initialized"):
             await session.get_state()
 
+    def test_is_initialized_before_init(self) -> None:
+        session = sia_scraper_rust.PySiaSession()
+        assert not session.is_initialized()
+
+    @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Requires real SIA server access")
+    async def test_is_initialized_after_init(self) -> None:
+        session = sia_scraper_rust.PySiaSession(timeout=30)
+        await session.init_session()
+        assert session.is_initialized()
+
 
 class TestPySiaSessionPickle:
     """Tests for pickle serialization support."""
 
     def test_pickle_preserves_timeout(self) -> None:
         session = sia_scraper_rust.PySiaSession(timeout=45)
+        assert session.timeout == 45
+        assert not session.is_initialized()
+
         pickled = pickle.dumps(session)
-        _restored = pickle.loads(pickled)
-        # Note: After unpickling, session is not initialized
-        # This is expected behavior - user must call init_session() again
+        restored = pickle.loads(pickled)
+
+        assert restored.timeout == 45
+        assert not restored.is_initialized()
+        assert "45" in repr(restored)
+
+    def test_pickle_default_timeout(self) -> None:
+        session = sia_scraper_rust.PySiaSession()
+        pickled = pickle.dumps(session)
+        restored = pickle.loads(pickled)
+
+        assert restored.timeout == 15
 
 
 class TestPySiaSessionTypeHints:
@@ -94,6 +117,27 @@ class TestPySiaSessionTypeHints:
         assert hasattr(session, "is_initialized")
         assert hasattr(session, "__aenter__")
         assert hasattr(session, "__aexit__")
+
+
+class TestPySiaSessionTimeoutProperty:
+    """Tests for timeout property getter."""
+
+    def test_timeout_property_custom(self) -> None:
+        session = sia_scraper_rust.PySiaSession(timeout=25)
+        assert session.timeout == 25
+
+    def test_timeout_property_default(self) -> None:
+        session = sia_scraper_rust.PySiaSession()
+        assert session.timeout == 15
+
+
+class TestPySiaSessionContextManager:
+    """Tests for async context manager support."""
+
+    def test_context_manager_methods_exist(self) -> None:
+        session = sia_scraper_rust.PySiaSession()
+        assert callable(session.__aenter__)
+        assert callable(session.__aexit__)
 
 
 @pytest.mark.integration

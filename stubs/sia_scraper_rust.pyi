@@ -795,7 +795,7 @@ class PySiaSession:
         >>>
         >>> async def main():
         ...     async with sia_scraper_rust.PySiaSession(timeout=30) as session:
-        ...         await session.init_session()
+        ...         # Session is automatically initialized on entry
         ...         await session.set_career("0-2-8-3")
         ...         course = await session.scrape_course_info(0)
         ...         print(course.course_name)
@@ -811,7 +811,7 @@ class PySiaSession:
         """
         ...
 
-    async def init_session(self) -> SessionStateModel:
+    def init_session(self) -> Awaitable[SessionStateModel]:
         """Initialize the SIA session and fetch initial ViewState.
 
         Must be called before any other methods. Establishes HTTP session
@@ -825,11 +825,11 @@ class PySiaSession:
         """
         ...
 
-    async def set_career(
+    def set_career(
         self,
         search_code: str,
         electives: bool | None = None,
-    ) -> SessionStateModel:
+    ) -> Awaitable[SessionStateModel]:
         """Navigate to a career and load the course list.
 
         Args:
@@ -844,7 +844,7 @@ class PySiaSession:
         """
         ...
 
-    async def scrape_course_info(self, course_index: int) -> CourseInfoModel:
+    def scrape_course_info(self, course_index: int) -> Awaitable[CourseInfoModel]:
         """Scrape course information for the given index.
 
         Combines HTTP fetch and parsing in a single Rust call, eliminating
@@ -861,7 +861,7 @@ class PySiaSession:
         """
         ...
 
-    async def scrape_course_prereqs(self, course_index: int) -> CoursePrereqsModel:
+    def scrape_course_prereqs(self, course_index: int) -> Awaitable[CoursePrereqsModel]:
         """Scrape prerequisite information for the given course index.
 
         Args:
@@ -875,7 +875,7 @@ class PySiaSession:
         """
         ...
 
-    async def get_state(self) -> SessionStateModel:
+    def get_state(self) -> Awaitable[SessionStateModel]:
         """Get the current session state.
 
         Returns:
@@ -886,10 +886,17 @@ class PySiaSession:
         """
         ...
 
+    @property
+    def timeout(self) -> int:
+        """Get the request timeout in seconds.
+
+        Returns:
+            Timeout value in seconds (default: 15).
+        """
+        ...
+
     def is_initialized(self) -> bool:
         """Check if the session has been initialized.
-
-        Note: This is a sync approximation. The actual check is done in async methods.
 
         Returns:
             True if init_session() has been called, False otherwise.
@@ -911,19 +918,22 @@ class PySiaSession:
         """
         ...
 
-    async def __aenter__(self) -> PySiaSession:
+    def __aenter__(self) -> Awaitable[PySiaSession]:
         """Async context manager entry.
 
-        Returns self for use in `async with` statement.
+        Automatically initializes session if not already initialized.
+
+        Returns:
+            Self for use in `async with` statement.
         """
         ...
 
-    async def __aexit__(
+    def __aexit__(
         self,
         exc_type: type | None,
         exc_val: BaseException | None,
         exc_tb: Any | None,
-    ) -> None:
+    ) -> Awaitable[None]:
         """Async context manager exit.
 
         Currently a no-op.

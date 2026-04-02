@@ -25,7 +25,7 @@ jobs:
         run: cargo check
 
       - name: Cargo clippy (warnings are errors)
-        run: RUSTFLAGS="--allow non-local-definitions" cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Cargo test (library, no extension-module)
         run: cargo test --lib --no-default-features

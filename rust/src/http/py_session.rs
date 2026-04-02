@@ -3,11 +3,14 @@
 //! This module provides a stateful PyO3 wrapper around the Rust SiaSession,
 //! enabling Python code to maintain persistent session state across method calls.
 
+#![allow(non_local_definitions)]
+
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3::Python;
 use pyo3_asyncio::tokio::future_into_py;
 
 use crate::constants::SIA_BASE_URL;
@@ -270,6 +273,21 @@ impl PySiaSession {
         })
     }
 
+    /// Get the request timeout in seconds.
+    ///
+    /// # Returns
+    /// Timeout value in seconds
+    ///
+    /// # Example
+    /// ```python
+    /// session = sia_scraper_rust.PySiaSession(timeout=30)
+    /// print(session.timeout)  # 30
+    /// ```
+    #[getter]
+    fn timeout(&self) -> u64 {
+        self.timeout
+    }
+
     /// Check if the session has been initialized.
     ///
     /// # Returns
@@ -283,12 +301,10 @@ impl PySiaSession {
     /// print(session.is_initialized())  # True
     /// ```
     fn is_initialized(&self) -> bool {
-        // We can't check the lock without being async, but we can track
-        // this with a simple flag or check the Option in the lock
-        // For simplicity, we'll return true if the inner session exists
-        // This is a sync approximation - the actual async methods will
-        // do proper checks
-        false // Will be properly checked in async methods
+        self.inner
+            .try_read()
+            .map(|guard| guard.is_some())
+            .unwrap_or(false)
     }
 
     /// Support for pickle serialization.
@@ -319,36 +335,63 @@ impl PySiaSession {
         format!("PySiaSession(timeout={})", self.timeout)
     }
 
-    /// Async context manager entry - check session is initialized.
+    /// Async context manager entry - auto-initializes session if needed.
     ///
-    /// This provides the async context manager pattern support.
-    /// Note: The user must still call init_session() manually after entering.
+    /// If session is not already initialized, this will automatically
+    /// call init_session() upon entering the context.
     ///
     /// # Returns
     /// Self (the session)
     ///
+    /// # Raises
+    /// RuntimeError: If auto-initialization fails
+    ///
     /// # Example
     /// ```python
     /// async with sia_scraper_rust.PySiaSession() as session:
-    ///     await session.init_session()
+    ///     # Session is automatically initialized
+    ///     state = await session.get_state()
     ///     # ... use session ...
     /// ```
-    fn __aenter__(&self) -> PyResult<Self> {
-        Ok(self.clone())
+    fn __aenter__<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let session_clone = self.clone();
+        let base_url = SIA_BASE_URL.to_string();
+
+        future_into_py(py, async move {
+            let needs_init = {
+                let guard = session_clone.inner.read().await;
+                guard.is_none()
+            };
+
+            if needs_init {
+                let session = SiaSession::new(session_clone.timeout, base_url)
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+                session.init_session()
+                    .await
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+                *session_clone.inner.write().await = Some(session);
+            }
+
+            Python::with_gil(|py| Ok(session_clone.into_py(py)))
+        })
     }
 
-    /// Async context manager exit - cleanup (no-op for now).
+    /// Async context manager exit - cleanup (no-op).
     ///
     /// Currently a no-op since we don't have explicit cleanup to do.
     /// The session can be re-used if needed.
-    fn __aexit__(
+    fn __aexit__<'py>(
         &self,
+        py: Python<'py>,
         _exc_type: &PyAny,
         _exc_val: &PyAny,
         _exc_tb: &PyAny,
-    ) -> PyResult<Option<&PyAny>> {
-        // No cleanup needed currently
-        Ok(None)
+    ) -> PyResult<&'py PyAny> {
+        future_into_py(py, async move {
+            Ok(Python::with_gil(|py| py.None()))
+        })
     }
 }
 
