@@ -1,5 +1,7 @@
 """Rust/Python parity tests - compare outputs from Rust extension vs Python implementation."""
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -12,6 +14,61 @@ from sia_scraper_rust import extract_view_state as rust_extract_view_state
 from sia_scraper_rust import parse_course_info as rust_parse_course_info
 from sia_scraper_rust import parse_prereqs as rust_parse_prereqs
 from sia_scraper_rust import parse_prereqs_json as rust_parse_prereqs_json
+
+
+def _course_to_dict(course: object) -> dict[str, object]:
+    return {
+        "course_name": course.course_name,
+        "credits": course.credits,
+        "typology": course.typology,
+        "available_spots": course.available_spots,
+        "groups": [
+            {
+                "group_name": group.group_name,
+                "teacher": group.teacher,
+                "faculty": group.faculty,
+                "course_name": group.course_name,
+                "duration": group.duration,
+                "schedule_type": group.schedule_type,
+                "spots": group.spots,
+                "code": group.code,
+                "schedules": [
+                    {
+                        "day": s.day,
+                        "start_time": s.start_time,
+                        "end_time": s.end_time,
+                        "classroom": s.classroom,
+                    }
+                    for s in group.schedules
+                ],
+            }
+            for group in course.groups
+        ],
+    }
+
+
+def _prereqs_to_dict(prereqs: object) -> dict[str, object]:
+    return {
+        "course_name": prereqs.course_name,
+        "credits": prereqs.credits,
+        "typology": prereqs.typology,
+        "conditions": [
+            {
+                "condition": condition.condition,
+                "type": condition.prereq_type,
+                "all_required": condition.all_required,
+                "number_of_courses": condition.number_of_courses,
+                "prerequisites": [
+                    {
+                        "course_code": p.course_code,
+                        "course_name": p.course_name,
+                    }
+                    for p in condition.prerequisites
+                ],
+            }
+            for condition in prereqs.conditions
+        ],
+    }
 
 
 class TestExtractViewStateParity:
@@ -35,35 +92,41 @@ class TestParseCourseInfoParity:
 
     def test_course_name_parity(self, sia_course_detail_xml):
         rust_result = rust_parse_course_info(sia_course_detail_xml)
+        rust_dict = _course_to_dict(rust_result)
         python_result = python_scrape_info(sia_course_detail_xml)
 
-        assert rust_result["course_name"] == python_result.course_name
-        assert rust_result["course_name"] is not None
-        assert len(rust_result["course_name"]) > 0
+        assert rust_dict["course_name"] == python_result.course_name
+        assert rust_dict["course_name"] is not None
+        assert len(str(rust_dict["course_name"])) > 0
 
     def test_credits_parity(self, sia_course_detail_xml):
         rust_result = rust_parse_course_info(sia_course_detail_xml)
+        rust_dict = _course_to_dict(rust_result)
         python_result = python_scrape_info(sia_course_detail_xml)
 
-        assert rust_result["credits"] == python_result.credits
+        assert rust_dict["credits"] == python_result.credits
 
     def test_typology_parity(self, sia_course_detail_xml):
         rust_result = rust_parse_course_info(sia_course_detail_xml)
+        rust_dict = _course_to_dict(rust_result)
         python_result = python_scrape_info(sia_course_detail_xml)
 
-        assert rust_result["typology"] == python_result.typology
+        assert rust_dict["typology"] == python_result.typology
 
     def test_groups_count_parity(self, sia_course_detail_xml):
         rust_result = rust_parse_course_info(sia_course_detail_xml)
+        rust_dict = _course_to_dict(rust_result)
         python_result = python_scrape_info(sia_course_detail_xml)
 
-        assert len(rust_result["groups"]) == len(python_result.groups)
+        groups = cast(list[dict[str, object]], rust_dict["groups"])
+        assert len(groups) == len(python_result.groups)
 
     def test_available_spots_parity(self, sia_course_detail_xml):
         rust_result = rust_parse_course_info(sia_course_detail_xml)
+        rust_dict = _course_to_dict(rust_result)
         python_result = python_scrape_info(sia_course_detail_xml)
 
-        assert rust_result["available_spots"] == python_result.available_spots
+        assert rust_dict["available_spots"] == python_result.available_spots
 
 
 class TestParsePrereqsParity:
@@ -71,41 +134,45 @@ class TestParsePrereqsParity:
 
     def test_prereqs_course_name_parity(self, sia_course_prereqs_xml):
         rust_result = rust_parse_prereqs(sia_course_prereqs_xml)
+        rust_dict = _prereqs_to_dict(rust_result)
         python_result = python_scrape_prereqs(sia_course_prereqs_xml)
 
-        assert rust_result["course_name"] == python_result.course_name
+        assert rust_dict["course_name"] == python_result.course_name
 
     def test_prereqs_credits_parity(self, sia_course_prereqs_xml):
         rust_result = rust_parse_prereqs(sia_course_prereqs_xml)
+        rust_dict = _prereqs_to_dict(rust_result)
         python_result = python_scrape_prereqs(sia_course_prereqs_xml)
 
-        assert rust_result["credits"] == python_result.credits
+        assert rust_dict["credits"] == python_result.credits
 
     def test_conditions_count_parity(self, sia_course_prereqs_xml):
         rust_result = rust_parse_prereqs(sia_course_prereqs_xml)
+        rust_dict = _prereqs_to_dict(rust_result)
         python_result = python_scrape_prereqs(sia_course_prereqs_xml)
 
-        assert len(rust_result["conditions"]) == len(python_result.conditions)
+        conditions = cast(list[dict[str, object]], rust_dict["conditions"])
+        assert len(conditions) == len(python_result.conditions)
 
     def test_condition_header_fields_parity(self, sia_course_prereqs_xml):
         rust_result = rust_parse_prereqs(sia_course_prereqs_xml)
+        rust_dict = _prereqs_to_dict(rust_result)
         python_result = python_scrape_prereqs(sia_course_prereqs_xml)
 
-        assert rust_result["conditions"]
+        conditions = cast(list[dict[str, object]], rust_dict["conditions"])
+        assert conditions
         assert python_result.conditions
 
-        rust_condition = rust_result["conditions"][0]
+        rust_condition = conditions[0]
         python_condition = python_result.conditions[0]
 
-        assert int(rust_condition["condition"].strip("[]")) == python_condition.condition
-        assert rust_condition["type"].strip("[]") == python_condition.type.value
-        assert rust_condition["all_required"].strip("[]").upper() == (
-            "S" if python_condition.all_required else "N"
-        )
-        assert (
-            int(rust_condition["number_of_courses"].strip("[]"))
-            == python_condition.number_of_courses
-        )
+        rust_condition_number = cast(int, rust_condition["condition"])
+        rust_num_courses = cast(int, rust_condition["number_of_courses"])
+
+        assert int(rust_condition_number) == python_condition.condition
+        assert str(rust_condition["type"]) == python_condition.type.value
+        assert bool(rust_condition["all_required"]) is python_condition.all_required
+        assert int(rust_num_courses) == python_condition.number_of_courses
 
     def test_typed_prereqs_json_parity(self, sia_course_prereqs_xml):
         rust_json = rust_parse_prereqs_json(sia_course_prereqs_xml)

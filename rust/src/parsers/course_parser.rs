@@ -3,9 +3,6 @@
 //! This module provides functions for extracting course data and prerequisites
 //! from Oracle ADF XML/HTML responses returned by SIA's web interface.
 
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
-use pyo3::Py;
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 use std::sync::LazyLock;
@@ -581,49 +578,9 @@ pub fn parse_course_model_json(xml: &str) -> Result<String, SiaScraperError> {
         .map_err(|e| SiaScraperError::ParseError(format!("Course JSON serialization failed: {e}")))
 }
 
-/// Parse comprehensive course information from Oracle ADF course detail page.
-pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
-    let model = parse_course_model(xml)?;
-
-    let result = PyDict::new(py);
-    result.set_item("course_name", &model.course_name)?;
-    result.set_item("credits", model.credits)?;
-    result.set_item("typology", &model.typology)?;
-    result.set_item("available_spots", model.available_spots)?;
-    result.set_item("scrape_timestamp", &model.scrape_timestamp)?;
-    result.set_item("code", py.None())?;
-
-    let groups_list = PyList::empty(py);
-    for group in model.groups {
-        let group_dict = PyDict::new(py);
-        group_dict.set_item("group_name", group.group_name)?;
-        group_dict.set_item("teacher", group.teacher)?;
-        group_dict.set_item("faculty", group.faculty)?;
-        group_dict.set_item("course_name", group.course_name)?;
-        group_dict.set_item("duration", group.duration)?;
-        group_dict.set_item("schedule_type", group.schedule_type)?;
-        match group.spots {
-            Some(spots) => group_dict.set_item("spots", spots)?,
-            None => group_dict.set_item("spots", py.None())?,
-        }
-        group_dict.set_item("code", py.None())?;
-
-        let schedules_list = PyList::empty(py);
-        for schedule in group.schedules {
-            let schedule_dict = PyDict::new(py);
-            schedule_dict.set_item("day", schedule.day)?;
-            schedule_dict.set_item("start_time", schedule.start_time)?;
-            schedule_dict.set_item("end_time", schedule.end_time)?;
-            schedule_dict.set_item("classroom", schedule.classroom)?;
-            schedules_list.append(schedule_dict)?;
-        }
-
-        group_dict.set_item("schedules", schedules_list)?;
-        groups_list.append(group_dict)?;
-    }
-
-    result.set_item("groups", groups_list)?;
-    Ok(result.into())
+/// Parse comprehensive course information and return a typed Rust model.
+pub fn parse_course_model_typed(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
+    parse_course_model(xml)
 }
 
 fn parse_prereqs_model(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
@@ -771,38 +728,7 @@ pub fn parse_prereqs_model_json(xml: &str) -> Result<String, SiaScraperError> {
         .map_err(|e| SiaScraperError::ParseError(format!("Prereqs JSON serialization failed: {e}")))
 }
 
-/// Parse course prerequisites and enrollment conditions from Oracle ADF XML.
-pub fn parse_prereqs_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
-    let model = parse_prereqs_model(xml)?;
-
-    let conditions = PyList::empty(py);
-    for condition in model.conditions {
-        let prereqs = PyList::empty(py);
-        for prereq in condition.prerequisites {
-            let prereq_dict = PyDict::new(py);
-            prereq_dict.set_item("course_code", prereq.course_code)?;
-            prereq_dict.set_item("course_name", prereq.course_name)?;
-            prereqs.append(prereq_dict)?;
-        }
-
-        let condition_dict = PyDict::new(py);
-        condition_dict.set_item("condition", condition.condition.to_string())?;
-        condition_dict.set_item("type", condition.prereq_type)?;
-        condition_dict.set_item(
-            "all_required",
-            if condition.all_required { "S" } else { "N" },
-        )?;
-        condition_dict.set_item("number_of_courses", condition.number_of_courses.to_string())?;
-        condition_dict.set_item("prerequisites", prereqs)?;
-        conditions.append(condition_dict)?;
-    }
-
-    let result = PyDict::new(py);
-    result.set_item("course_name", model.course_name.trim())?;
-    result.set_item("code", py.None())?;
-    result.set_item("credits", model.credits)?;
-    result.set_item("typology", model.typology)?;
-    result.set_item("conditions", conditions)?;
-
-    Ok(result.into())
+/// Parse prerequisite information and return a typed Rust model.
+pub fn parse_prereqs_model_typed(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
+    parse_prereqs_model(xml)
 }

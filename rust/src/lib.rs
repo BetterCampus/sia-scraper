@@ -18,7 +18,7 @@ pub mod constants;
 mod error;
 pub mod patterns;
 pub mod http;
-mod models;
+pub mod models;
 mod parsers;
 pub mod testing;
 #[cfg(test)]
@@ -33,12 +33,12 @@ mod tests;
 /// * `xml` - Raw XML/HTML string from SIA course detail page
 ///
 /// # Returns
-/// Python dictionary containing:
+/// `CourseInfoModel` instance with attributes:
 /// - `course_name`: Course title string
 /// - `credits`: Credit hours as integer
 /// - `typology`: Course typology string
 /// - `available_spots`: Total available spots across all groups
-/// - `groups`: List of group dictionaries with schedules
+/// - `groups`: List of `GroupModel` instances with schedules
 /// - `scrape_timestamp`: Timestamp string
 /// - `code`: Course code (None for now)
 ///
@@ -49,11 +49,15 @@ mod tests;
 /// ```python
 /// import sia_scraper_rust
 /// result = sia_scraper_rust.parse_course_info(xml_string)
-/// print(result["course_name"])  # "CALCULO AVANZADO"
+/// print(result.course_name)  # "CALCULO AVANZADO"
 /// ```
 #[pyfunction]
-fn parse_course_info(xml: &str) -> Result<Py<PyAny>, error::SiaScraperError> {
-    Python::with_gil(|py| parsers::course_parser::parse_course_xml(xml, py))
+fn parse_course_info(
+    py: Python<'_>,
+    xml: &str,
+) -> Result<Py<models::course::CourseInfoModel>, error::SiaScraperError> {
+    let model = parsers::course_parser::parse_course_model_typed(xml)?;
+    Py::new(py, model).map_err(error::SiaScraperError::from)
 }
 
 /// Parse course information from Oracle ADF XML/HTML and return typed JSON.
@@ -96,12 +100,12 @@ fn extract_view_state(html: &str) -> Result<String, error::SiaScraperError> {
 /// * `xml` - Raw XML/HTML string from SIA course prerequisites page
 ///
 /// # Returns
-/// Python dictionary containing:
+/// `CoursePrereqsModel` instance with attributes:
 /// - `course_name`: Course title string
 /// - `code`: Course code (None for now)
 /// - `credits`: Credit hours as integer
 /// - `typology`: Course typology string
-/// - `conditions`: List of prerequisite condition dictionaries
+/// - `conditions`: List of `PrereqConditionModel` instances
 ///
 /// # Errors
 /// Returns `SiaScraperError` if course name or credits not found
@@ -110,11 +114,15 @@ fn extract_view_state(html: &str) -> Result<String, error::SiaScraperError> {
 /// ```python
 /// import sia_scraper_rust
 /// result = sia_scraper_rust.parse_prereqs(xml_string)
-/// print(len(result["conditions"]))  # Number of prerequisite conditions
+/// print(len(result.conditions))  # Number of prerequisite conditions
 /// ```
 #[pyfunction]
-fn parse_prereqs(xml: &str) -> Result<Py<PyAny>, error::SiaScraperError> {
-    Python::with_gil(|py| parsers::course_parser::parse_prereqs_xml(xml, py))
+fn parse_prereqs(
+    py: Python<'_>,
+    xml: &str,
+) -> Result<Py<models::prerequisite::CoursePrereqsModel>, error::SiaScraperError> {
+    let model = parsers::course_parser::parse_prereqs_model_typed(xml)?;
+    Py::new(py, model).map_err(error::SiaScraperError::from)
 }
 
 /// Parse prerequisite information from Oracle ADF XML/HTML and return typed JSON.
@@ -419,7 +427,7 @@ fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p Py
     let timeout = timeout.unwrap_or(15);
     let base_url = SIA_BASE_URL.to_string();
 
-    future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
+    future_into_py::<_, crate::models::session::SessionStateModel>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
@@ -429,22 +437,7 @@ fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p Py
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         let state = session.get_state().await;
-
-        let view_state = state.javax_faces_ViewState.ok_or_else(|| {
-            pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "init_sia_session: missing javax_faces_ViewState after init_session".to_string(),
-            )
-        })?;
-
-        Python::with_gil(|py| {
-            let dict = pyo3::types::PyDict::new(py);
-            dict.set_item("status", state.status)?;
-            dict.set_item("career_code", state.career_code)?;
-            dict.set_item("career_name", state.career_name)?;
-            dict.set_item("is_electives", state.is_electives)?;
-            dict.set_item("javax_faces_ViewState", view_state)?;
-            Ok(dict.into_py(py))
-        })
+        Ok(crate::models::session::SessionStateModel::from_session_state(&state))
     })
 }
 
@@ -494,7 +487,7 @@ fn set_career<'p>(
     let electives = electives.unwrap_or(false);
     let base_url = SIA_BASE_URL.to_string();
 
-    future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
+    future_into_py::<_, crate::models::session::SessionStateModel>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
@@ -507,31 +500,7 @@ fn set_career<'p>(
             .set_career(&search_code, electives)
             .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        let career_indices: Vec<String> = search_code.split('-').map(|s| s.to_string()).collect();
-        let course_list = &state.course_list;
-
-        let view_state = state.javax_faces_ViewState.ok_or_else(|| {
-            pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "set_career: missing javax_faces_ViewState after set_career".to_string(),
-            )
-        })?;
-
-        Python::with_gil(|py| {
-            let dict = pyo3::types::PyDict::new(py);
-            dict.set_item("career_code", search_code)?;
-            dict.set_item(
-                "career_indices",
-                career_indices
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<&str>>(),
-            )?;
-            dict.set_item("is_electives", electives)?;
-            dict.set_item("career_name", state.career_name)?;
-            dict.set_item("javax_faces_ViewState", view_state)?;
-            dict.set_item("course_list", course_list)?;
-            Ok(dict.into_py(py))
-        })
+        Ok(crate::models::session::SessionStateModel::from_session_state(&state))
     })
 }
 
@@ -612,6 +581,23 @@ fn get_course_xml<'p>(
 
 #[pymodule]
 fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    // Register exception types
+    m.add(
+        "SiaScraperException",
+        error::SiaScraperException::type_object(py),
+    )?;
+    
+    // Register model classes
+    m.add_class::<models::course::ScheduleModel>()?;
+    m.add_class::<models::course::GroupModel>()?;
+    m.add_class::<models::course::CourseInfoModel>()?;
+    m.add_class::<models::session::CourseListEntryModel>()?;
+    m.add_class::<models::session::SessionStateModel>()?;
+    m.add_class::<models::prerequisite::PrerequisiteModel>()?;
+    m.add_class::<models::prerequisite::PrereqConditionModel>()?;
+    m.add_class::<models::prerequisite::CoursePrereqsModel>()?;
+    
+    // Register parsing functions
     m.add_function(wrap_pyfunction!(parse_course_info, m)?)?;
     m.add_function(wrap_pyfunction!(parse_course_info_json, m)?)?;
     m.add_function(wrap_pyfunction!(extract_view_state, m)?)?;
@@ -622,6 +608,8 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_oracle_adf_request_dict, m)?)?;
     m.add_function(wrap_pyfunction!(build_oracle_adf_request_body, m)?)?;
     m.add_function(wrap_pyfunction!(get_oracle_adf_event_dict, m)?)?;
+    
+    // Register async HTTP functions
     m.add_function(wrap_pyfunction!(async_get, m)?)?;
     m.add_function(wrap_pyfunction!(async_post, m)?)?;
     m.add_function(wrap_pyfunction!(async_get_with_config, m)?)?;
@@ -630,9 +618,6 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_career, m)?)?;
     m.add_function(wrap_pyfunction!(set_career_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_course_xml, m)?)?;
-    m.add(
-        "SiaScraperException",
-        error::SiaScraperException::type_object(py),
-    )?;
+    
     Ok(())
 }
