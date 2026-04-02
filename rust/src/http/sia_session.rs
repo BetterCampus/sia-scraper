@@ -13,7 +13,10 @@ use crate::http::errors::HttpError;
 use crate::http::retry::{calculate_delay, should_retry, RetryConfig};
 use crate::http::session::SessionState;
 use crate::http::types::HttpResponse;
+use crate::models::course::CourseInfoModel;
+use crate::models::prerequisite::CoursePrereqsModel;
 use crate::parsers::adf_request::OracleAdfRequestBuilderState;
+use crate::parsers::course_parser::{parse_course_model, parse_prereqs_model};
 use crate::parsers::table_parser::get_course_list;
 use crate::patterns::get_regex;
 
@@ -278,7 +281,7 @@ impl SiaSession {
         Ok(current.clone())
     }
 
-    pub async fn get_course_xml(
+    pub(crate) async fn get_course_xml_internal(
         &self,
         search_code: &str,
         electives: bool,
@@ -404,6 +407,101 @@ impl SiaSession {
         state.status = "ON_CAREER_PAGE".to_string();
 
         Ok(xml)
+    }
+
+    /// Scrape course information for the given index.
+    ///
+    /// This method combines HTTP fetching and parsing in a single Rust call,
+    /// eliminating string copying across the FFI boundary.
+    ///
+    /// # Arguments
+    /// * `course_index` - The index of the course in the current course list
+    ///
+    /// # Returns
+    /// `CourseInfoModel` containing parsed course data
+    ///
+    /// # Errors
+    /// Returns `HttpError` if the session is not on a career or course page, or if
+    /// HTTP/parsing fails.
+    pub async fn scrape_course_info(&self, course_index: i32) -> Result<CourseInfoModel, HttpError> {
+        let state = self.get_state().await;
+
+        if state.status != "ON_CAREER_PAGE" && state.status != "ON_COURSE_PAGE" {
+            return Err(HttpError::InvalidInput(
+                "scrape_course_info: session not on career or course page".to_string(),
+            ));
+        }
+
+        let course_list = &state.course_list;
+        if course_list.is_empty() {
+            return Err(HttpError::InvalidInput(
+                "scrape_course_info: course list is empty".to_string(),
+            ));
+        }
+        if course_index < 0 || course_index as usize >= course_list.len() {
+            return Err(HttpError::InvalidInput(format!(
+                "course index {} out of range (0-{})",
+                course_index,
+                course_list.len() - 1
+            )));
+        }
+
+        log::info!("Scrape course info for index {}", course_index);
+
+        let xml = self
+            .get_course_xml_internal(&state.career_code, state.is_electives, course_index)
+            .await?;
+
+        parse_course_model(&xml).map_err(|e| HttpError::ParseError(e.to_string()))
+    }
+
+    /// Scrape course prerequisite information for the given index.
+    ///
+    /// This method combines HTTP fetching and parsing in a single Rust call,
+    /// eliminating string copying across the FFI boundary.
+    ///
+    /// # Arguments
+    /// * `course_index` - The index of the course in the current course list
+    ///
+    /// # Returns
+    /// `CoursePrereqsModel` containing parsed prerequisite data
+    ///
+    /// # Errors
+    /// Returns `HttpError` if the session is not on a career or course page, or if
+    /// HTTP/parsing fails.
+    pub async fn scrape_course_prereqs(
+        &self,
+        course_index: i32,
+    ) -> Result<CoursePrereqsModel, HttpError> {
+        let state = self.get_state().await;
+
+        if state.status != "ON_CAREER_PAGE" && state.status != "ON_COURSE_PAGE" {
+            return Err(HttpError::InvalidInput(
+                "scrape_course_prereqs: session not on career or course page".to_string(),
+            ));
+        }
+
+        let course_list = &state.course_list;
+        if course_list.is_empty() {
+            return Err(HttpError::InvalidInput(
+                "scrape_course_prereqs: course list is empty".to_string(),
+            ));
+        }
+        if course_index < 0 || course_index as usize >= course_list.len() {
+            return Err(HttpError::InvalidInput(format!(
+                "course index {} out of range (0-{})",
+                course_index,
+                course_list.len() - 1
+            )));
+        }
+
+        log::info!("Scrape course prerequisites for index {}", course_index);
+
+        let xml = self
+            .get_course_xml_internal(&state.career_code, state.is_electives, course_index)
+            .await?;
+
+        parse_prereqs_model(&xml).map_err(|e| HttpError::ParseError(e.to_string()))
     }
 
     pub async fn post_request(&self, body: &str) -> Result<HttpResponse, HttpError> {
@@ -624,5 +722,123 @@ mod tests {
         let html = r#"<select id="wrong_id"><option>Test</option></select>"#;
         let name = SiaSession::extract_career_name(html, 0);
         assert_eq!(name, "N/A");
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_info_rejects_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session.scrape_course_info(0).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("not on career or course page"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_info_rejects_out_of_range_index() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![
+                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+                std::collections::HashMap::from([("code".to_string(), "COUR-102".to_string())]),
+                std::collections::HashMap::from([("code".to_string(), "COUR-103".to_string())]),
+            ];
+        }
+        let result = session.scrape_course_info(10).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_prereqs_rejects_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session.scrape_course_prereqs(0).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("not on career or course page"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_prereqs_rejects_out_of_range_index() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![
+                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+            ];
+        }
+        let result = session.scrape_course_prereqs(5).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_info_rejects_negative_index() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![
+                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+            ];
+        }
+        let result = session.scrape_course_info(-1).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_info_rejects_empty_course_list() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![];
+        }
+        let result = session.scrape_course_info(0).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("course list is empty"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_prereqs_rejects_negative_index() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![
+                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+            ];
+        }
+        let result = session.scrape_course_prereqs(-1).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_prereqs_rejects_empty_course_list() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![];
+        }
+        let result = session.scrape_course_prereqs(0).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("course list is empty"));
     }
 }
