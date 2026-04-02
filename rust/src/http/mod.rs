@@ -6,7 +6,10 @@
 pub mod client;
 pub mod config;
 pub mod errors;
+pub mod py_session;
 pub mod retry;
 pub mod session;
 pub mod sia_session;
 pub mod types;
+
+pub use py_session::PySiaSession;
