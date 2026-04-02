@@ -14,17 +14,10 @@ use pyo3::Python;
 use pyo3_asyncio::tokio::future_into_py;
 
 use crate::constants::SIA_BASE_URL;
-use crate::http::errors::HttpError;
 use crate::http::sia_session::SiaSession;
 use crate::models::session::SessionStateModel;
 
-impl From<HttpError> for PyErr {
-    fn from(err: HttpError) -> PyErr {
-        pyo3::exceptions::PyRuntimeError::new_err(err.to_string())
-    }
-}
-
-type SessionState = Option<SiaSession>;
+type SiaSessionInner = Option<SiaSession>;
 
 fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
     dict.get_item(key)?
@@ -56,7 +49,7 @@ fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
 /// ```
 #[pyclass(module = "sia_scraper_rust")]
 pub struct PySiaSession {
-    inner: Arc<RwLock<SessionState>>,
+    inner: Arc<RwLock<SiaSessionInner>>,
     timeout: u64,
 }
 
@@ -391,6 +384,122 @@ impl PySiaSession {
     ) -> PyResult<&'py PyAny> {
         future_into_py(py, async move {
             Ok(Python::with_gil(|py| py.None()))
+        })
+    }
+
+    /// Reset the session state, clearing the underlying Rust session.
+    ///
+    /// This drops the SiaSession inside the wrapper, releasing all
+    /// resources including HTTP connections and cookies. The PySiaSession
+    /// can be re-initialized by calling init_session() again.
+    ///
+    /// # Returns
+    /// None
+    ///
+    /// # Example
+    /// ```python
+    /// await session.init_session()
+    /// # ... use session ...
+    /// await session.reset()
+    /// # Session is now cleared, can call init_session() again
+    /// ```
+    fn reset<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+
+        future_into_py::<_, PyObject>(py, async move {
+            *inner.write().await = None;
+            Ok(Python::with_gil(|py| py.None()))
+        })
+    }
+
+    /// Restore a session from previously saved state.
+    ///
+    /// This static method creates a new PySiaSession with an already
+    /// initialized Rust session restored from the provided state.
+    ///
+    /// # Arguments
+    /// * `state` - Dictionary with session state data (timeout, state_dict)
+    /// * `timeout` - Request timeout in seconds (default: 15)
+    ///
+    /// # Returns
+    /// New PySiaSession with restored state
+    ///
+    /// # Raises
+    /// RuntimeError: If state restoration fails
+    ///
+    /// # Example
+    /// ```python
+    /// state = {"timeout": 15, "state_dict": {...}}
+    /// session = await PySiaSession.from_state(state)
+    /// ```
+    #[staticmethod]
+    fn from_state<'py>(py: Python<'py>, state: &PyDict, timeout: Option<u64>) -> PyResult<&'py PyAny> {
+        let timeout = timeout.unwrap_or(15);
+
+        let state_dict = required_item(state, "state_dict")?
+            .downcast::<PyDict>()
+            .map_err(|_| pyo3::exceptions::PyTypeError::new_err("state_dict must be a dict"))?;
+
+        let session_state_model = SessionStateModel::from_dict(state_dict)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!(
+                "Invalid state_dict: {}", e
+            )))?;
+
+        let session_state = session_state_model.into_session_state();
+
+        future_into_py::<_, PyObject>(py, async move {
+            let base_url = SIA_BASE_URL.to_string();
+            let sia_session = SiaSession::from_state(timeout, base_url, session_state)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            let inner = Arc::new(RwLock::new(Some(sia_session)));
+
+            let py_session = PySiaSession {
+                inner,
+                timeout,
+            };
+
+            Python::with_gil(|py| Ok(py_session.into_py(py)))
+        })
+    }
+
+    /// Get session data for persistence.
+    ///
+    /// Returns the complete session state including headers, cookies,
+    /// ViewState, career info, and course list as a dictionary.
+    ///
+    /// # Returns
+    /// Dictionary with session data suitable for pickling/serialization
+    ///
+    /// # Raises
+    /// RuntimeError: If session not initialized
+    ///
+    /// # Example
+    /// ```python
+    /// data = await session.get_session_data()
+    /// # Save to file or database
+    /// ```
+    fn get_session_data<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+        let timeout = self.timeout;
+
+        future_into_py::<_, PyObject>(py, async move {
+            let session_guard = inner.read().await;
+            let session = session_guard
+                .as_ref()
+                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                    "Session not initialized. Call init_session() first."
+                ))?;
+
+            let state = session.get_state().await;
+            let state_model = SessionStateModel::from_session_state(&state);
+
+            Python::with_gil(|py| {
+                let dict = pyo3::types::PyDict::new(py);
+                dict.set_item("timeout", timeout)?;
+                dict.set_item("state_dict", state_model.to_dict(py)?)?;
+                Ok(dict.into_py(py))
+            })
         })
     }
 }

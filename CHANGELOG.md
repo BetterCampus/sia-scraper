@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session status property**: Renamed `SiaSession.STATUS` to `SiaSession.status`
 - **Session state serialization**: Renamed `SessionState.STATUS` field to `SessionState.status`
 - **Electives parameter**: Renamed `electives` parameter to `is_electives` in `set_career()` (Python + Rust bindings)
+- **Session persistence API**: `get_session_data()` now returns `Awaitable[dict]` instead of `SessionStateModel`; use `await session.get_session_data()` to get serializable state dict
 - Removed sync modules: `adf_context`, `adf_state_manager`, `enhanced_session`, `navigation_controller`, `oracle_adf_request`, `decorators`
 - Removed Python dependencies: `requests`, `tenacity`
 - **Strict parsing for all endpoints**: Both legacy dict endpoints (`parse_course_info`, `parse_prereqs`) and typed JSON endpoints (`parse_course_info_json`, `parse_prereqs_json`) now enforce strict validation. Malformed groups, empty panels, and invalid prerequisite conditions that were previously skipped now cause parsing errors. This ensures data quality and early error detection at the cost of backward compatibility.
@@ -28,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic ViewState synchronization after each request
   - SIA-optimized retry with exponential backoff and jitter
   - TLS: rustls with dual backend (native-certs + webpki-roots)
+- **Session persistence via Rust**: Implemented proper session save/restore
+  - `PySiaSession.get_session_data()` returns complete session state (headers, cookies, ViewState, career info, course list)
+  - `PySiaSession.reset()` clears Rust session for clean re-initialization
+  - `PySiaSession.from_state()` class method restores session from saved state
+  - `SiaSession.from_state()` Python wrapper for session restoration
 - **pytest-asyncio**: Async test infrastructure added
   - Async session tests consolidated in `tests/test_session.py`
   - All tests passing

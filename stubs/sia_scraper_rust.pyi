@@ -939,3 +939,62 @@ class PySiaSession:
         Currently a no-op.
         """
         ...
+
+    def reset(self) -> Awaitable[None]:
+        """Reset the session state, clearing the underlying Rust session.
+
+        This drops the SiaSession inside the wrapper, releasing all
+        resources including HTTP connections and cookies. The PySiaSession
+        can be re-initialized by calling init_session() again.
+
+        Returns:
+            None
+
+        Example:
+            >>> await session.init_session()
+            >>> # ... use session ...
+            >>> await session.reset()
+            >>> # Session is now cleared, can call init_session() again
+        """
+        ...
+
+    @staticmethod
+    async def from_state(state: dict[str, Any], timeout: int | None = None) -> PySiaSession:
+        """Restore a session from previously saved state.
+
+        This static method creates a new PySiaSession with an already
+        initialized Rust session restored from the provided state.
+
+        Args:
+            state: Dictionary with session state data (timeout, state_dict).
+            timeout: Request timeout in seconds (default: 15).
+
+        Returns:
+            New PySiaSession with restored state.
+
+        Raises:
+            RuntimeError: If state restoration fails.
+
+        Example:
+            >>> state = {"timeout": 15, "state_dict": {...}}
+            >>> session = await PySiaSession.from_state(state)
+        """
+        ...
+
+    def get_session_data(self) -> Awaitable[dict[str, Any]]:
+        """Get session data for persistence.
+
+        Returns the complete session state including headers, cookies,
+        ViewState, career info, and course list as a dictionary.
+
+        Returns:
+            Dictionary with session data suitable for pickling/serialization.
+
+        Raises:
+            RuntimeError: If session not initialized.
+
+        Example:
+            >>> data = await session.get_session_data()
+            >>> # Save to file or database
+        """
+        ...

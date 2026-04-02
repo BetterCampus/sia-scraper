@@ -278,12 +278,140 @@ impl SessionStateModel {
             course_list: flatten_course_list(&state.course_list),
         }
     }
+
+    /// Convert to Python dictionary for transport/persistence.
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let dict = PyDict::new(py);
+
+        let headers = PyDict::new(py);
+        for (k, v) in &self.session_headers {
+            headers.set_item(k, v)?;
+        }
+        dict.set_item("session_headers", headers)?;
+
+        let cookies = PyDict::new(py);
+        for (k, v) in &self.session_cookies {
+            cookies.set_item(k, v)?;
+        }
+        dict.set_item("session_cookies", cookies)?;
+
+        let params = PyDict::new(py);
+        for (k, v) in &self.params {
+            params.set_item(k, v)?;
+        }
+        dict.set_item("params", params)?;
+
+        dict.set_item(
+            "javax_faces_view_state",
+            self.javax_faces_view_state.clone(),
+        )?;
+        dict.set_item("career_code", self.career_code.clone())?;
+        dict.set_item("career_name", self.career_name.clone())?;
+        dict.set_item("is_electives", self.is_electives)?;
+        dict.set_item("status", self.status.clone())?;
+
+        let courses = PyList::empty(py);
+        for course in &self.course_list {
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("course_code", &course.course_code)?;
+            course_dict.set_item("course_name", &course.course_name)?;
+            courses.append(course_dict)?;
+        }
+        dict.set_item("course_list", courses)?;
+
+        Ok(dict.into_py(py))
+    }
+
+    /// Parse from Python dictionary (for session restoration).
+    pub fn from_dict(dict: &PyDict) -> PyResult<Self> {
+        let get_str_map = |key: &str| -> PyResult<HashMap<String, String>> {
+            let sub_dict = required_item(dict, key)?.downcast::<PyDict>()?;
+            let mut map = HashMap::new();
+            for (k, v) in sub_dict.iter() {
+                let key: String = k.extract()?;
+                let value: String = v.extract()?;
+                map.insert(key, value);
+            }
+            Ok(map)
+        };
+
+        let session_headers = get_str_map("session_headers")?;
+        let session_cookies = get_str_map("session_cookies")?;
+        let params = get_str_map("params")?;
+
+        let javax_faces_view_state: Option<String> =
+            required_item(dict, "javax_faces_view_state")?.extract()?;
+        let career_code: String = required_item(dict, "career_code")?.extract()?;
+        let career_name: String = required_item(dict, "career_name")?.extract()?;
+        let is_electives: bool = required_item(dict, "is_electives")?.extract()?;
+        let status: String = required_item(dict, "status")?.extract()?;
+
+        let list = required_item(dict, "course_list")?.downcast::<PyList>()?;
+        let mut course_list = Vec::with_capacity(list.len());
+        for item in list.iter() {
+            let course_dict = item.downcast::<PyDict>()?;
+            let course_code: String = required_item(course_dict, "course_code")?.extract()?;
+            let course_name: String = required_item(course_dict, "course_name")?.extract()?;
+            course_list.push(CourseListEntryModel {
+                course_code,
+                course_name,
+            });
+        }
+
+        Ok(Self {
+            session_headers,
+            session_cookies,
+            params,
+            javax_faces_view_state,
+            career_code,
+            career_name,
+            is_electives,
+            status,
+            course_list,
+        })
+    }
+
+    /// Convert back to internal SessionState for Rust session restoration.
+    #[must_use]
+    pub fn into_session_state(self) -> SessionState {
+        let course_list: Vec<HashMap<String, String>> = self
+            .course_list
+            .into_iter()
+            .map(|entry| {
+                let mut map = HashMap::new();
+                map.insert(entry.course_code, entry.course_name);
+                map
+            })
+            .collect();
+
+        SessionState {
+            session_headers: self.session_headers,
+            session_cookies: self.session_cookies,
+            params: self.params,
+            javax_faces_ViewState: self.javax_faces_view_state,
+            career_code: self.career_code,
+            career_name: self.career_name,
+            is_electives: self.is_electives,
+            status: denormalize_status(&self.status),
+            course_list,
+        }
+    }
 }
 
 fn normalize_status(status: &str) -> String {
     match status {
         "CREATED" => "NO_SESSION".to_string(),
         "SESSION_SET" => "CAREER_NOT_SET".to_string(),
+        "ON_CAREER_PAGE" => "ON_CAREER_PAGE".to_string(),
+        "ON_COURSE_PAGE" => "ON_COURSE_PAGE".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn denormalize_status(status: &str) -> String {
+    match status {
+        "NO_SESSION" => "CREATED".to_string(),
+        "CAREER_NOT_SET" => "SESSION_SET".to_string(),
         "ON_CAREER_PAGE" => "ON_CAREER_PAGE".to_string(),
         "ON_COURSE_PAGE" => "ON_COURSE_PAGE".to_string(),
         other => other.to_string(),

@@ -1,4 +1,4 @@
-"""Rust-backed async SIA session management."""
+"""Thin Python wrapper around Rust PySiaSession."""
 
 from contextlib import asynccontextmanager
 
@@ -6,90 +6,40 @@ import sia_scraper_rust
 
 from .constants import status
 from .constants.defaults import DEFAULT_CAREER_NAME
-from .core import SiaSessionException
 from .core.exceptions import ConcurrentAccessError
 
 
-class _SessionRuntimeState:
-    """Lightweight runtime state returned by Rust session helpers."""
-
-    __slots__ = ("javax_faces_ViewState", "course_list")
-
-    def __init__(self) -> None:
-        self.javax_faces_ViewState: str | None = None
-        self.course_list: list[dict[str, str]] = []
-
-
-def _typed_state_to_runtime(
-    state: sia_scraper_rust.SessionStateModel,
-) -> _SessionRuntimeState:
-    """Convert typed Rust session state to runtime state."""
-    runtime = _SessionRuntimeState()
-    runtime.javax_faces_ViewState = state.javax_faces_view_state
-    runtime.course_list = [{entry.course_code: entry.course_name} for entry in state.course_list]
-    return runtime
-
-
-def _legacy_course_list_to_typed(
-    course_list: object,
-) -> list[sia_scraper_rust.CourseListEntryModel]:
-    if not isinstance(course_list, list):
-        raise TypeError("course_list must be a list")
-
-    typed_entries: list[sia_scraper_rust.CourseListEntryModel] = []
-    for index, row in enumerate(course_list):
-        if not isinstance(row, dict):
-            raise TypeError(f"course_list[{index}] must be a dict")
-        if len(row) != 1:
-            raise ValueError(f"course_list[{index}] must contain exactly one course entry")
-        course_code, course_name = next(iter(row.items()))
-        typed_entries.append(
-            sia_scraper_rust.CourseListEntryModel(
-                course_code=str(course_code),
-                course_name=str(course_name),
-            )
-        )
-
-    return typed_entries
-
-
 class SiaSession:
-    """Async SIA session backed by Rust reqwest/tokio HTTP client.
+    """Thin Python wrapper around Rust PySiaSession.
+
+    All HTTP operations and state management are delegated to Rust.
+    This class provides:
+    - Python-friendly async interface
+    - Cached property access (no await needed)
+    - Concurrent access protection
 
     **IMPORTANT: This class does NOT support concurrent operations.**
+    Methods must be called sequentially. Use multiple SiaSession instances
+    for parallel scraping.
 
-    SiaSession maintains stateful Oracle ADF navigation context. Methods must
-    be called sequentially. Concurrent calls will raise `ConcurrentAccessError`.
-
-    For parallel scraping, create multiple independent `SiaSession` instances.
-
-    Example (correct sequential usage):
+    Example:
         >>> session = await SiaSession.create()
         >>> await session.set_career("0-2-8-3")
-        >>> for i in range(10):
-        ...     xml = await session.get_course_xml(i)  # OK - sequential
-
-    Example (incorrect concurrent usage):
-        >>> # DO NOT DO THIS:
-        >>> tasks = [session.get_course_xml(i) for i in range(10)]
-        >>> await asyncio.gather(*tasks)  # Will raise ConcurrentAccessError!
-
-    Example (correct parallel usage):
-        >>> # Create separate sessions for parallel work:
-        >>> sessions = [await SiaSession.create() for _ in range(5)]
-        >>> tasks = [s.set_career("0-2-8-3") for s in sessions]
-        >>> await asyncio.gather(*tasks)  # OK - different instances
+        >>> course = await session.scrape_course_info(0)
+        >>> print(course.course_name)
     """
 
     def __init__(self, timeout: int = 15) -> None:
         self._timeout = timeout
+        self._rust_session = sia_scraper_rust.PySiaSession(timeout=timeout)
+
         self._career_name = DEFAULT_CAREER_NAME
         self._career_code = ""
         self._is_electives = False
         self._career_indices: list[str] = []
         self._status: status.SiaSessionStatus = status.SiaSessionStatus.NO_SESSION
-        self._session_state = _SessionRuntimeState()
-        self._typed_state: sia_scraper_rust.SessionStateModel | None = None
+        self._course_list: list[dict[str, str]] = []
+
         self._active_operation: str | None = None
 
     @classmethod
@@ -141,91 +91,87 @@ class SiaSession:
     @property
     def course_list(self) -> list[dict[str, str]]:
         """Get loaded course list for the selected career."""
-        return self._session_state.course_list
+        return self._course_list
 
     @property
     def career_indices(self) -> list[str]:
         """Get parsed career code indices."""
         return self._career_indices
 
+    def _sync_state_from_rust(self, state: sia_scraper_rust.SessionStateModel) -> None:
+        """Sync local cache from Rust state model."""
+        self._status = status.SiaSessionStatus[state.status]
+        self._career_code = state.career_code
+        self._career_name = state.career_name or DEFAULT_CAREER_NAME
+        self._is_electives = state.is_electives
+        self._career_indices = state.career_code.split("-") if state.career_code else []
+        self._course_list = [{entry.course_code: entry.course_name} for entry in state.course_list]
+
     async def init_session(self) -> None:
-        """Initialize HTTP session with SIA and fetch initial ViewState."""
+        """Initialize session by delegating to Rust PySiaSession."""
         async with self._operation("init_session"):
-            typed_state = await sia_scraper_rust.init_sia_session(self._timeout)  # type: ignore[attr-defined]
-            self._status = status.SiaSessionStatus[typed_state.status]
-            self._career_code = typed_state.career_code
-            self._career_name = typed_state.career_name
-            self._is_electives = typed_state.is_electives
-            self._career_indices = (
-                typed_state.career_code.split("-") if typed_state.career_code else []
-            )
-            self._session_state = _typed_state_to_runtime(typed_state)
-            self._typed_state = typed_state
+            state = await self._rust_session.init_session()
+            self._sync_state_from_rust(state)
 
     async def set_career(self, search_code: str, is_electives: bool = False) -> None:
         """Navigate to career and load course list."""
         async with self._operation("set_career"):
-            typed_state = await sia_scraper_rust.set_career(  # type: ignore[attr-defined]
-                self._timeout,
-                search_code,
-                is_electives,
-            )
-            self._career_code = typed_state.career_code
-            self._career_indices = (
-                typed_state.career_code.split("-") if typed_state.career_code else []
-            )
-            self._is_electives = typed_state.is_electives
-            self._career_name = typed_state.career_name
-            self._session_state = _typed_state_to_runtime(typed_state)
-            self._status = status.SiaSessionStatus[typed_state.status]
-            self._typed_state = typed_state
+            state = await self._rust_session.set_career(search_code, is_electives)
+            self._sync_state_from_rust(state)
 
-    async def get_course_xml(self, course_index: int) -> str:
-        """Get course detail XML for given index."""
-        async with self._operation("get_course_xml"):
-            if self._status not in (
-                status.SiaSessionStatus.ON_CAREER_PAGE,
-                status.SiaSessionStatus.ON_COURSE_PAGE,
-            ):
-                raise SiaSessionException.InvalidStatus from None
+    async def scrape_course_info(self, course_index: int) -> sia_scraper_rust.CourseInfoModel:
+        """Scrape course info via Rust (zero-copy, no XML crossing FFI)."""
+        async with self._operation("scrape_course_info"):
+            return await self._rust_session.scrape_course_info(course_index)
 
-            course_list = self.course_list
-            if not 0 <= course_index < len(course_list):
-                raise ValueError(
-                    f"Course index {course_index} out of range (0-{max(len(course_list) - 1, 0)})"
-                )
+    async def scrape_course_prereqs(self, course_index: int) -> sia_scraper_rust.CoursePrereqsModel:
+        """Scrape course prerequisites via Rust."""
+        async with self._operation("scrape_course_prereqs"):
+            return await self._rust_session.scrape_course_prereqs(course_index)
 
-            result = await sia_scraper_rust.get_course_xml(  # type: ignore[attr-defined]
-                self._timeout,
-                course_index,
-                self._career_indices,
-                self._is_electives,
-            )
-            return str(result)
+    async def get_state(self) -> sia_scraper_rust.SessionStateModel:
+        """Get current session state from Rust and sync local cache."""
+        async with self._operation("get_state"):
+            state = await self._rust_session.get_state()
+            self._sync_state_from_rust(state)
+            return state
 
     async def close(self) -> None:
-        """Close the session and cleanup resources."""
+        """Reset session state and clear Rust session."""
         async with self._operation("close"):
+            if self._rust_session.is_initialized():
+                await self._rust_session.reset()
             self._status = status.SiaSessionStatus.NO_SESSION
-            self._session_state = _SessionRuntimeState()
-            self._typed_state = None
+            self._career_code = ""
+            self._career_name = DEFAULT_CAREER_NAME
+            self._is_electives = False
+            self._career_indices = []
+            self._course_list = []
 
-    def get_session_data(self) -> sia_scraper_rust.SessionStateModel:
+    async def get_session_data(self) -> dict:
         """Serialize session state for persistence."""
-        if self._typed_state is not None:
-            return self._typed_state
+        return await self._rust_session.get_session_data()
 
-        return sia_scraper_rust.SessionStateModel(
-            session_headers={},
-            session_cookies={},
-            params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
-            career_code=self._career_code,
-            career_name=self._career_name,
-            is_electives=self._is_electives,
-            status=self._status.value,
-            course_list=_legacy_course_list_to_typed(self.course_list),
-            javax_faces_view_state=self._session_state.javax_faces_ViewState,
-        )
+    @classmethod
+    async def from_state(cls, state: dict) -> "SiaSession":
+        """Restore a session from previously saved state.
+
+        Args:
+            state: Dictionary with session state (timeout, state_dict)
+
+        Returns:
+            Restored SiaSession instance
+
+        Example:
+            >>> saved_state = await session.get_session_data()
+            >>> new_session = await SiaSession.from_state(saved_state)
+        """
+        timeout = state.get("timeout", 15)
+        session = cls(timeout)
+        session._rust_session = await sia_scraper_rust.PySiaSession.from_state(state)
+        state_model = await session._rust_session.get_state()
+        session._sync_state_from_rust(state_model)
+        return session
 
     async def __aenter__(self) -> "SiaSession":
         return self

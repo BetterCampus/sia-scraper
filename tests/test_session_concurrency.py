@@ -5,7 +5,7 @@ and that sequential operations work correctly.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -42,11 +42,24 @@ def _make_state_model(
     )
 
 
-@pytest.fixture
-def mock_rust_module():
-    """Patch Rust extension calls used by SiaSession."""
+def _make_course_info_model() -> sia_scraper_rust.CourseInfoModel:
+    """Create a CourseInfoModel for testing."""
+    return sia_scraper_rust.CourseInfoModel(
+        course_name="Test Course",
+        code="1000001",
+        credits=3,
+        typology="TEORICA",
+        available_spots=20,
+        groups=[],
+        scrape_timestamp="2024-01-01T00:00:00",
+    )
 
-    def init_payload(timeout: int) -> sia_scraper_rust.SessionStateModel:
+
+@pytest.fixture
+def mock_rust_session():
+    """Mock PySiaSession for unit testing."""
+
+    def init_side_effect() -> sia_scraper_rust.SessionStateModel:
         return _make_state_model(
             career_code="",
             career_name="N/A",
@@ -56,13 +69,13 @@ def mock_rust_module():
             view_state="vs-1",
         )
 
-    def career_payload(
-        timeout: int, search_code: str, is_electives: bool
+    def career_side_effect(
+        search_code: str, electives: bool | None = None
     ) -> sia_scraper_rust.SessionStateModel:
         return _make_state_model(
             career_code=search_code,
             career_name="Ingenieria de Sistemas",
-            is_electives=is_electives,
+            is_electives=electives or False,
             status="ON_CAREER_PAGE",
             course_list=[
                 {"course_code": "1000001", "course_name": "Calculo"},
@@ -72,18 +85,32 @@ def mock_rust_module():
             view_state="vs-2",
         )
 
-    with patch("sia_scraper.session.sia_scraper_rust") as rust:
-        rust.init_sia_session = AsyncMock(side_effect=init_payload)
-        rust.set_career = AsyncMock(side_effect=career_payload)
-        rust.get_course_xml = AsyncMock(return_value="<xml>course</xml>")
-        yield rust
+    mock_instance = MagicMock()
+    mock_instance.init_session = AsyncMock(side_effect=init_side_effect)
+    mock_instance.set_career = AsyncMock(side_effect=career_side_effect)
+    mock_instance.scrape_course_info = AsyncMock(return_value=_make_course_info_model())
+    mock_instance.scrape_course_prereqs = AsyncMock(
+        return_value=sia_scraper_rust.CoursePrereqsModel(
+            course_name="Test Course",
+            code="1000001",
+            credits=3,
+            typology="TEORICA",
+            conditions=[],
+        )
+    )
+    mock_instance.get_state = AsyncMock(side_effect=lambda: career_side_effect("0-2-8-3", False))
+    mock_instance.is_initialized = lambda: False
+
+    with patch("sia_scraper.session.sia_scraper_rust.PySiaSession") as MockPySiaSession:
+        MockPySiaSession.return_value = mock_instance
+        yield mock_instance
 
 
 class TestConcurrentAccessDetection:
     """Test that concurrent operations are detected and rejected."""
 
     @pytest.mark.asyncio
-    async def test_concurrent_set_career_raises_error(self, mock_rust_module):
+    async def test_concurrent_set_career_raises_error(self, mock_rust_session):
         """Two concurrent set_career calls should raise ConcurrentAccessError."""
         session = await SiaSession.create()
 
@@ -100,7 +127,7 @@ class TestConcurrentAccessDetection:
                     view_state="vs-3",
                 )
 
-            mock_rust_module.set_career.side_effect = slow_set_career
+            mock_rust_session.set_career.side_effect = slow_set_career
 
             task1 = asyncio.create_task(session.set_career("0-2-8-3"))
             await asyncio.sleep(0.01)
@@ -118,53 +145,53 @@ class TestConcurrentAccessDetection:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_concurrent_get_course_xml_raises_error(self, mock_rust_module):
-        """Two concurrent get_course_xml calls should raise error."""
+    async def test_concurrent_scrape_course_info_raises_error(self, mock_rust_session):
+        """Two concurrent scrape_course_info calls should raise error."""
         session = await SiaSession.create()
         await session.set_career("0-2-8-3")
 
         try:
 
-            async def slow_get_course(*args):
+            async def slow_scrape_course(*args):
                 await asyncio.sleep(0.1)
-                return "<xml>test</xml>"
+                return _make_course_info_model()
 
-            mock_rust_module.get_course_xml.side_effect = slow_get_course
+            mock_rust_session.scrape_course_info.side_effect = slow_scrape_course
 
-            task1 = asyncio.create_task(session.get_course_xml(0))
+            task1 = asyncio.create_task(session.scrape_course_info(0))
             await asyncio.sleep(0.01)
 
             with pytest.raises(ConcurrentAccessError) as exc_info:
-                await session.get_course_xml(1)
+                await session.scrape_course_info(1)
 
-            assert exc_info.value.active_operation == "get_course_xml"
-            assert exc_info.value.attempted_operation == "get_course_xml"
+            assert exc_info.value.active_operation == "scrape_course_info"
+            assert exc_info.value.attempted_operation == "scrape_course_info"
 
             await task1
         finally:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_mixed_concurrent_operations_raises_error(self, mock_rust_module):
-        """set_career during get_course_xml should raise error."""
+    async def test_mixed_concurrent_operations_raises_error(self, mock_rust_session):
+        """set_career during scrape_course_info should raise error."""
         session = await SiaSession.create()
         await session.set_career("0-2-8-3")
 
         try:
 
-            async def slow_get_course(*args):
+            async def slow_scrape_course(*args):
                 await asyncio.sleep(0.1)
-                return "<xml>test</xml>"
+                return _make_course_info_model()
 
-            mock_rust_module.get_course_xml.side_effect = slow_get_course
+            mock_rust_session.scrape_course_info.side_effect = slow_scrape_course
 
-            task1 = asyncio.create_task(session.get_course_xml(0))
+            task1 = asyncio.create_task(session.scrape_course_info(0))
             await asyncio.sleep(0.01)
 
             with pytest.raises(ConcurrentAccessError) as exc_info:
                 await session.set_career("1-2-3-4")
 
-            assert exc_info.value.active_operation == "get_course_xml"
+            assert exc_info.value.active_operation == "scrape_course_info"
             assert exc_info.value.attempted_operation == "set_career"
 
             await task1
@@ -172,7 +199,7 @@ class TestConcurrentAccessDetection:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_concurrent_init_session_raises_error(self, mock_rust_module):
+    async def test_concurrent_init_session_raises_error(self, mock_rust_session):
         """Two concurrent init_session calls should raise error."""
         session = SiaSession()
 
@@ -187,7 +214,7 @@ class TestConcurrentAccessDetection:
                 view_state="test",
             )
 
-        mock_rust_module.init_sia_session.side_effect = slow_init
+        mock_rust_session.init_session.side_effect = slow_init
 
         task1 = asyncio.create_task(session.init_session())
         await asyncio.sleep(0.01)
@@ -198,26 +225,26 @@ class TestConcurrentAccessDetection:
         await task1
 
     @pytest.mark.asyncio
-    async def test_concurrent_close_raises_error(self, mock_rust_module):
-        """close during get_course_xml should raise error."""
+    async def test_concurrent_close_raises_error(self, mock_rust_session):
+        """close during scrape_course_info should raise error."""
         session = await SiaSession.create()
         await session.set_career("0-2-8-3")
 
         try:
 
-            async def slow_get_course(*args):
+            async def slow_scrape_course(*args):
                 await asyncio.sleep(0.1)
-                return "<xml>test</xml>"
+                return _make_course_info_model()
 
-            mock_rust_module.get_course_xml.side_effect = slow_get_course
+            mock_rust_session.scrape_course_info.side_effect = slow_scrape_course
 
-            task1 = asyncio.create_task(session.get_course_xml(0))
+            task1 = asyncio.create_task(session.scrape_course_info(0))
             await asyncio.sleep(0.01)
 
             with pytest.raises(ConcurrentAccessError) as exc_info:
                 await session.close()
 
-            assert exc_info.value.active_operation == "get_course_xml"
+            assert exc_info.value.active_operation == "scrape_course_info"
             assert exc_info.value.attempted_operation == "close"
 
             await task1
@@ -225,7 +252,7 @@ class TestConcurrentAccessDetection:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_concurrent_init_during_set_career_raises_error(self, mock_rust_module):
+    async def test_concurrent_init_during_set_career_raises_error(self, mock_rust_session):
         """init_session during set_career should raise error."""
         session = SiaSession()
 
@@ -240,7 +267,7 @@ class TestConcurrentAccessDetection:
                 view_state="vs",
             )
 
-        mock_rust_module.set_career.side_effect = slow_set_career
+        mock_rust_session.set_career.side_effect = slow_set_career
 
         await session.init_session()
 
@@ -260,7 +287,7 @@ class TestSequentialOperationsStillWork:
     """Verify that sequential operations are not affected by the guard."""
 
     @pytest.mark.asyncio
-    async def test_sequential_set_career_works(self, mock_rust_module):
+    async def test_sequential_set_career_works(self, mock_rust_session):
         """Sequential set_career calls should work normally."""
         session = await SiaSession.create()
 
@@ -274,35 +301,38 @@ class TestSequentialOperationsStillWork:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_sequential_get_course_xml_works(self, mock_rust_module):
-        """Sequential get_course_xml calls should work normally."""
+    async def test_sequential_scrape_course_info_works(self, mock_rust_session):
+        """Sequential scrape_course_info calls should work normally."""
         session = await SiaSession.create()
         await session.set_career("0-2-8-3")
 
         try:
-            xml1 = await session.get_course_xml(0)
-            xml2 = await session.get_course_xml(1)
+            course1 = await session.scrape_course_info(0)
+            course2 = await session.scrape_course_info(1)
 
-            assert xml1 is not None
-            assert xml2 is not None
-            assert isinstance(xml1, str)
-            assert isinstance(xml2, str)
+            assert course1 is not None
+            assert course2 is not None
+            assert isinstance(course1, sia_scraper_rust.CourseInfoModel)
+            assert isinstance(course2, sia_scraper_rust.CourseInfoModel)
+            assert course1.course_name == "Test Course"
+            assert course2.course_name == "Test Course"
+            assert course1.code == "1000001"
         finally:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_operation_guard_releases_on_exception(self, mock_rust_module):
+    async def test_operation_guard_releases_on_exception(self, mock_rust_session):
         """Guard should release if operation raises exception."""
         session = await SiaSession.create()
 
         try:
-            mock_rust_module.set_career.side_effect = RuntimeError("Simulated error")
+            mock_rust_session.set_career.side_effect = RuntimeError("Simulated error")
 
             with pytest.raises(RuntimeError):
                 await session.set_career("0-2-8-3")
 
-            mock_rust_module.set_career.side_effect = None
-            mock_rust_module.set_career.return_value = _make_state_model(
+            mock_rust_session.set_career.side_effect = None
+            mock_rust_session.set_career.return_value = _make_state_model(
                 career_code="1-2-3-4",
                 career_name="Test",
                 is_electives=False,
@@ -317,7 +347,7 @@ class TestSequentialOperationsStillWork:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_multiple_sessions_can_run_concurrently(self, mock_rust_module):
+    async def test_multiple_sessions_can_run_concurrently(self, mock_rust_session):
         """Different session instances CAN run concurrently."""
         session1 = await SiaSession.create()
         session2 = await SiaSession.create()
@@ -335,7 +365,7 @@ class TestSequentialOperationsStillWork:
             await session2.close()
 
     @pytest.mark.asyncio
-    async def test_operation_guard_releases_on_success(self, mock_rust_module):
+    async def test_operation_guard_releases_on_success(self, mock_rust_session):
         """Guard should release after successful operation."""
         session = await SiaSession.create()
 
@@ -343,8 +373,9 @@ class TestSequentialOperationsStillWork:
             await session.set_career("0-2-8-3")
             assert session._active_operation is None
 
-            xml = await session.get_course_xml(0)
+            course = await session.scrape_course_info(0)
             assert session._active_operation is None
-            assert xml == "<xml>course</xml>"
+            assert isinstance(course, sia_scraper_rust.CourseInfoModel)
+            assert course.course_name == "Test Course"
         finally:
             await session.close()
