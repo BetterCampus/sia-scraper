@@ -33,6 +33,7 @@ jobs:
           manylinux: auto
 
       - name: Smoke test built wheel
+        shell: bash
         run: |
           python - <<'PY'
           import glob
