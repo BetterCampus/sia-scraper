@@ -7,8 +7,10 @@ matches the actual Rust PyClass implementations in the sia_scraper_rust module.
 It performs the following checks:
 1. Extracts model class definitions from the stub file
 2. Imports the actual sia_scraper_rust module and inspects its classes
-3. Compares field names and types between stub and actual implementations
-4. Reports any mismatches or missing classes
+3. Ensures each expected model exists in both stub and Rust module and compares
+   their field names
+4. Reports any missing models or fields that are present in Rust but not in the
+   stub
 
 Usage:
     python scripts/verify_type_stubs.py
@@ -49,7 +51,7 @@ def parse_stub_file(stub_path: Path) -> dict[str, dict]:
 
         fields: dict[str, str] = {}
 
-        field_pattern = re.compile(r"^\s{4}(\w+)\s*:\s*(\S+)", re.MULTILINE)
+        field_pattern = re.compile(r"^\s{4}(\w+)\s*:\s*(.+)$", re.MULTILINE)
         for field_match in field_pattern.finditer(class_body):
             field_name = field_match.group(1)
             field_type = field_match.group(2).rstrip("\n")

@@ -108,7 +108,7 @@ Python receives native Rust CourseInfoModel (#[pyclass])
   - [x] Ensure all fields are public and derive `Serialize`, `Deserialize`, `PartialEq`, `Eq`
   - [x] Add rustdoc comments to all public methods
 
-- [ ] Update `rust/src/models/prerequisite.rs`
+- [x] Update `rust/src/models/prerequisite.rs`
   - [x] Add `#[pyclass(get_all, module = "sia_scraper_rust")]` to `PrerequisiteModel`
   - [x] Implement `#[pymethods]` with `__new__`, `__repr__` for `PrerequisiteModel`
   - [x] Add `#[pyclass(get_all, module = "sia_scraper_rust")]` to `PrereqConditionModel`
@@ -117,7 +117,7 @@ Python receives native Rust CourseInfoModel (#[pyclass])
   - [x] Add `#[pyclass(get_all, module = "sia_scraper_rust")]` to `CoursePrereqsModel`
   - [x] Implement `#[pymethods]` with `__repr__`, `has_prerequisites()` for `CoursePrereqsModel`
 
-- [ ] Update `rust/src/models/session.rs`
+- [x] Update `rust/src/models/session.rs`
   - [x] Add `#[pyclass(get_all, module = "sia_scraper_rust")]` to `CourseListEntryModel`
   - [x] Implement `#[pymethods]` with `__new__`, `__repr__` for `CourseListEntryModel`
   - [x] Add `#[pyclass(get_all, module = "sia_scraper_rust")]` to `SessionStateModel`
@@ -126,7 +126,7 @@ Python receives native Rust CourseInfoModel (#[pyclass])
   - [x] Implement `__repr__` and `is_ready()` helper methods
   - [x] Add `use std::collections::HashMap` if not present
 
-- [ ] Register classes in `rust/src/lib.rs`
+- [x] Register classes in `rust/src/lib.rs`
   - [x] Add `m.add_class::<models::course::ScheduleModel>()?;`
   - [x] Add `m.add_class::<models::course::GroupModel>()?;`
   - [x] Add `m.add_class::<models::course::CourseInfoModel>()?;`
@@ -136,7 +136,7 @@ Python receives native Rust CourseInfoModel (#[pyclass])
   - [x] Add `m.add_class::<models::session::CourseListEntryModel>()?;`
   - [x] Add `m.add_class::<models::session::SessionStateModel>()?;`
 
-- [ ] Build and test
+- [x] Build and test
   - [x] Run `maturin develop --release`
   - [x] Test model creation in Python REPL
   - [x] Verify `__repr__` output
@@ -144,16 +144,16 @@ Python receives native Rust CourseInfoModel (#[pyclass])
   - [x] Run `cargo clippy --manifest-path Cargo.toml`
   - [x] Run `cargo test --manifest-path Cargo.toml`
 
-### Task 6.2: Update Type Stubs ✅ COMPLETE (PR #52)
+### Task 6.2: Update Type Stubs ✅ COMPLETE (PR #53)
 
 **Completed:** April 2, 2026
 
 **Verification Results:**
-- All 8 PyClass models added to type stubs with full type hints
+- All 8 PyClass models added to type stubs with full type hints (PR #52)
 - Parser functions (`parse_course_info`, `parse_prereqs`) return model types
-- Comprehensive docstrings added with usage examples
+- Comprehensive docstrings added with usage examples (PR #53)
 - Pyright verification: 0 errors (47 files analyzed)
-- Verification script created: `scripts/verify_type_stubs.py`
+- Verification script created: `scripts/verify_type_stubs.py` (PR #53)
 
 #### Todo List
 

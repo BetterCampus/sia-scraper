@@ -15,15 +15,19 @@ Example:
     3
 """
 
+from collections.abc import Awaitable
 from typing import Any
 
 class SiaScraperException(Exception):
-    """Custom exception raised by sia_scraper_rust when parsing or HTTP operations fail.
+    """Custom exception raised by sia_scraper_rust for parsing and validation errors.
 
-    This exception is raised when:
+    This exception is typically raised when:
     - XML/HTML parsing fails due to malformed input
     - Required fields are missing from parsed content
-    - HTTP requests fail (connection errors, timeouts)
+
+    Note:
+        Network or HTTP-related failures in the underlying implementation may
+        surface as RuntimeError rather than SiaScraperException.
 
     Example:
         >>> try:
@@ -270,16 +274,18 @@ class SessionStateModel:
         course_list: List of CourseListEntryModel for available courses.
 
     Example:
-        >>> import sia_scraper_rust
-        >>> state = sia_scraper_rust.init_sia_session(timeout=30)
-        >>> print(state.career_code)
-        0-2-8-3
-        >>> # Save session for later use
+        >>> import asyncio
         >>> import pickle
-        >>> saved = pickle.dumps(state)
-        >>> restored = pickle.loads(saved)
-        >>> restored.career_name
-        'Ingeniería de Sistemas'
+        >>> import sia_scraper_rust
+        >>>
+        >>> async def main() -> None:
+        ...     state = await sia_scraper_rust.init_sia_session(timeout=30)
+        ...     print(state.career_code)
+        ...     saved = pickle.dumps(state)
+        ...     restored = pickle.loads(saved)
+        ...     print(restored.career_name)
+        >>>
+        >>> asyncio.run(main())
     """
 
     session_headers: dict[str, str]
@@ -488,9 +494,11 @@ def parse_course_info(xml: str) -> CourseInfoModel:
     """
 
 def parse_course_info_json(xml: str) -> str:
-    """Parse course information and return JSON string (legacy endpoint).
+    """Parse course information and return a JSON string representation.
 
-    Note: This function is deprecated. Use parse_course_info() instead.
+    This function is primarily intended for callers that need a JSON contract,
+    such as higher-level wrappers. For typed access in Python, prefer
+    parse_course_info().
 
     Args:
         xml: Raw XML/HTML string from SIA course detail page.
@@ -555,9 +563,10 @@ def parse_prereqs(xml: str) -> CoursePrereqsModel:
     """
 
 def parse_prereqs_json(xml: str) -> str:
-    """Parse prerequisite information and return JSON string (legacy endpoint).
+    """Parse prerequisite information and return a JSON string representation.
 
-    Note: This function is deprecated. Use parse_prereqs() instead.
+    This function is primarily intended for callers that need a JSON contract.
+    For typed access in Python, prefer parse_prereqs().
 
     Args:
         xml: Raw XML/HTML string from SIA course prerequisites page.
@@ -570,19 +579,20 @@ def get_course_list(html: str | bytes) -> list[dict[str, str]]:
     """Extract course list from Oracle ADF table HTML.
 
     Parses the course selection table from a career page and returns
-    a list of course entries with their codes and names.
+    a list of single-key dictionaries mapping course code to course name.
 
     Args:
         html: Raw HTML string or bytes from SIA course list page.
 
     Returns:
-        List of dictionaries with 'code' and 'name' keys.
+        List of single-key dictionaries mapping course code to course name,
+        e.g. [{'1000001': 'Cálculo I'}, {'1000002': 'Álgebra'}].
 
     Example:
         >>> html = '<table><tr><td>1000001</td><td>Cálculo I</td></tr></table>'
         >>> courses = sia_scraper_rust.get_course_list(html)
-        >>> courses[0]['code']
-        '1000001'
+        >>> courses[0]['1000001']
+        'Cálculo I'
     """
 
 def get_plain_text(xml: str) -> str:
@@ -606,9 +616,9 @@ def get_plain_text(xml: str) -> str:
 
 def init_oracle_adf_request_dict(
     tipology_index: str,
-    window_id: str | None = None,
-    page_id: str | None = None,
-    view_state: str | None = None,
+    window_id: str,
+    page_id: str,
+    view_state: str,
 ) -> dict[str, Any]:
     """Initialize Oracle ADF request dictionary for SIA interactions.
 
@@ -616,15 +626,15 @@ def init_oracle_adf_request_dict(
 
     Args:
         tipology_index: Tipology/career index identifier.
-        window_id: ADF window ID (optional).
-        page_id: ADF page ID (optional).
-        view_state: ViewState string (optional, auto-generated if None).
+        window_id: ADF window ID.
+        page_id: ADF page ID.
+        view_state: ViewState string.
 
     Returns:
         Dictionary with ADF request structure.
 
     Example:
-        >>> req = sia_scraper_rust.init_oracle_adf_request_dict("0-2-8-3")
+        >>> req = sia_scraper_rust.init_oracle_adf_request_dict("0-2-8-3", "w1", "p1", "vs1")
         >>> req['tipologyIndex']
         '0-2-8-3'
     """
@@ -677,13 +687,13 @@ def get_oracle_adf_event_dict(
         >>> event = sia_scraper_rust.get_oracle_adf_event_dict("btn1", "action", 0)
     """
 
-def async_get(url: str) -> Any:
+def async_get(url: str) -> Awaitable[dict[str, Any]]:
     """Perform async HTTP GET request (stub).
 
     Note: This is a stub function. Use Python SiaSession for actual async HTTP.
     """
 
-def async_post(url: str, body: str) -> Any:
+def async_post(url: str, body: str) -> Awaitable[dict[str, Any]]:
     """Perform async HTTP POST request (stub).
 
     Note: This is a stub function. Use Python SiaSession for actual async HTTP.
@@ -693,7 +703,7 @@ def async_get_with_config(
     url: str,
     timeout: int | None = None,
     user_agent: str | None = None,
-) -> Any:
+) -> Awaitable[dict[str, Any]]:
     """Perform async HTTP GET with custom configuration (stub).
 
     Note: This is a stub function. Use Python SiaSession for actual async HTTP.
@@ -704,7 +714,7 @@ def async_get_with_config(
         user_agent: Custom User-Agent string.
     """
 
-def init_sia_session(timeout: int | None = None) -> SessionStateModel:
+def init_sia_session(timeout: int | None = None) -> Awaitable[SessionStateModel]:
     """Initialize a new SIA session with HTTP configuration (stub).
 
     Note: This is a stub. Use Python sia_scraper.SiaSession for actual session.
@@ -716,17 +726,14 @@ def init_sia_session(timeout: int | None = None) -> SessionStateModel:
         SessionStateModel with initialized state.
     """
 
-def init_sia_session_json(timeout: int | None = None) -> Any:
-    """Initialize SIA session and return JSON (legacy stub).
-
-    Note: Deprecated. Use init_sia_session() instead.
-    """
+def init_sia_session_json(timeout: int | None = None) -> Awaitable[str]:
+    """Initialize SIA session and return typed JSON state payload."""
 
 def set_career(
     timeout: int | None = None,
     search_code: str = "",
     electives: bool | None = None,
-) -> SessionStateModel:
+) -> Awaitable[SessionStateModel]:
     """Set career selection in SIA session (stub).
 
     Note: This is a stub. Use Python sia_scraper.SiaSession.set_career() instead.
@@ -744,18 +751,15 @@ def set_career_json(
     timeout: int | None = None,
     search_code: str = "",
     electives: bool | None = None,
-) -> Any:
-    """Set career and return JSON (legacy stub).
-
-    Note: Deprecated. Use set_career() instead.
-    """
+) -> Awaitable[str]:
+    """Set career and return typed JSON session payload."""
 
 def get_course_xml(
     timeout: int | None = None,
     course_index: int = 0,
     career_indices: list[str] | None = None,
     electives: bool | None = None,
-) -> Any:
+) -> Awaitable[str]:
     """Get course XML data (stub).
 
     Note: This is a stub. Use Python sia_scraper.SiaSession for actual course data.
@@ -767,5 +771,5 @@ def get_course_xml(
         electives: True for electives, False for required.
 
     Returns:
-        Raw XML string (stub return type is Any).
+        Awaitable resolving to raw XML string.
     """
