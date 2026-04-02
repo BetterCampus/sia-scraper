@@ -56,16 +56,28 @@ fn parse_course_info(
     py: Python<'_>,
     xml: &str,
 ) -> Result<Py<models::course::CourseInfoModel>, error::SiaScraperError> {
-    let model = parsers::course_parser::parse_course_model_typed(xml)?;
+    let model = parsers::course_parser::parse_course_model(xml)?;
     Py::new(py, model).map_err(error::SiaScraperError::from)
 }
 
 /// Parse course information from Oracle ADF XML/HTML and return typed JSON.
 ///
-/// This is the Phase 3 typed contract endpoint used by Python wrappers.
+/// Deprecated: use `parse_course_info()` to get a `CourseInfoModel` directly.
 #[pyfunction]
-fn parse_course_info_json(xml: &str) -> Result<String, error::SiaScraperError> {
-    parsers::course_parser::parse_course_model_json(xml)
+fn parse_course_info_json(py: Python<'_>, xml: &str) -> Result<String, error::SiaScraperError> {
+    let warnings = py.import("warnings")?;
+    warnings.call_method1(
+        "warn",
+        (
+            "sia_scraper_rust.parse_course_info_json() is deprecated; use parse_course_info()",
+            py.get_type::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+
+    let model = parsers::course_parser::parse_course_model(xml)?;
+    serde_json::to_string(&model)
+        .map_err(|e| SiaScraperError::ParseError(format!("Course JSON serialization failed: {e}")))
 }
 
 /// Extract the ViewState value from Oracle ADF HTML response.
@@ -121,14 +133,28 @@ fn parse_prereqs(
     py: Python<'_>,
     xml: &str,
 ) -> Result<Py<models::prerequisite::CoursePrereqsModel>, error::SiaScraperError> {
-    let model = parsers::course_parser::parse_prereqs_model_typed(xml)?;
+    let model = parsers::course_parser::parse_prereqs_model(xml)?;
     Py::new(py, model).map_err(error::SiaScraperError::from)
 }
 
 /// Parse prerequisite information from Oracle ADF XML/HTML and return typed JSON.
+///
+/// Deprecated: use `parse_prereqs()` to get a `CoursePrereqsModel` directly.
 #[pyfunction]
-fn parse_prereqs_json(xml: &str) -> Result<String, error::SiaScraperError> {
-    parsers::course_parser::parse_prereqs_model_json(xml)
+fn parse_prereqs_json(py: Python<'_>, xml: &str) -> Result<String, error::SiaScraperError> {
+    let warnings = py.import("warnings")?;
+    warnings.call_method1(
+        "warn",
+        (
+            "sia_scraper_rust.parse_prereqs_json() is deprecated; use parse_prereqs()",
+            py.get_type::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+
+    let model = parsers::course_parser::parse_prereqs_model(xml)?;
+    serde_json::to_string(&model)
+        .map_err(|e| SiaScraperError::ParseError(format!("Prereqs JSON serialization failed: {e}")))
 }
 
 /// Convert internal session state to typed JSON payload.

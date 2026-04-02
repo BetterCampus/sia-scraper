@@ -438,11 +438,68 @@ def scrape_info(xml: str) -> CourseInfo:
     )
 
 
-def scrape_info_typed(xml: str) -> CourseInfoTyped:
-    """Parse course information using Rust typed JSON contract.
+def _course_model_to_payload(course: Any) -> dict[str, Any]:
+    """Convert Rust CourseInfoModel into a Pydantic-compatible payload."""
+    return {
+        "course_name": course.course_name,
+        "credits": course.credits,
+        "typology": course.typology,
+        "available_spots": course.available_spots,
+        "scrape_timestamp": course.scrape_timestamp,
+        "code": course.code,
+        "groups": [
+            {
+                "group_name": group.group_name,
+                "teacher": group.teacher,
+                "faculty": group.faculty,
+                "course_name": group.course_name,
+                "duration": group.duration,
+                "schedule_type": group.schedule_type,
+                "spots": group.spots,
+                "code": group.code,
+                "schedules": [
+                    {
+                        "day": schedule.day,
+                        "start_time": schedule.start_time,
+                        "end_time": schedule.end_time,
+                        "classroom": schedule.classroom,
+                    }
+                    for schedule in group.schedules
+                ],
+            }
+            for group in course.groups
+        ],
+    }
 
-    This function uses the Rust Phase 3 typed endpoint and validates the
-    resulting payload with strict Pydantic models.
+
+def _prereqs_model_to_payload(prereqs: Any) -> dict[str, Any]:
+    """Convert Rust CoursePrereqsModel into a Pydantic-compatible payload."""
+    return {
+        "course_name": prereqs.course_name,
+        "code": prereqs.code,
+        "credits": prereqs.credits,
+        "typology": prereqs.typology,
+        "conditions": [
+            {
+                "condition": condition.condition,
+                "prereq_type": condition.prereq_type,
+                "all_required": condition.all_required,
+                "number_of_courses": condition.number_of_courses,
+                "prerequisites": [
+                    {
+                        "course_code": prerequisite.course_code,
+                        "course_name": prerequisite.course_name,
+                    }
+                    for prerequisite in condition.prerequisites
+                ],
+            }
+            for condition in prereqs.conditions
+        ],
+    }
+
+
+def scrape_info_typed(xml: str) -> CourseInfoTyped:
+    """Parse course information via Rust PyClass models and validate with Pydantic.
 
     Args:
         xml: Raw XML/HTML from SIA course detail page response.
@@ -450,8 +507,8 @@ def scrape_info_typed(xml: str) -> CourseInfoTyped:
     Returns:
         Strictly validated typed course payload.
     """
-    typed_json = sia_scraper_rust.parse_course_info_json(xml)  # type: ignore[attr-defined]
-    return CourseInfoTyped.model_validate_json(typed_json)
+    model = sia_scraper_rust.parse_course_info(xml)  # type: ignore[attr-defined]
+    return CourseInfoTyped.model_validate(_course_model_to_payload(model))
 
 
 def scrape_prereqs(xml: str) -> CoursePrereqs:
@@ -491,7 +548,7 @@ def scrape_prereqs(xml: str) -> CoursePrereqs:
 
 
 def scrape_prereqs_typed(xml: str) -> CoursePrereqsTyped:
-    """Parse prerequisites using Rust typed JSON contract.
+    """Parse prerequisites via Rust PyClass models and validate with Pydantic.
 
     Args:
         xml: Raw XML/HTML from SIA course prerequisite response.
@@ -499,5 +556,5 @@ def scrape_prereqs_typed(xml: str) -> CoursePrereqsTyped:
     Returns:
         Strictly validated typed prerequisite payload.
     """
-    typed_json = sia_scraper_rust.parse_prereqs_json(xml)  # type: ignore[attr-defined]
-    return CoursePrereqsTyped.model_validate_json(typed_json)
+    model = sia_scraper_rust.parse_prereqs(xml)  # type: ignore[attr-defined]
+    return CoursePrereqsTyped.model_validate(_prereqs_model_to_payload(model))

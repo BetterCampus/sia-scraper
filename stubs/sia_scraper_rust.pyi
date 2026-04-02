@@ -496,9 +496,11 @@ def parse_course_info(xml: str) -> CourseInfoModel:
 def parse_course_info_json(xml: str) -> str:
     """Parse course information and return a JSON string representation.
 
-    This function is primarily intended for callers that need a JSON contract,
-    such as higher-level wrappers. For typed access in Python, prefer
-    parse_course_info().
+    Deprecated:
+        Use `parse_course_info()` to get `CourseInfoModel` directly.
+
+    This function is kept for backwards compatibility with callers that still
+    need JSON serialization.
 
     Args:
         xml: Raw XML/HTML string from SIA course detail page.
@@ -565,8 +567,11 @@ def parse_prereqs(xml: str) -> CoursePrereqsModel:
 def parse_prereqs_json(xml: str) -> str:
     """Parse prerequisite information and return a JSON string representation.
 
-    This function is primarily intended for callers that need a JSON contract.
-    For typed access in Python, prefer parse_prereqs().
+    Deprecated:
+        Use `parse_prereqs()` to get `CoursePrereqsModel` directly.
+
+    This function is kept for backwards compatibility with callers that still
+    need JSON serialization.
 
     Args:
         xml: Raw XML/HTML string from SIA course prerequisites page.
