@@ -49,20 +49,20 @@ fn test_parse_course_xml_complete() {
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
-        let dict = py_result.as_ref(py);
-        let course_name = dict.get_item("course_name").unwrap();
+        let obj = py_result.as_ref(py);
+        let course_name = obj.getattr("course_name").unwrap();
         assert_eq!(course_name.extract::<String>().unwrap(), "CALCULO AVANZADO");
 
-        let credits = dict.get_item("credits").unwrap();
+        let credits = obj.getattr("credits").unwrap();
         assert_eq!(credits.extract::<i32>().unwrap(), 4);
 
-        let typology = dict.get_item("typology").unwrap();
+        let typology = obj.getattr("typology").unwrap();
         assert_eq!(
             typology.extract::<String>().unwrap(),
             "DISCIPLINAR OBLIGATORIA"
         );
 
-        let groups = dict.get_item("groups").unwrap();
+        let groups = obj.getattr("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
         assert_eq!(groups_list.len(), 1);
     });
@@ -84,8 +84,8 @@ fn test_parse_course_xml_typology_defaults_to_unknown() {
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
-        let dict = py_result.as_ref(py);
-        let typology = dict.get_item("typology").unwrap();
+        let obj = py_result.as_ref(py);
+        let typology = obj.getattr("typology").unwrap();
         assert_eq!(typology.extract::<String>().unwrap(), "Unknown");
     });
 }
@@ -107,17 +107,17 @@ fn test_parse_course_xml_no_groups() {
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
-        let dict = py_result.as_ref(py);
-        let course_name = dict.get_item("course_name").unwrap();
+        let obj = py_result.as_ref(py);
+        let course_name = obj.getattr("course_name").unwrap();
         assert_eq!(
             course_name.extract::<String>().unwrap(),
             "INTRODUCCION A LA PROGRAMACION"
         );
 
-        let credits = dict.get_item("credits").unwrap();
+        let credits = obj.getattr("credits").unwrap();
         assert_eq!(credits.extract::<i32>().unwrap(), 3);
 
-        let groups = dict.get_item("groups").unwrap();
+        let groups = obj.getattr("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
         assert_eq!(groups_list.len(), 0);
     });
@@ -168,8 +168,8 @@ fn test_parse_course_xml_typology_container_without_inner_span_defaults_unknown(
 
     Python::with_gil(|py| {
         let result = parse_course_info(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let typology = dict.get_item("typology").unwrap();
+        let obj = result.as_ref(py);
+        let typology = obj.getattr("typology").unwrap();
         assert_eq!(typology.extract::<String>().unwrap(), "Unknown");
     });
 }
@@ -196,15 +196,15 @@ fn test_parse_course_xml_group_defaults_and_group_name_extraction() {
 
     Python::with_gil(|py| {
         let result = parse_course_info(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let groups = dict.get_item("groups").unwrap();
+        let obj = result.as_ref(py);
+        let groups = obj.getattr("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
         assert_eq!(groups_list.len(), 1);
 
         let group = groups_list[0].as_ref(py);
         assert_eq!(
             group
-                .get_item("group_name")
+                .getattr("group_name")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
@@ -212,7 +212,7 @@ fn test_parse_course_xml_group_defaults_and_group_name_extraction() {
         );
         assert_eq!(
             group
-                .get_item("faculty")
+                .getattr("faculty")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
@@ -220,7 +220,7 @@ fn test_parse_course_xml_group_defaults_and_group_name_extraction() {
         );
         assert_eq!(
             group
-                .get_item("duration")
+                .getattr("duration")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
@@ -228,14 +228,14 @@ fn test_parse_course_xml_group_defaults_and_group_name_extraction() {
         );
         assert_eq!(
             group
-                .get_item("schedule_type")
+                .getattr("schedule_type")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
             "Unknown"
         );
         assert!(
-            group.get_item("spots").unwrap().is_none(),
+            group.getattr("spots").unwrap().is_none(),
             "spots should be None when not provided"
         );
     });
@@ -270,15 +270,15 @@ fn test_parse_course_xml_extract_label_value_without_span_uses_extracted_text() 
 
     Python::with_gil(|py| {
         let result = parse_course_info(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let groups = dict.get_item("groups").unwrap();
+        let obj = result.as_ref(py);
+        let groups = obj.getattr("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
         assert_eq!(groups_list.len(), 1);
 
         let group = groups_list[0].as_ref(py);
         assert_eq!(
             group
-                .get_item("faculty")
+                .getattr("faculty")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
@@ -356,25 +356,25 @@ fn test_parse_course_xml_schedule_non_matching_pattern_is_ignored() {
 
     Python::with_gil(|py| {
         let result = parse_course_info(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let groups = dict.get_item("groups").unwrap();
+        let obj = result.as_ref(py);
+        let groups = obj.getattr("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
         assert_eq!(groups_list.len(), 1);
 
         let group = groups_list[0].as_ref(py);
-        let schedules = group.get_item("schedules").unwrap();
+        let schedules = group.getattr("schedules").unwrap();
         let schedule_list: Vec<pyo3::Py<pyo3::types::PyAny>> = schedules.extract().unwrap();
         assert!(schedule_list.is_empty());
         assert_eq!(
             group
-                .get_item("faculty")
+                .getattr("faculty")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
             "Unknown"
         );
         assert!(
-            group.get_item("spots").unwrap().is_none(),
+            group.getattr("spots").unwrap().is_none(),
             "spots should be None when not provided"
         );
     });
@@ -456,14 +456,14 @@ fn test_parse_prereqs_xml_complete() {
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
-        let dict = py_result.as_ref(py);
-        let course_name = dict.get_item("course_name").unwrap();
+        let obj = py_result.as_ref(py);
+        let course_name = obj.getattr("course_name").unwrap();
         assert_eq!(course_name.extract::<String>().unwrap(), "CALCULO AVANZADO");
 
-        let credits = dict.get_item("credits").unwrap();
+        let credits = obj.getattr("credits").unwrap();
         assert_eq!(credits.extract::<i32>().unwrap(), 4);
 
-        let conditions = dict.get_item("conditions").unwrap();
+        let conditions = obj.getattr("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
         assert!(!conditions_list.is_empty());
     });
@@ -502,32 +502,32 @@ fn test_parse_prereqs_xml_extracts_nested_header_values() {
 
     Python::with_gil(|py| {
         let result = parse_prereqs(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let conditions = dict.get_item("conditions").unwrap();
+        let obj = result.as_ref(py);
+        let conditions = obj.getattr("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
         assert_eq!(conditions_list.len(), 1);
 
         let cond = conditions_list[0].as_ref(py);
         assert_eq!(
-            cond.get_item("condition")
+            cond.getattr("condition")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
             "1"
         );
         assert_eq!(
-            cond.get_item("type").unwrap().extract::<String>().unwrap(),
+            cond.getattr("type").unwrap().extract::<String>().unwrap(),
             "M"
         );
         assert_eq!(
-            cond.get_item("all_required")
+            cond.getattr("all_required")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
             "N"
         );
         assert_eq!(
-            cond.get_item("number_of_courses")
+            cond.getattr("number_of_courses")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
@@ -567,32 +567,32 @@ fn test_parse_prereqs_xml_extracts_sibling_header_values() {
 
     Python::with_gil(|py| {
         let result = parse_prereqs(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let conditions = dict.get_item("conditions").unwrap();
+        let obj = result.as_ref(py);
+        let conditions = obj.getattr("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
         assert_eq!(conditions_list.len(), 1);
 
         let cond = conditions_list[0].as_ref(py);
         assert_eq!(
-            cond.get_item("condition")
+            cond.getattr("condition")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
             "2"
         );
         assert_eq!(
-            cond.get_item("type").unwrap().extract::<String>().unwrap(),
+            cond.getattr("type").unwrap().extract::<String>().unwrap(),
             "O"
         );
         assert_eq!(
-            cond.get_item("all_required")
+            cond.getattr("all_required")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
             "S"
         );
         assert_eq!(
-            cond.get_item("number_of_courses")
+            cond.getattr("number_of_courses")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
@@ -618,8 +618,8 @@ fn test_parse_prereqs_xml_no_conditions() {
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
-        let dict = py_result.as_ref(py);
-        let conditions = dict.get_item("conditions").unwrap();
+        let obj = py_result.as_ref(py);
+        let conditions = obj.getattr("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
         assert_eq!(conditions_list.len(), 0);
     });
@@ -641,8 +641,8 @@ fn test_parse_prereqs_xml_typology_defaults_to_unknown() {
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
-        let dict = py_result.as_ref(py);
-        let typology = dict.get_item("typology").unwrap();
+        let obj = py_result.as_ref(py);
+        let typology = obj.getattr("typology").unwrap();
         assert_eq!(typology.extract::<String>().unwrap(), "Unknown");
     });
 }
@@ -669,8 +669,8 @@ fn test_parse_prereqs_xml_skips_condition_with_too_few_subdivs() {
 
     Python::with_gil(|py| {
         let result = parse_prereqs(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let conditions = dict.get_item("conditions").unwrap();
+        let obj = result.as_ref(py);
+        let conditions = obj.getattr("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
         assert!(conditions_list.is_empty());
     });
@@ -737,13 +737,13 @@ fn test_parse_prereqs_xml_fills_missing_header_values_with_empty_string() {
 
     Python::with_gil(|py| {
         let result = parse_prereqs(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let conditions = dict.get_item("conditions").unwrap();
+        let obj = result.as_ref(py);
+        let conditions = obj.getattr("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
         assert_eq!(conditions_list.len(), 1);
 
         let cond = conditions_list[0].as_ref(py);
-        let number_of_courses = cond.get_item("number_of_courses").unwrap();
+        let number_of_courses = cond.getattr("number_of_courses").unwrap();
         assert_eq!(number_of_courses.extract::<String>().unwrap(), "0");
     });
 }
@@ -779,13 +779,13 @@ fn test_parse_prereqs_xml_skips_prereq_row_with_few_spans() {
 
     Python::with_gil(|py| {
         let result = parse_prereqs(py, xml).unwrap();
-        let dict = result.as_ref(py);
-        let conditions = dict.get_item("conditions").unwrap();
+        let obj = result.as_ref(py);
+        let conditions = obj.getattr("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
         assert_eq!(conditions_list.len(), 1);
 
         let cond = conditions_list[0].as_ref(py);
-        let prereqs = cond.get_item("prerequisites").unwrap();
+        let prereqs = cond.getattr("prerequisites").unwrap();
         let prereq_list: Vec<pyo3::Py<pyo3::types::PyAny>> = prereqs.extract().unwrap();
         assert!(prereq_list.is_empty());
     });
