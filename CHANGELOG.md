@@ -171,6 +171,15 @@ This alpha release marks the completion of Phase 6 of the Rust migration plan, i
 
 - **Direct Rust model return path**: Rust structs exposed directly to Python via `#[pyclass]`, reducing FFI overhead
 
+### Phase 7 Complete: Unified HTTP + Parse Pipeline
+
+- **Zero-copy scraping**: `scrape_course_info()` and `scrape_course_prereqs()` perform HTTP fetch + parsing entirely in Rust
+- **No XML crossing FFI**: Raw HTML/XML never copied to Python heap - stays in Rust throughout
+- **Unified pipeline**: Single async call for complete HTTP+parse workflow (was fetch→parse before)
+- **Session persistence**: Full save/restore via `get_session_data()` and `from_state()`
+- **Integration tests**: Added `tests/integration/test_phase7_workflow.py` with real SIA server tests
+- **Phase 7 benchmark**: Added `benchmarks/benchmark_phase7.py` documenting unified pipeline performance
+
 ### Deprecated
 
 - `sia_scraper.models` module - will be removed in v3.1.0 final release
