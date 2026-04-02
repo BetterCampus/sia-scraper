@@ -164,7 +164,6 @@ This alpha release marks the completion of Phase 6 of the Rust migration plan, i
 ### Performance
 
 - **Direct Rust model return path**: Rust structs exposed directly to Python via `#[pyclass]`, reducing FFI overhead
-- Baseline benchmark results (`scrape_info`): ~7.14ms (Python/lxml)
 
 ### Deprecated
 
