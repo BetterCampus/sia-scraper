@@ -581,6 +581,11 @@ pub fn parse_course_model_json(xml: &str) -> Result<String, SiaScraperError> {
         .map_err(|e| SiaScraperError::ParseError(format!("Course JSON serialization failed: {e}")))
 }
 
+/// Parse comprehensive course information and return a typed Rust model.
+pub fn parse_course_model_typed(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
+    parse_course_model(xml)
+}
+
 /// Parse comprehensive course information from Oracle ADF course detail page.
 pub fn parse_course_xml(xml: &str, py: Python<'_>) -> Result<Py<PyAny>, SiaScraperError> {
     let model = parse_course_model(xml)?;
@@ -769,6 +774,11 @@ pub fn parse_prereqs_model_json(xml: &str) -> Result<String, SiaScraperError> {
     let model = parse_prereqs_model(xml)?;
     serde_json::to_string(&model)
         .map_err(|e| SiaScraperError::ParseError(format!("Prereqs JSON serialization failed: {e}")))
+}
+
+/// Parse prerequisite information and return a typed Rust model.
+pub fn parse_prereqs_model_typed(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
+    parse_prereqs_model(xml)
 }
 
 /// Parse course prerequisites and enrollment conditions from Oracle ADF XML.
