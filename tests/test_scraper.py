@@ -358,33 +358,36 @@ class TestSiaScraperScrapeCoursesEdgeCases:
     @pytest.mark.asyncio
     async def test_scrape_courses_with_progress_callback(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
+        mock_session = _mock_session(scraper)
 
-        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
-            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
-                course_name="CURSO X",
+        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
+            return sia_scraper_rust.CourseInfoModel(
+                course_name=f"Course {index}",
                 credits=3,
-                typology="DISCIPLINAR OBLIGATORIA",
+                typology="DISCIPLINAR",
                 available_spots=20,
                 scrape_timestamp="2024-01-01 12:00",
                 groups=[],
                 code=None,
             )
 
-            progress_calls = []
+        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
 
-            def progress_callback(current, total, successes, failures):
-                progress_calls.append((current, total, successes, failures))
+        progress_calls = []
 
-            await scraper.scrape_courses(
-                courses_indices=[0, 1],
-                courses_codes=["A", "B"],
-                error_mode=ErrorMode.SKIP,
-                progress_callback=progress_callback,
-            )
+        def progress_callback(current, total, successes, failures):
+            progress_calls.append((current, total, successes, failures))
 
-            assert len(progress_calls) == 2
-            assert progress_calls[0] == (1, 2, 1, 0)
-            assert progress_calls[1] == (2, 2, 2, 0)
+        await scraper.scrape_courses(
+            courses_indices=[0, 1],
+            courses_codes=["A", "B"],
+            error_mode=ErrorMode.SKIP,
+            progress_callback=progress_callback,
+        )
+
+        assert len(progress_calls) == 2
+        assert progress_calls[0] == (1, 2, 1, 0)
+        assert progress_calls[1] == (2, 2, 2, 0)
 
     @pytest.mark.asyncio
     async def test_scrape_courses_with_codes_only(self, mock_async_session_class):
@@ -393,9 +396,9 @@ class TestSiaScraperScrapeCoursesEdgeCases:
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
         mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
 
-        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
-            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
-                course_name="CURSO X",
+        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
+            return sia_scraper_rust.CourseInfoModel(
+                course_name=f"Course {index}",
                 credits=3,
                 typology="DISCIPLINAR OBLIGATORIA",
                 available_spots=20,
@@ -404,13 +407,15 @@ class TestSiaScraperScrapeCoursesEdgeCases:
                 code=None,
             )
 
-            out = await scraper.scrape_courses(
-                courses_codes=["1000001"],
-                error_mode=ErrorMode.ABORT,
-            )
+        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
 
-            assert isinstance(out, list)
-            assert len(out) == 1
+        out = await scraper.scrape_courses(
+            courses_codes=["1000001"],
+            error_mode=ErrorMode.ABORT,
+        )
+
+        assert isinstance(out, list)
+        assert len(out) == 1
 
 
 @pytest.mark.unit
