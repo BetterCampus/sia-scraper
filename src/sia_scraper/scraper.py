@@ -74,13 +74,12 @@ class SiaScraper:
         self, session_data: dict[str, object] | sia_scraper_rust.SessionStateModel
     ) -> "SiaScraper":
         """Restore lightweight async session state from serialized data."""
-        type_name = type(session_data).__name__
-        if type_name == "SessionStateModel":
-            state = session_data  # type: ignore[assignment]
-            self._load_session_from_model(state)
-            return self
-        data_dict = session_data  # type: ignore[assignment]
-        return self.load_session_dict(data_dict)
+        if isinstance(session_data, dict):
+            return self.load_session_dict(session_data)
+
+        # Handle Rust SessionStateModel
+        self._load_session_from_model(session_data)
+        return self
 
     def _load_session_from_model(self, state: sia_scraper_rust.SessionStateModel) -> None:
         """Load session from typed Rust model."""
