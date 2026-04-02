@@ -33,12 +33,12 @@ mod tests;
 /// * `xml` - Raw XML/HTML string from SIA course detail page
 ///
 /// # Returns
-/// Python dictionary containing:
+/// `CourseInfoModel` instance with attributes:
 /// - `course_name`: Course title string
 /// - `credits`: Credit hours as integer
 /// - `typology`: Course typology string
 /// - `available_spots`: Total available spots across all groups
-/// - `groups`: List of group dictionaries with schedules
+/// - `groups`: List of `GroupModel` instances with schedules
 /// - `scrape_timestamp`: Timestamp string
 /// - `code`: Course code (None for now)
 ///
@@ -49,7 +49,7 @@ mod tests;
 /// ```python
 /// import sia_scraper_rust
 /// result = sia_scraper_rust.parse_course_info(xml_string)
-/// print(result["course_name"])  # "CALCULO AVANZADO"
+/// print(result.course_name)  # "CALCULO AVANZADO"
 /// ```
 #[pyfunction]
 fn parse_course_info(
@@ -100,12 +100,12 @@ fn extract_view_state(html: &str) -> Result<String, error::SiaScraperError> {
 /// * `xml` - Raw XML/HTML string from SIA course prerequisites page
 ///
 /// # Returns
-/// Python dictionary containing:
+/// `CoursePrereqsModel` instance with attributes:
 /// - `course_name`: Course title string
 /// - `code`: Course code (None for now)
 /// - `credits`: Credit hours as integer
 /// - `typology`: Course typology string
-/// - `conditions`: List of prerequisite condition dictionaries
+/// - `conditions`: List of `PrereqConditionModel` instances
 ///
 /// # Errors
 /// Returns `SiaScraperError` if course name or credits not found
@@ -114,7 +114,7 @@ fn extract_view_state(html: &str) -> Result<String, error::SiaScraperError> {
 /// ```python
 /// import sia_scraper_rust
 /// result = sia_scraper_rust.parse_prereqs(xml_string)
-/// print(len(result["conditions"]))  # Number of prerequisite conditions
+/// print(len(result.conditions))  # Number of prerequisite conditions
 /// ```
 #[pyfunction]
 fn parse_prereqs(
