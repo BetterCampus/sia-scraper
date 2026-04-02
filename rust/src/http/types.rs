@@ -36,9 +36,9 @@ impl HttpResponse {
 
     pub fn raise_for_status(&self) -> Result<(), crate::http::errors::HttpError> {
         if self.status >= 400 {
-            return Err(crate::http::errors::HttpError::HttpStatus {
+            return Err(crate::http::errors::HttpError::HttpStatusError {
                 status: self.status,
-                url: Some(self.url.clone()),
+                message: self.url.clone(),
             });
         }
         Ok(())
