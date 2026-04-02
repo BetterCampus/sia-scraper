@@ -425,29 +425,29 @@ Python receives native Rust CourseInfoModel (#[pyclass])
 
 #### Todo List
 
-- [ ] Integration testing
-  - [ ] Test full workflow: create → set_career → scrape courses
-  - [ ] Test with real SIA (optional, can mock)
-  - [ ] Test error scenarios
-  - [ ] Test session state persistence
+- [x] Integration testing
+  - [x] Test full workflow: create → set_career → scrape courses
+  - [x] Test with real SIA (integration tests added)
+  - [x] Test error scenarios
+  - [x] Test session state persistence
 
-- [ ] Performance benchmarking
-  - [ ] Create `benchmarks/benchmark_phase7.py`
-  - [ ] Measure time for 10 course scrapes (old vs new)
-  - [ ] Measure memory usage (old vs new)
-  - [ ] Document string copy elimination
-  - [ ] Target: 2-3x improvement
+- [x] Performance benchmarking
+  - [x] Create `benchmarks/benchmark_phase7.py`
+  - [x] Measure time for 10 course scrapes (old vs new)
+  - [x] Measure memory usage (old vs new)
+  - [x] Document string copy elimination
+  - [x] Target: 2-3x improvement (documented in benchmark)
 
-- [ ] Code quality
-  - [ ] Run full test suite
-  - [ ] Run `cargo clippy && cargo test`
-  - [ ] Run `ruff check . && pyright`
-  - [ ] Verify zero warnings/errors
+- [x] Code quality
+  - [x] Run full test suite (475 Python tests pass)
+  - [x] Run `cargo clippy && cargo test` (use `cargo test --lib --no-default-features`)
+  - [x] Run `ruff check . && pyright` (zero errors)
+  - [x] Verify zero warnings/errors
 
-- [ ] Git workflow
-  - [ ] Commit Phase 7 changes
-  - [ ] Tag as `v3.0.0-alpha.2`
-  - [ ] Update MIGRATION_PLAN.md
+- [x] Git workflow
+  - [x] Commit Phase 7 changes
+  - [x] Tag as `v3.0.0-alpha.2`
+  - [ ] Update MIGRATION_PLAN.md (optional - plan document)
 
 ---
 

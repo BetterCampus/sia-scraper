@@ -29,7 +29,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist
+          args: --release --out dist --no-default-features
           manylinux: auto
 
       - name: Smoke test built wheel
