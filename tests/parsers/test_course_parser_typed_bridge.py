@@ -1,4 +1,6 @@
-"""Tests for typed Rust JSON bridge parser endpoint."""
+"""Tests for typed Rust PyClass bridge parser endpoint."""
+
+from unittest.mock import patch
 
 import pytest
 
@@ -40,3 +42,34 @@ class TestTypedCourseBridge:
         assert "teacher" in error_msg.lower()
         assert "html snippet" in error_msg.lower()
         assert "stack" in error_msg.lower()
+
+    def test_scrape_info_typed_uses_pyclass_endpoint_not_json(self):
+        payload = {
+            "course_name": "CALCULO",
+            "credits": 4,
+            "typology": "DISCIPLINAR OBLIGATORIA",
+            "available_spots": 0,
+            "scrape_timestamp": "2026-04-02 10:00",
+            "groups": [],
+            "code": None,
+        }
+
+        with (
+            patch(
+                "sia_scraper.parsers.course_parser.sia_scraper_rust.parse_course_info"
+            ) as mock_parse,
+            patch(
+                "sia_scraper.parsers.course_parser._course_model_to_payload",
+                return_value=payload,
+            ) as mock_payload,
+            patch(
+                "sia_scraper.parsers.course_parser.sia_scraper_rust.parse_course_info_json"
+            ) as mock_json,
+        ):
+            mock_parse.return_value = object()
+            result = scrape_info_typed("<xml/>")
+
+        assert isinstance(result, CourseInfoTyped)
+        mock_parse.assert_called_once_with("<xml/>")
+        mock_payload.assert_called_once()
+        mock_json.assert_not_called()

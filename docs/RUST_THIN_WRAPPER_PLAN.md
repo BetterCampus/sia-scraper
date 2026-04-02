@@ -181,23 +181,28 @@ Python receives native Rust CourseInfoModel (#[pyclass])
 
 #### Todo List
 
-- [ ] Update `rust/src/parsers/course_parser.rs`
-  - [ ] Change `parse_course_model_json()` to `parse_course_model()` returning `CourseInfoModel`
-  - [ ] Change `parse_prereqs_model_json()` to `parse_prereqs_model()` returning `CoursePrereqsModel`
-  - [ ] Remove JSON serialization logic
-  - [ ] Return structs directly
-  - [ ] Update error handling to use `SiaScraperError`
+- [x] Update `rust/src/parsers/course_parser.rs`
+  - [x] Promote `parse_course_model()` as public typed parser returning `CourseInfoModel`
+  - [x] Promote `parse_prereqs_model()` as public typed parser returning `CoursePrereqsModel`
+  - [x] Remove parser-layer JSON helper variants (`parse_*_model_json`)
+  - [x] Return structs directly from parser layer
+  - [x] Keep parser errors on `SiaScraperError`
 
-- [ ] Update `rust/src/lib.rs`
-  - [ ] Change `parse_course_info()` signature to `fn parse_course_info(xml: &str) -> PyResult<CourseInfoModel>`
-  - [ ] Change `parse_prereqs()` signature to `fn parse_prereqs(xml: &str) -> PyResult<CoursePrereqsModel>`
-  - [ ] Remove `_json` variants
-  - [ ] Update error conversion
+- [x] Update `rust/src/lib.rs`
+  - [x] Route `parse_course_info()` through `parse_course_model()` typed path
+  - [x] Route `parse_prereqs()` through `parse_prereqs_model()` typed path
+  - [x] Keep `_json` variants for compatibility, but deprecate with `DeprecationWarning`
+  - [x] Keep JSON serialization only at FFI boundary for deprecated endpoints
 
-- [ ] Test parser changes
-  - [ ] Run Rust parser tests
-  - [ ] Verify output types
-  - [ ] Test error cases
+- [x] Update Python typed bridge to consume PyClass models directly
+  - [x] Switch `scrape_info_typed()` from `parse_course_info_json()` to `parse_course_info()`
+  - [x] Switch `scrape_prereqs_typed()` from `parse_prereqs_json()` to `parse_prereqs()`
+  - [x] Add PyClass-to-Pydantic payload conversion helpers
+
+- [x] Test parser changes
+  - [x] Run targeted parser/parity pytest suites
+  - [x] Verify typed output parity from direct PyClass models
+  - [x] Add tests for deprecated JSON endpoints and warning behavior
 
 ### Task 6.4: Deprecate Python Pydantic Models
 

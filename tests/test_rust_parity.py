@@ -3,20 +3,35 @@
 from typing import cast
 
 import pytest
-from pydantic import ValidationError
 
+import sia_scraper_rust
 from sia_scraper.constants import business
 from sia_scraper.core.adf_state import extract_view_state as python_extract_view_state
+from sia_scraper.models.course import CourseInfoTyped
 from sia_scraper.models.prerequisite import CoursePrereqsTyped
 from sia_scraper.parsers.course_parser import scrape_info as python_scrape_info
 from sia_scraper.parsers.course_parser import scrape_prereqs as python_scrape_prereqs
-from sia_scraper_rust import extract_view_state as rust_extract_view_state
-from sia_scraper_rust import parse_course_info as rust_parse_course_info
-from sia_scraper_rust import parse_prereqs as rust_parse_prereqs
-from sia_scraper_rust import parse_prereqs_json as rust_parse_prereqs_json
+from sia_scraper_rust import (
+    SiaScraperException,
+)
+from sia_scraper_rust import (
+    extract_view_state as rust_extract_view_state,
+)
+from sia_scraper_rust import (
+    parse_course_info as rust_parse_course_info,
+)
+from sia_scraper_rust import (
+    parse_course_info_json as rust_parse_course_info_json,
+)
+from sia_scraper_rust import (
+    parse_prereqs as rust_parse_prereqs,
+)
+from sia_scraper_rust import (
+    parse_prereqs_json as rust_parse_prereqs_json,
+)
 
 
-def _course_to_dict(course: object) -> dict[str, object]:
+def _course_to_dict(course: sia_scraper_rust.CourseInfoModel) -> dict[str, object]:
     return {
         "course_name": course.course_name,
         "credits": course.credits,
@@ -47,7 +62,7 @@ def _course_to_dict(course: object) -> dict[str, object]:
     }
 
 
-def _prereqs_to_dict(prereqs: object) -> dict[str, object]:
+def _prereqs_to_dict(prereqs: sia_scraper_rust.CoursePrereqsModel) -> dict[str, object]:
     return {
         "course_name": prereqs.course_name,
         "credits": prereqs.credits,
@@ -174,18 +189,48 @@ class TestParsePrereqsParity:
         assert bool(rust_condition["all_required"]) is python_condition.all_required
         assert int(rust_num_courses) == python_condition.number_of_courses
 
-    def test_typed_prereqs_json_parity(self, sia_course_prereqs_xml):
-        rust_json = rust_parse_prereqs_json(sia_course_prereqs_xml)
-        typed = CoursePrereqsTyped.model_validate_json(rust_json)
+    def test_typed_prereqs_model_parity(self, sia_course_prereqs_xml):
+        rust_model = rust_parse_prereqs(sia_course_prereqs_xml)
+        typed = CoursePrereqsTyped.model_validate(_prereqs_to_dict(rust_model))
         python_result = python_scrape_prereqs(sia_course_prereqs_xml)
 
         assert typed.course_name == python_result.course_name
         assert typed.credits == python_result.credits
         assert len(typed.conditions) == len(python_result.conditions)
 
-    def test_typed_prereqs_json_invalid_raises(self):
-        with pytest.raises((ValidationError, Exception)):  # noqa: B017 - PyO3 runtime exception path
-            CoursePrereqsTyped.model_validate_json(rust_parse_prereqs_json("<div></div>"))
+    def test_typed_prereqs_model_invalid_raises(self):
+        with pytest.raises(SiaScraperException) as exc_info:
+            rust_parse_prereqs("<div></div>")
+
+        error_msg = str(exc_info.value).lower()
+        assert "course_name" in error_msg
+        assert "parse failure" in error_msg or "html snippet" in error_msg
+
+
+class TestDeprecatedJsonParsers:
+    """Ensure deprecated JSON parser endpoints still behave as documented."""
+
+    def test_parse_course_info_json_warns_and_matches_typed_contract(self, sia_course_detail_xml):
+        with pytest.warns(DeprecationWarning):
+            rust_json = rust_parse_course_info_json(sia_course_detail_xml)
+
+        typed = CourseInfoTyped.model_validate_json(rust_json)
+        rust_model = rust_parse_course_info(sia_course_detail_xml)
+        rust_dict = _course_to_dict(rust_model)
+
+        assert typed.course_name == rust_dict["course_name"]
+        assert typed.credits == rust_dict["credits"]
+
+    def test_parse_prereqs_json_warns_and_matches_typed_contract(self, sia_course_prereqs_xml):
+        with pytest.warns(DeprecationWarning):
+            rust_json = rust_parse_prereqs_json(sia_course_prereqs_xml)
+
+        typed = CoursePrereqsTyped.model_validate_json(rust_json)
+        rust_model = rust_parse_prereqs(sia_course_prereqs_xml)
+        rust_dict = _prereqs_to_dict(rust_model)
+
+        assert typed.course_name == rust_dict["course_name"]
+        assert typed.credits == rust_dict["credits"]
 
 
 class TestRustErrors:

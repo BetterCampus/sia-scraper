@@ -466,7 +466,7 @@ fn extract_groups(root: &Html, course_name: &str) -> Result<Vec<GroupModel>, Sia
 }
 
 #[cfg(all(feature = "fail-fast", not(feature = "full-error-collection")))]
-fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
+pub fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let document = Html::parse_document(xml);
     let h2_elems = css_select_html(&document, &H2_SELECTOR)?;
     let course_name = h2_elems
@@ -499,7 +499,7 @@ fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
 }
 
 #[cfg(any(not(feature = "fail-fast"), feature = "full-error-collection"))]
-fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
+pub fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     let document = Html::parse_document(xml);
     let mut errors: Vec<SiaScraperError> = Vec::new();
 
@@ -571,19 +571,7 @@ fn parse_course_model(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
     })
 }
 
-/// Parse comprehensive course information from Oracle ADF course detail page and return JSON.
-pub fn parse_course_model_json(xml: &str) -> Result<String, SiaScraperError> {
-    let model = parse_course_model(xml)?;
-    serde_json::to_string(&model)
-        .map_err(|e| SiaScraperError::ParseError(format!("Course JSON serialization failed: {e}")))
-}
-
-/// Parse comprehensive course information and return a typed Rust model.
-pub fn parse_course_model_typed(xml: &str) -> Result<CourseInfoModel, SiaScraperError> {
-    parse_course_model(xml)
-}
-
-fn parse_prereqs_model(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
+pub fn parse_prereqs_model(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
     let document = Html::parse_document(xml);
 
     let h2_elems = css_select_html(&document, &H2_SELECTOR)?;
@@ -719,16 +707,4 @@ fn parse_prereqs_model(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError>
         typology,
         conditions,
     })
-}
-
-/// Parse prerequisite information and return typed JSON.
-pub fn parse_prereqs_model_json(xml: &str) -> Result<String, SiaScraperError> {
-    let model = parse_prereqs_model(xml)?;
-    serde_json::to_string(&model)
-        .map_err(|e| SiaScraperError::ParseError(format!("Prereqs JSON serialization failed: {e}")))
-}
-
-/// Parse prerequisite information and return a typed Rust model.
-pub fn parse_prereqs_model_typed(xml: &str) -> Result<CoursePrereqsModel, SiaScraperError> {
-    parse_prereqs_model(xml)
 }
