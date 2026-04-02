@@ -23,10 +23,10 @@ except ModuleNotFoundError as exc:  # pragma: no cover - runtime dependency mess
         "pip install -e '.[dev]'"
     ) from exc
 
+import sia_scraper_rust
 from sia_scraper import SiaScraper
 from sia_scraper.constants import SIA_BASE_URL
 from sia_scraper.core import SiaSessionException
-from sia_scraper.parsers import scrape_info, scrape_prereqs
 
 
 @dataclass(frozen=True)
@@ -263,8 +263,9 @@ async def capture_timeout_error(config: CaptureConfig, replacements: dict[str, s
     timeout_scraper = SiaScraper(timeout=1, init_session=False)
     try:
         await timeout_scraper.create_session()
-        await timeout_scraper.sia_session.get_course_xml(0)
-        return "<html><body>No timeout error captured.</body></html>"
+        await timeout_scraper.set_career("0-2-8-3")
+        course = await timeout_scraper.sia_session.scrape_course_info(0)
+        return f"<html><body>No timeout error captured. Course: {course.course_name}</body></html>"
     except Exception as exc:  # pragma: no cover - depends on runtime network
         html = (
             "<html><body>"
@@ -306,49 +307,32 @@ async def capture_adf_error_response(config: CaptureConfig, replacements: dict[s
 
 
 def build_parser_baseline_payload(
-    course_detail_xml_candidates: list[str],
-    prereqs_xml_candidates: list[str],
+    course_models: list[sia_scraper_rust.CourseInfoModel],
+    prereqs_model: sia_scraper_rust.CoursePrereqsModel | None,
     regular_courses: list[dict[str, str]],
 ) -> dict[str, object] | None:
-    """Build parser regression baseline payload from captured fixture content."""
+    """Build parser regression baseline payload from captured model content."""
 
-    parsed_info = None
-    for xml in course_detail_xml_candidates:
-        try:
-            parsed_info = scrape_info(xml)
-            break
-        except ValueError:
-            continue
-
-    if parsed_info is None:
+    if not course_models:
         return None
 
-    parsed_prereqs = None
-    for xml in prereqs_xml_candidates:
-        try:
-            parsed_prereqs = scrape_prereqs(xml)
-            break
-        except ValueError:
-            continue
+    first_course = course_models[0]
+    first_group = first_course.groups[0] if first_course.groups else None
 
-    if parsed_prereqs is None:
-        return None
-
-    first_group = parsed_info.groups[0] if parsed_info.groups else None
-    first_condition = parsed_prereqs.conditions[0] if parsed_prereqs.conditions else None
-    first_prerequisite = (
-        first_condition.prerequisites[0]
-        if first_condition is not None and first_condition.prerequisites
-        else None
-    )
+    first_condition = None
+    first_prerequisite = None
+    if prereqs_model is not None and prereqs_model.conditions:
+        first_condition = prereqs_model.conditions[0]
+        if first_condition.prerequisites:
+            first_prerequisite = first_condition.prerequisites[0]
 
     return {
         "course_info": {
-            "course_name": parsed_info.course_name,
-            "credits": parsed_info.credits,
-            "typology": parsed_info.typology,
-            "groups_count": len(parsed_info.groups),
-            "available_spots": parsed_info.available_spots,
+            "course_name": first_course.course_name,
+            "credits": first_course.credits,
+            "typology": first_course.typology,
+            "groups_count": len(first_course.groups),
+            "available_spots": first_course.available_spots,
             "first_group": {
                 "group_name": first_group.group_name if first_group is not None else "",
                 "teacher": first_group.teacher if first_group is not None else "",
@@ -357,17 +341,19 @@ def build_parser_baseline_payload(
             },
         },
         "course_prereqs": {
-            "course_name": parsed_prereqs.course_name,
-            "code": parsed_prereqs.code,
-            "credits": parsed_prereqs.credits,
-            "typology": parsed_prereqs.typology,
-            "conditions_count": len(parsed_prereqs.conditions),
+            "course_name": prereqs_model.course_name if prereqs_model is not None else "",
+            "code": prereqs_model.code if prereqs_model is not None else "",
+            "credits": prereqs_model.credits if prereqs_model is not None else 0,
+            "typology": prereqs_model.typology if prereqs_model is not None else "",
+            "conditions_count": len(prereqs_model.conditions) if prereqs_model is not None else 0,
             "first_condition": {
-                "condition": first_condition.condition if first_condition is not None else "",
-                "type": first_condition.type if first_condition is not None else "",
-                "all_required": first_condition.all_required if first_condition is not None else "",
+                "condition": str(first_condition.condition) if first_condition is not None else "",
+                "type": first_condition.prereq_type if first_condition is not None else "",
+                "all_required": str(first_condition.all_required)
+                if first_condition is not None
+                else "",
                 "number_of_courses": (
-                    first_condition.number_of_courses if first_condition is not None else ""
+                    str(first_condition.number_of_courses) if first_condition is not None else ""
                 ),
                 "prerequisites_count": (
                     len(first_condition.prerequisites) if first_condition is not None else 0
@@ -472,41 +458,105 @@ async def main() -> int:
         )
 
         regular_capture_count = min(config.num_regular_courses, len(regular_courses))
-        regular_course_xmls: list[str] = []
+        regular_course_models: list[sia_scraper_rust.CourseInfoModel] = []
         for idx in range(regular_capture_count):
-            xml = await scraper.sia_session.get_course_xml(idx)
-            xml = sanitize_text(xml, replacements, config.sanitization_enabled)
-            regular_course_xmls.append(xml)
+            course = await scraper.sia_session.scrape_course_info(idx)
+            regular_course_models.append(course)
+            course_dict = {
+                "course_name": course.course_name,
+                "code": course.code,
+                "credits": course.credits,
+                "typology": course.typology,
+                "available_spots": course.available_spots,
+                "scrape_timestamp": course.scrape_timestamp,
+                "groups": [
+                    {
+                        "group_name": g.group_name,
+                        "teacher": g.teacher,
+                        "schedules": [
+                            {
+                                "day": s.day,
+                                "start_time": s.start_time,
+                                "end_time": s.end_time,
+                                "classroom": s.classroom,
+                            }
+                            for s in g.schedules
+                        ],
+                        "spots": g.spots,
+                    }
+                    for g in course.groups
+                ],
+            }
             generated_files.append(
-                write_fixture(
-                    target_dir=fixtures_root / "xml",
+                save_json_fixture(
+                    target_dir=fixtures_root / "json",
                     base_name=f"course_detail_{idx}",
-                    extension="xml",
-                    content=xml,
+                    payload=course_dict,
                     include_timestamp=config.include_timestamp,
                     keep_only_latest=config.keep_only_latest,
                 )
             )
 
-        prereqs_xml: str | None = None
+        prereqs_model: sia_scraper_rust.CoursePrereqsModel | None = None
         for idx in range(regular_capture_count):
             try:
-                prereqs_xml = await scraper.sia_session.get_course_xml(idx)
-                await scraper.get_course_prereqs(course_index=idx)
+                prereqs_model = await scraper.sia_session.scrape_course_prereqs(idx)
                 break
             except ValueError:
                 continue
 
-        prereqs_xml_candidates = [*regular_course_xmls]
-        if prereqs_xml is not None:
-            prereqs_xml = sanitize_text(prereqs_xml, replacements, config.sanitization_enabled)
-            prereqs_xml_candidates.insert(0, prereqs_xml)
+        prereqs_candidates: list[dict[str, Any]] = [
+            {
+                "course_name": c.course_name,
+                "code": c.code,
+                "credits": c.credits,
+                "typology": c.typology,
+                "groups": [
+                    {
+                        "group_name": g.group_name,
+                        "teacher": g.teacher,
+                        "schedules": [
+                            {
+                                "day": s.day,
+                                "start_time": s.start_time,
+                                "end_time": s.end_time,
+                                "classroom": s.classroom,
+                            }
+                            for s in g.schedules
+                        ],
+                        "spots": g.spots,
+                    }
+                    for g in c.groups
+                ],
+            }
+            for c in regular_course_models
+        ]
+        if prereqs_model is not None:
+            prereqs_dict = {
+                "course_name": prereqs_model.course_name,
+                "code": prereqs_model.code,
+                "credits": prereqs_model.credits,
+                "typology": prereqs_model.typology,
+                "conditions": [
+                    {
+                        "condition": c.condition,
+                        "number_of_courses": c.number_of_courses,
+                        "all_required": c.all_required,
+                        "prereq_type": c.prereq_type,
+                        "prerequisites": [
+                            {"course_code": p.course_code, "course_name": p.course_name}
+                            for p in c.prerequisites
+                        ],
+                    }
+                    for c in prereqs_model.conditions
+                ],
+            }
+            prereqs_candidates.insert(0, prereqs_dict)
             generated_files.append(
-                write_fixture(
-                    target_dir=fixtures_root / "xml",
+                save_json_fixture(
+                    target_dir=fixtures_root / "json",
                     base_name="course_prereqs",
-                    extension="xml",
-                    content=prereqs_xml,
+                    payload=prereqs_dict,
                     include_timestamp=config.include_timestamp,
                     keep_only_latest=config.keep_only_latest,
                 )
@@ -551,14 +601,37 @@ async def main() -> int:
 
                 elective_capture_count = min(config.num_elective_courses, len(elective_courses))
                 for idx in range(elective_capture_count):
-                    xml = await elective_scraper.sia_session.get_course_xml(idx)
-                    xml = sanitize_text(xml, elective_replacements, config.sanitization_enabled)
+                    course = await elective_scraper.sia_session.scrape_course_info(idx)
+                    course_dict = {
+                        "course_name": course.course_name,
+                        "code": course.code,
+                        "credits": course.credits,
+                        "typology": course.typology,
+                        "available_spots": course.available_spots,
+                        "scrape_timestamp": course.scrape_timestamp,
+                        "groups": [
+                            {
+                                "group_name": g.group_name,
+                                "teacher": g.teacher,
+                                "schedules": [
+                                    {
+                                        "day": s.day,
+                                        "start_time": s.start_time,
+                                        "end_time": s.end_time,
+                                        "classroom": s.classroom,
+                                    }
+                                    for s in g.schedules
+                                ],
+                                "spots": g.spots,
+                            }
+                            for g in course.groups
+                        ],
+                    }
                     generated_files.append(
-                        write_fixture(
-                            target_dir=fixtures_root / "xml",
+                        save_json_fixture(
+                            target_dir=fixtures_root / "json",
                             base_name=f"course_elective_{idx}",
-                            extension="xml",
-                            content=xml,
+                            payload=course_dict,
                             include_timestamp=config.include_timestamp,
                             keep_only_latest=config.keep_only_latest,
                         )
@@ -625,8 +698,8 @@ async def main() -> int:
             )
 
         baseline_payload = build_parser_baseline_payload(
-            course_detail_xml_candidates=regular_course_xmls,
-            prereqs_xml_candidates=prereqs_xml_candidates,
+            course_models=regular_course_models,
+            prereqs_model=prereqs_model,
             regular_courses=regular_courses,
         )
         if baseline_payload is not None:

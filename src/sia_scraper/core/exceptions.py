@@ -73,15 +73,15 @@ class ConcurrentAccessError(SiaSessionException):
         >>> session = await SiaSession.create()
         >>> await session.set_career("0-2-8-3")
         >>> # This will raise ConcurrentAccessError:
-        >>> task1 = asyncio.create_task(session.get_course_xml(0))
+        >>> task1 = asyncio.create_task(session.scrape_course_info(0))
         >>> task2 = asyncio.create_task(session.set_career("1-2-3-4"))
         >>> await asyncio.gather(task1, task2)  # ERROR!
 
     Example of VALID usage:
         >>> session = await SiaSession.create()
         >>> await session.set_career("0-2-8-3")
-        >>> xml1 = await session.get_course_xml(0)  # Sequential - OK
-        >>> xml2 = await session.get_course_xml(1)  # Sequential - OK
+        >>> course1 = await session.scrape_course_info(0)  # Sequential - OK
+        >>> course2 = await session.scrape_course_info(1)  # Sequential - OK
     """
 
     def __init__(self, active_op: str, attempted_op: str) -> None:
