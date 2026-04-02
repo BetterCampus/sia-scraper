@@ -777,4 +777,68 @@ mod tests {
         let err = result.unwrap_err();
         assert!(err.to_string().contains("out of range"));
     }
+
+    #[tokio::test]
+    async fn test_scrape_course_info_rejects_negative_index() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![
+                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+            ];
+        }
+        let result = session.scrape_course_info(-1).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_info_rejects_empty_course_list() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![];
+        }
+        let result = session.scrape_course_info(0).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("course list is empty"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_prereqs_rejects_negative_index() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![
+                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+            ];
+        }
+        let result = session.scrape_course_prereqs(-1).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_course_prereqs_rejects_empty_course_list() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        {
+            let mut state = session.state.write().await;
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.career_code = "0-2-8-3".to_string();
+            state.course_list = vec![];
+        }
+        let result = session.scrape_course_prereqs(0).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("course list is empty"));
+    }
 }
