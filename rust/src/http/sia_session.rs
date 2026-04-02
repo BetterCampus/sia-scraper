@@ -433,7 +433,7 @@ impl SiaSession {
         }
 
         let course_list = &state.course_list;
-        if !(-(course_list.len() as i32)..=(course_list.len() as i32 - 1)).contains(&course_index) {
+        if course_index < 0 || course_index as usize >= course_list.len() {
             return Err(HttpError::InvalidInput(format!(
                 "course index {} out of range (0-{})",
                 course_index,
@@ -477,7 +477,7 @@ impl SiaSession {
         }
 
         let course_list = &state.course_list;
-        if !(-(course_list.len() as i32)..=(course_list.len() as i32 - 1)).contains(&course_index) {
+        if course_index < 0 || course_index as usize >= course_list.len() {
             return Err(HttpError::InvalidInput(format!(
                 "course index {} out of range (0-{})",
                 course_index,
