@@ -438,7 +438,7 @@ def scrape_info(xml: str) -> CourseInfo:
     )
 
 
-def _course_model_to_payload(course: Any) -> dict[str, Any]:
+def _course_model_to_payload(course: sia_scraper_rust.CourseInfoModel) -> dict[str, Any]:
     """Convert Rust CourseInfoModel into a Pydantic-compatible payload."""
     return {
         "course_name": course.course_name,
@@ -472,7 +472,7 @@ def _course_model_to_payload(course: Any) -> dict[str, Any]:
     }
 
 
-def _prereqs_model_to_payload(prereqs: Any) -> dict[str, Any]:
+def _prereqs_model_to_payload(prereqs: sia_scraper_rust.CoursePrereqsModel) -> dict[str, Any]:
     """Convert Rust CoursePrereqsModel into a Pydantic-compatible payload."""
     return {
         "course_name": prereqs.course_name,

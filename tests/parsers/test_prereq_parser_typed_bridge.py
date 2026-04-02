@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+import sia_scraper_rust
 from sia_scraper.models.prerequisite import CoursePrereqsTyped
 from sia_scraper.parsers.course_parser import scrape_prereqs_typed
 
@@ -18,7 +19,7 @@ class TestTypedPrereqBridge:
         assert result.credits > 0
 
     def test_scrape_prereqs_typed_raises_on_missing_name(self):
-        with pytest.raises(Exception) as exc_info:  # noqa: B017 - PyO3 raises runtime-like error
+        with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
             scrape_prereqs_typed("<div>invalid prereq body</div>")
 
         error_msg = str(exc_info.value).lower()

@@ -22,20 +22,20 @@ class TestViewStateExtractionErrors:
     def test_extract_view_state_fails_on_missing_element(self):
         """ViewState extraction should raise error, not return empty string."""
         html = "<div>No ViewState here</div>"
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
             sia_scraper_rust.extract_view_state(html)
         # Error message should indicate the issue
         assert "ViewState" in str(exc_info.value) or "not found" in str(exc_info.value)
 
     def test_extract_view_state_fails_on_empty_html(self):
         """ViewState extraction should raise error on empty input."""
-        with pytest.raises(Exception):  # noqa: B017 - PyO3 RuntimeError
+        with pytest.raises(sia_scraper_rust.SiaScraperException):
             sia_scraper_rust.extract_view_state("")
 
     def test_extract_view_state_fails_on_malformed_html(self):
         """ViewState extraction should raise error on malformed HTML."""
         html = "<input type='broken'"
-        with pytest.raises(Exception):  # noqa: B017 - PyO3 RuntimeError
+        with pytest.raises(sia_scraper_rust.SiaScraperException):
             sia_scraper_rust.extract_view_state(html)
 
     def test_extract_view_state_succeeds_on_valid_input(self):
@@ -51,7 +51,7 @@ class TestCourseParsingErrors:
     def test_parse_course_info_fails_on_invalid_xml(self):
         """Course parsing should raise error on malformed input."""
         invalid_xml = "<div>Not a valid course page</div>"
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
             sia_scraper_rust.parse_course_info(invalid_xml)
         # Should indicate what's missing
         error_msg = str(exc_info.value).lower()
@@ -59,13 +59,13 @@ class TestCourseParsingErrors:
 
     def test_parse_course_info_fails_on_empty_input(self):
         """Course parsing should raise error on empty input."""
-        with pytest.raises(Exception):  # noqa: B017 - PyO3 RuntimeError
+        with pytest.raises(sia_scraper_rust.SiaScraperException):
             sia_scraper_rust.parse_course_info("")
 
     def test_parse_prereqs_fails_on_invalid_xml(self):
         """Prerequisites parsing should raise error on malformed input."""
         invalid_xml = "<div>Not a valid prereqs page</div>"
-        with pytest.raises(Exception):  # noqa: B017 - PyO3 RuntimeError
+        with pytest.raises(sia_scraper_rust.SiaScraperException):
             sia_scraper_rust.parse_prereqs(invalid_xml)
 
 

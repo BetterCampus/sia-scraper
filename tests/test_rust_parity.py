@@ -1,23 +1,37 @@
 """Rust/Python parity tests - compare outputs from Rust extension vs Python implementation."""
 
-from typing import Any, cast
+from typing import cast
 
 import pytest
 
+import sia_scraper_rust
 from sia_scraper.constants import business
 from sia_scraper.core.adf_state import extract_view_state as python_extract_view_state
 from sia_scraper.models.course import CourseInfoTyped
 from sia_scraper.models.prerequisite import CoursePrereqsTyped
 from sia_scraper.parsers.course_parser import scrape_info as python_scrape_info
 from sia_scraper.parsers.course_parser import scrape_prereqs as python_scrape_prereqs
-from sia_scraper_rust import extract_view_state as rust_extract_view_state
-from sia_scraper_rust import parse_course_info as rust_parse_course_info
-from sia_scraper_rust import parse_course_info_json as rust_parse_course_info_json
-from sia_scraper_rust import parse_prereqs as rust_parse_prereqs
-from sia_scraper_rust import parse_prereqs_json as rust_parse_prereqs_json
+from sia_scraper_rust import (
+    SiaScraperException,
+)
+from sia_scraper_rust import (
+    extract_view_state as rust_extract_view_state,
+)
+from sia_scraper_rust import (
+    parse_course_info as rust_parse_course_info,
+)
+from sia_scraper_rust import (
+    parse_course_info_json as rust_parse_course_info_json,
+)
+from sia_scraper_rust import (
+    parse_prereqs as rust_parse_prereqs,
+)
+from sia_scraper_rust import (
+    parse_prereqs_json as rust_parse_prereqs_json,
+)
 
 
-def _course_to_dict(course: Any) -> dict[str, object]:
+def _course_to_dict(course: sia_scraper_rust.CourseInfoModel) -> dict[str, object]:
     return {
         "course_name": course.course_name,
         "credits": course.credits,
@@ -48,7 +62,7 @@ def _course_to_dict(course: Any) -> dict[str, object]:
     }
 
 
-def _prereqs_to_dict(prereqs: Any) -> dict[str, object]:
+def _prereqs_to_dict(prereqs: sia_scraper_rust.CoursePrereqsModel) -> dict[str, object]:
     return {
         "course_name": prereqs.course_name,
         "credits": prereqs.credits,
@@ -185,8 +199,12 @@ class TestParsePrereqsParity:
         assert len(typed.conditions) == len(python_result.conditions)
 
     def test_typed_prereqs_model_invalid_raises(self):
-        with pytest.raises(Exception):  # noqa: B017 - PyO3 runtime exception path
+        with pytest.raises(SiaScraperException) as exc_info:
             rust_parse_prereqs("<div></div>")
+
+        error_msg = str(exc_info.value).lower()
+        assert "course_name" in error_msg
+        assert "parse failure" in error_msg or "html snippet" in error_msg
 
 
 class TestDeprecatedJsonParsers:
