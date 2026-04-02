@@ -1,8 +1,9 @@
 """Rust/Python parity tests - compare outputs from Rust extension vs Python implementation."""
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
-from typing import cast
 
 from sia_scraper.constants import business
 from sia_scraper.core.adf_state import extract_view_state as python_extract_view_state
@@ -17,10 +18,10 @@ from sia_scraper_rust import parse_prereqs_json as rust_parse_prereqs_json
 
 def _course_to_dict(course: object) -> dict[str, object]:
     return {
-        "course_name": getattr(course, "course_name"),
-        "credits": getattr(course, "credits"),
-        "typology": getattr(course, "typology"),
-        "available_spots": getattr(course, "available_spots"),
+        "course_name": course.course_name,
+        "credits": course.credits,
+        "typology": course.typology,
+        "available_spots": course.available_spots,
         "groups": [
             {
                 "group_name": group.group_name,
@@ -41,16 +42,16 @@ def _course_to_dict(course: object) -> dict[str, object]:
                     for s in group.schedules
                 ],
             }
-            for group in getattr(course, "groups")
+            for group in course.groups
         ],
     }
 
 
 def _prereqs_to_dict(prereqs: object) -> dict[str, object]:
     return {
-        "course_name": getattr(prereqs, "course_name"),
-        "credits": getattr(prereqs, "credits"),
-        "typology": getattr(prereqs, "typology"),
+        "course_name": prereqs.course_name,
+        "credits": prereqs.credits,
+        "typology": prereqs.typology,
         "conditions": [
             {
                 "condition": condition.condition,
@@ -65,7 +66,7 @@ def _prereqs_to_dict(prereqs: object) -> dict[str, object]:
                     for p in condition.prerequisites
                 ],
             }
-            for condition in getattr(prereqs, "conditions")
+            for condition in prereqs.conditions
         ],
     }
 
