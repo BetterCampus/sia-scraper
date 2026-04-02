@@ -4,8 +4,10 @@ This module provides functions for extracting course data from Oracle ADF XML/HT
 responses returned by SIA's web interface.
 """
 
+# ruff: noqa: E402
 import os
 import re
+import warnings
 from datetime import datetime
 from typing import Any
 
@@ -13,6 +15,9 @@ from loguru import logger
 
 import sia_scraper_rust
 
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="sia_scraper")
+
+# noqa: E402
 from ..constants.business import (
     GROUP_DURATION_INDEX,
     GROUP_FACULTY_INDEX,

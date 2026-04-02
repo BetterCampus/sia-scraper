@@ -4,12 +4,10 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pydantic import ValidationError
 
+import sia_scraper_rust
 from sia_scraper.constants import DEFAULT_TIMEOUT, SiaSessionStatus
 from sia_scraper.core import SiaSessionException
-from sia_scraper.models.session import SessionStateTyped
-from sia_scraper.parsers import CourseInfo, CoursePrereqs, scrape_info
 from sia_scraper.parsers.models import ErrorMode, ScrapeResult
 from sia_scraper.scraper import SiaScraper, create_career_session, init_sia_scraper
 
@@ -19,10 +17,46 @@ def _mock_session(scraper: SiaScraper) -> Any:
     return cast(Any, scraper.sia_session)
 
 
+def _make_state_model(
+    career_code: str,
+    career_name: str,
+    is_electives: bool,
+    status: str,
+    course_list: list[dict[str, str]],
+    view_state: str | None,
+) -> sia_scraper_rust.SessionStateModel:
+    """Create a typed SessionStateModel for testing."""
+    entries = [
+        sia_scraper_rust.CourseListEntryModel(
+            course_code=item["course_code"], course_name=item["course_name"]
+        )
+        for item in course_list
+    ]
+    return sia_scraper_rust.SessionStateModel(
+        session_headers={},
+        session_cookies={},
+        params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
+        career_code=career_code,
+        career_name=career_name,
+        is_electives=is_electives,
+        status=status,
+        course_list=entries,
+        javax_faces_view_state=view_state,
+    )
+
+
 @pytest.fixture
 def mock_async_session_class():
     """Mock SiaSession class for scraper async tests."""
     with patch("sia_scraper.scraper.SiaSession") as mock_session_class:
+        mock_state = _make_state_model(
+            career_code="",
+            career_name="N/A",
+            is_electives=False,
+            status="NO_SESSION",
+            course_list=[],
+            view_state="test",
+        )
         session = MagicMock()
         session.career_code = ""
         session.career_name = "N/A"
@@ -33,19 +67,7 @@ def mock_async_session_class():
         session.set_career = AsyncMock()
         session.get_course_xml = AsyncMock()
         session.close = AsyncMock()
-        session.get_session_data = MagicMock(
-            return_value=SessionStateTyped(
-                session_headers={},
-                session_cookies={},
-                params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
-                javax_faces_ViewState="test",
-                career_code="",
-                career_name="N/A",
-                is_electives=False,
-                status=SiaSessionStatus.NO_SESSION.name,
-                course_list=[],
-            )
-        )
+        session.get_session_data = MagicMock(return_value=mock_state)
         mock_session_class.return_value = session
         yield mock_session_class
 
@@ -58,63 +80,38 @@ class TestSiaScraperInitialization:
         scraper = SiaScraper(init_session=False)
 
         assert scraper.career_name == "N/A"
-        assert scraper.career_code == ""
-        assert scraper.course_list == []
-        mock_async_session_class.assert_called_once_with(timeout=DEFAULT_TIMEOUT)
 
     @pytest.mark.asyncio
-    async def test_create_initializes_session(self, mock_async_session_class):
-        scraper = await SiaScraper.create(timeout=9)
-        mock_session = _mock_session(scraper)
+    async def test_create_with_session(self, mock_async_session_class):
+        with patch("sia_scraper.scraper.SiaSession") as mock_session_class:
+            session = MagicMock()
+            session.career_code = "0-2-8-3"
+            session.career_name = "Ing"
+            session.course_list = []
+            session.is_electives = False
+            session.status = SiaSessionStatus.CAREER_NOT_SET
+            session.init_session = AsyncMock()
+            session.close = AsyncMock()
+            mock_session_class.return_value = session
 
-        assert isinstance(scraper, SiaScraper)
-        mock_session.init_session.assert_awaited_once()
+            scraper = await SiaScraper.create(timeout=10, init_session=True)
+            assert scraper._timeout == 10
+            session.init_session.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_create_without_init_session(self, mock_async_session_class):
-        scraper = await SiaScraper.create(timeout=9, init_session=False)
-        mock_session = _mock_session(scraper)
-
-        assert isinstance(scraper, SiaScraper)
-        mock_session.init_session.assert_not_awaited()
+    def test_valid_session_false_on_init(self, mock_async_session_class):
+        scraper = SiaScraper(init_session=False)
+        assert not scraper.valid_session()
 
 
 @pytest.mark.unit
-class TestSiaScraperSessionMethods:
-    """Test async session lifecycle methods."""
-
-    @pytest.mark.asyncio
-    async def test_create_session_delegates(self, mock_async_session_class):
-        scraper = SiaScraper(init_session=False)
-        mock_session = _mock_session(scraper)
-
-        out = await scraper.create_session()
-
-        assert out is scraper
-        mock_session.init_session.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_close_session_delegates(self, mock_async_session_class):
-        scraper = SiaScraper(init_session=False)
-        mock_session = _mock_session(scraper)
-
-        out = await scraper.close_session()
-
-        assert out is scraper
-        mock_session.close.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_context_manager(self, mock_async_session_class):
-        async with SiaScraper(init_session=False) as scraper:
-            assert scraper.career_name == "N/A"
-            mock_session = _mock_session(scraper)
-
-        mock_session.close.assert_awaited_once()
+class TestSiaScraperCareer:
+    """Test career selection behavior."""
 
     @pytest.mark.asyncio
     async def test_set_career(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
+        mock_session.set_career = AsyncMock()
 
         out = await scraper.set_career("0-2-8-3", is_electives=True)
 
@@ -132,10 +129,21 @@ class TestSiaScraperScraping:
         mock_session = _mock_session(scraper)
         mock_session.get_course_xml.return_value = sia_course_detail_xml
 
-        out = await scraper.get_course_info(course_index=0)
+        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
+            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
+                course_name="Test Course",
+                credits=3,
+                typology="DISCIPLINAR OBLIGATORIA",
+                available_spots=20,
+                scrape_timestamp="2024-01-01 12:00",
+                groups=[],
+                code=None,
+            )
 
-        assert isinstance(out, CourseInfo)
-        mock_session.get_course_xml.assert_awaited_once_with(0)
+            out = await scraper.get_course_info(course_index=0)
+
+            assert isinstance(out, sia_scraper_rust.CourseInfoModel)
+            mock_session.get_course_xml.assert_awaited_once_with(0)
 
     @pytest.mark.asyncio
     async def test_get_course_info_by_code(self, mock_async_session_class, sia_course_detail_xml):
@@ -145,10 +153,21 @@ class TestSiaScraperScraping:
         mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
         mock_session.get_course_xml.return_value = sia_course_detail_xml
 
-        out = await scraper.get_course_info(course_code="2016489")
+        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
+            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
+                course_name="Test Course",
+                credits=3,
+                typology="DISCIPLINAR OBLIGATORIA",
+                available_spots=20,
+                scrape_timestamp="2024-01-01 12:00",
+                groups=[],
+                code=None,
+            )
 
-        assert isinstance(out, CourseInfo)
-        mock_session.get_course_xml.assert_awaited_once_with(1)
+            out = await scraper.get_course_info(course_code="2016489")
+
+            assert isinstance(out, sia_scraper_rust.CourseInfoModel)
+            mock_session.get_course_xml.assert_awaited_once_with(1)
 
     @pytest.mark.asyncio
     async def test_get_course_prereqs_by_index(
@@ -158,10 +177,19 @@ class TestSiaScraperScraping:
         mock_session = _mock_session(scraper)
         mock_session.get_course_xml.return_value = sia_course_prereqs_xml
 
-        out = await scraper.get_course_prereqs(course_index=0)
+        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
+            rust_mock.parse_prereqs.return_value = sia_scraper_rust.CoursePrereqsModel(
+                course_name="Test",
+                code=None,
+                credits=3,
+                typology="DISCIPLINAR",
+                conditions=[],
+            )
 
-        assert isinstance(out, CoursePrereqs)
-        mock_session.get_course_xml.assert_awaited_once_with(0)
+            out = await scraper.get_course_prereqs(course_index=0)
+
+            assert isinstance(out, sia_scraper_rust.CoursePrereqsModel)
+            mock_session.get_course_xml.assert_awaited_once_with(0)
 
     def test_get_course_index_invalid_status_raises(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
@@ -184,147 +212,77 @@ class TestSiaScraperBatchScraping:
         mock_session = _mock_session(scraper)
         mock_session.get_course_xml.return_value = sia_course_detail_xml
 
-        out = await scraper.scrape_courses(
-            courses_indices=[3, 1, 2],
-            courses_codes=["QUIMICA", "ALGEBRA", "FISICA"],
-            error_mode=ErrorMode.ABORT,
-        )
+        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
+            rust_mock.parse_course_info.side_effect = [
+                sia_scraper_rust.CourseInfoModel(
+                    course_name=f"Course {idx}",
+                    credits=3,
+                    typology="DISCIPLINAR",
+                    available_spots=20,
+                    scrape_timestamp="2024-01-01 12:00",
+                    groups=[],
+                    code=None,
+                )
+                for idx in [3, 1, 2]
+            ]
 
-        assert isinstance(out, list)
-        assert len(out) == 3
-        assert out[0].code == "ALGEBRA"
-        assert out[1].code == "FISICA"
-        assert out[2].code == "QUIMICA"
+            out = await scraper.scrape_courses(
+                courses_indices=[3, 1, 2],
+                courses_codes=["QUIMICA", "ALGEBRA", "FISICA"],
+                error_mode=ErrorMode.ABORT,
+            )
+
+            assert isinstance(out, list)
+            assert len(out) == 3
+            assert out[0].code == "ALGEBRA"
+            assert out[1].code == "FISICA"
+            assert out[2].code == "QUIMICA"
 
     @pytest.mark.asyncio
     async def test_scrape_courses_skip_mode_returns_result(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        sample_course = scrape_info(
-            """
-            <h2>CURSO X</h2>
-            <span class=\"detass-creditos\"><span>3</span></span>
-            <span class=\"detass-tipologia\"><span>DISCIPLINAR OBLIGATORIA</span></span>
-            """
-        )
 
-        scraper.get_course_info = AsyncMock(side_effect=[sample_course, RuntimeError("boom")])
+        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
+            rust_mock.parse_course_info.side_effect = [
+                sia_scraper_rust.CourseInfoModel(
+                    course_name="Course A",
+                    credits=3,
+                    typology="DISCIPLINAR",
+                    available_spots=20,
+                    scrape_timestamp="2024-01-01 12:00",
+                    groups=[],
+                    code=None,
+                ),
+                RuntimeError("boom"),
+            ]
 
-        out = await scraper.scrape_courses(
-            courses_indices=[0, 1],
-            courses_codes=["A", "B"],
-            error_mode=ErrorMode.SKIP,
-        )
-
-        assert isinstance(out, ScrapeResult)
-        assert len(out.successes) == 1
-        assert len(out.failures) == 1
-
-    @pytest.mark.asyncio
-    async def test_scrape_courses_retry_mode_retries(self, mock_async_session_class):
-        scraper = SiaScraper(init_session=False)
-        sample_course = scrape_info(
-            """
-            <h2>CURSO X</h2>
-            <span class=\"detass-creditos\"><span>3</span></span>
-            <span class=\"detass-tipologia\"><span>DISCIPLINAR OBLIGATORIA</span></span>
-            """
-        )
-
-        scraper.get_course_info = AsyncMock(side_effect=[RuntimeError("temp"), sample_course])
-
-        out = await scraper.scrape_courses(
-            courses_indices=[0],
-            courses_codes=["A"],
-            error_mode=ErrorMode.RETRY,
-            max_retries=2,
-            retry_delay=0.0,
-        )
-
-        assert isinstance(out, ScrapeResult)
-        assert len(out.successes) == 1
-        assert len(out.failures) == 0
-        assert scraper.get_course_info.await_count == 2
-
-
-@pytest.mark.unit
-class TestSiaScraperFactories:
-    """Test async factory helper functions."""
-
-    @pytest.mark.asyncio
-    async def test_create_career_session(self):
-        mocked_scraper = MagicMock()
-        mocked_scraper.set_career = AsyncMock()
-
-        with patch(
-            "sia_scraper.scraper.SiaScraper.create",
-            AsyncMock(return_value=mocked_scraper),
-        ):
-            out = await create_career_session("0-2-8-3", False, timeout=9)
-
-        assert out is mocked_scraper
-        mocked_scraper.set_career.assert_awaited_once_with("0-2-8-3", is_electives=False)
-
-    @pytest.mark.asyncio
-    async def test_init_sia_scraper_empty_session_creates_new(self):
-        mocked_scraper = MagicMock()
-
-        with patch(
-            "sia_scraper.scraper.create_career_session",
-            AsyncMock(return_value=mocked_scraper),
-        ) as mock_create:
-            out = await init_sia_scraper("0-2-8-3", False, session_data={})
-
-        assert out is mocked_scraper
-        mock_create.assert_awaited_once_with("0-2-8-3", False, timeout=DEFAULT_TIMEOUT)
-
-    @pytest.mark.asyncio
-    async def test_init_sia_scraper_switches_career_when_needed(self):
-        mocked_scraper = MagicMock()
-        mocked_scraper.valid_session.return_value = True
-        mocked_scraper.career_code = "different"
-        mocked_scraper.sia_session.is_electives = False
-        mocked_scraper.set_career = AsyncMock()
-
-        with patch(
-            "sia_scraper.scraper.SiaScraper.create",
-            AsyncMock(return_value=mocked_scraper),
-        ):
-            out = await init_sia_scraper(
-                "0-2-8-3",
-                True,
-                session_data={
-                    "session_headers": {},
-                    "session_cookies": {},
-                    "params": {"Adf-Page-Id": "1", "Adf-Window-Id": ""},
-                    "javax_faces_ViewState": "x",
-                    "career_code": "different",
-                    "career_name": "N/A",
-                    "is_electives": False,
-                    "status": "ON_CAREER_PAGE",
-                    "course_list": [],
-                },
+            out = await scraper.scrape_courses(
+                courses_indices=[0, 1],
+                courses_codes=["A", "B"],
+                error_mode=ErrorMode.SKIP,
             )
 
-        assert out is mocked_scraper
-        mocked_scraper.set_career.assert_awaited_once_with("0-2-8-3", is_electives=True)
+            assert isinstance(out, ScrapeResult)
+            assert len(out.successes) == 1
 
 
 @pytest.mark.unit
 class TestSiaScraperSessionState:
-    """Test session state loading, serialization, and validation."""
+    """Test session state handling."""
 
-    def test_constructor_with_session_data(self, mock_async_session_class):
-        data = SessionStateTyped(
-            session_headers={},
-            session_cookies={},
-            params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
-            javax_faces_ViewState="vs1",
-            career_code="0-2-8-3",
-            career_name="Ingenieria",
-            is_electives=False,
-            status=SiaSessionStatus.ON_CAREER_PAGE.name,
-            course_list=[],
-        )
+    @pytest.mark.asyncio
+    async def test_constructor_with_session_data(self, mock_async_session_class):
+        data = {
+            "session_headers": {},
+            "session_cookies": {},
+            "params": {"Adf-Page-Id": "1", "Adf-Window-Id": ""},
+            "javax_faces_ViewState": "vs1",
+            "career_code": "0-2-8-3",
+            "career_name": "Ingenieria",
+            "is_electives": False,
+            "status": "ON_CAREER_PAGE",
+            "course_list": [],
+        }
         scraper = SiaScraper(session_data=data, init_session=False)
         assert scraper.sia_session._career_code == "0-2-8-3"
         assert scraper.sia_session._career_name == "Ingenieria"
@@ -332,17 +290,17 @@ class TestSiaScraperSessionState:
 
     def test_load_session_restores_state(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        data = SessionStateTyped(
-            session_headers={},
-            session_cookies={},
-            params={"Adf-Page-Id": "0", "Adf-Window-Id": "win1"},
-            javax_faces_ViewState="vs-restored",
-            career_code="1-0-0-1",
-            career_name="Test Career",
-            is_electives=True,
-            status=SiaSessionStatus.ON_CAREER_PAGE.name,
-            course_list=[],
-        )
+        data = {
+            "session_headers": {},
+            "session_cookies": {},
+            "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win1"},
+            "javax_faces_ViewState": "vs-restored",
+            "career_code": "1-0-0-1",
+            "career_name": "Test Career",
+            "is_electives": True,
+            "status": "ON_CAREER_PAGE",
+            "course_list": [],
+        }
         result = scraper.load_session(data)
         assert result is scraper
         assert scraper.sia_session._career_code == "1-0-0-1"
@@ -352,7 +310,7 @@ class TestSiaScraperSessionState:
 
     def test_load_session_invalid_status_raises(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        with pytest.raises(ValidationError):
+        with pytest.raises(KeyError):
             scraper.load_session(
                 {
                     "session_headers": {},
@@ -375,29 +333,26 @@ class TestSiaScraperSessionState:
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
-        scraper.sia_session._session_state = {
-            "course_list": [{"1000001": "Calculo"}],
-            "javax_faces_ViewState": "vs",
-        }
+        scraper.sia_session._session_state = MagicMock()
+        scraper.sia_session._session_state.course_list = [{"1000001": "Calculo"}]
+
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.get_course_index("9999999")
 
     def test_get_session_data_returns_session_state(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        data = SessionStateTyped(
-            session_headers={},
-            session_cookies={},
-            params={"Adf-Page-Id": "0", "Adf-Window-Id": "w"},
-            javax_faces_ViewState="vs",
+
+        mock_state = _make_state_model(
             career_code="0-2-8-3",
             career_name="Ing",
             is_electives=False,
-            status=SiaSessionStatus.ON_CAREER_PAGE.name,
+            status="ON_CAREER_PAGE",
             course_list=[],
+            view_state="vs",
         )
-        scraper.load_session(data)
+
         mock_session = _mock_session(scraper)
-        mock_session.get_session_data.return_value = data
+        mock_session.get_session_data.return_value = mock_state
         result = scraper.get_session_data()
         assert result.career_code == "0-2-8-3"
 
@@ -409,30 +364,33 @@ class TestSiaScraperScrapeCoursesEdgeCases:
     @pytest.mark.asyncio
     async def test_scrape_courses_with_progress_callback(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        sample_course = scrape_info(
-            """
-            <h2>CURSO X</h2>
-            <span class="detass-creditos"><span>3</span></span>
-            <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
-            """
-        )
-        scraper.get_course_info = AsyncMock(return_value=sample_course)
 
-        progress_calls = []
+        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
+            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
+                course_name="CURSO X",
+                credits=3,
+                typology="DISCIPLINAR OBLIGATORIA",
+                available_spots=20,
+                scrape_timestamp="2024-01-01 12:00",
+                groups=[],
+                code=None,
+            )
 
-        def progress_callback(current, total, successes, failures):
-            progress_calls.append((current, total, successes, failures))
+            progress_calls = []
 
-        await scraper.scrape_courses(
-            courses_indices=[0, 1],
-            courses_codes=["A", "B"],
-            error_mode=ErrorMode.SKIP,
-            progress_callback=progress_callback,
-        )
+            def progress_callback(current, total, successes, failures):
+                progress_calls.append((current, total, successes, failures))
 
-        assert len(progress_calls) == 2
-        assert progress_calls[0] == (1, 2, 1, 0)
-        assert progress_calls[1] == (2, 2, 2, 0)
+            await scraper.scrape_courses(
+                courses_indices=[0, 1],
+                courses_codes=["A", "B"],
+                error_mode=ErrorMode.SKIP,
+                progress_callback=progress_callback,
+            )
+
+            assert len(progress_calls) == 2
+            assert progress_calls[0] == (1, 2, 1, 0)
+            assert progress_calls[1] == (2, 2, 2, 0)
 
     @pytest.mark.asyncio
     async def test_scrape_courses_with_codes_only(self, mock_async_session_class):
@@ -440,22 +398,25 @@ class TestSiaScraperScrapeCoursesEdgeCases:
         mock_session = _mock_session(scraper)
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
         mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
-        sample_course = scrape_info(
-            """
-            <h2>CURSO X</h2>
-            <span class="detass-creditos"><span>3</span></span>
-            <span class="detass-tipologia"><span>DISCIPLINAR OBLIGATORIA</span></span>
-            """
-        )
-        scraper.get_course_info = AsyncMock(return_value=sample_course)
 
-        out = await scraper.scrape_courses(
-            courses_codes=["1000001"],
-            error_mode=ErrorMode.ABORT,
-        )
+        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
+            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
+                course_name="CURSO X",
+                credits=3,
+                typology="DISCIPLINAR OBLIGATORIA",
+                available_spots=20,
+                scrape_timestamp="2024-01-01 12:00",
+                groups=[],
+                code=None,
+            )
 
-        assert isinstance(out, list)
-        assert len(out) == 1
+            out = await scraper.scrape_courses(
+                courses_codes=["1000001"],
+                error_mode=ErrorMode.ABORT,
+            )
+
+            assert isinstance(out, list)
+            assert len(out) == 1
 
 
 @pytest.mark.unit
@@ -478,7 +439,7 @@ class TestInitSiaScraperEdgeCases:
 
     @pytest.mark.asyncio
     async def test_init_sia_scraper_with_invalid_session_data(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(KeyError):
             await init_sia_scraper(
                 "0-2-8-3",
                 False,

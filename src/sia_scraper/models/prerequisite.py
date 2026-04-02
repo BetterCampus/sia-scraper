@@ -1,4 +1,19 @@
-"""Typed prerequisite payload models used for Rust bridge parsing."""
+"""Typed prerequisite payload models used for Rust bridge parsing.
+
+.. deprecated::
+    Use `sia_scraper_rust.CoursePrereqsModel`, `sia_scraper_rust.PrereqConditionModel`,
+    and `sia_scraper_rust.PrerequisiteModel` directly instead. These Python models
+    will be removed in version 3.1.0.
+"""
+
+# ruff: noqa: E402
+import warnings
+
+warnings.warn(
+    "sia_scraper.models.prerequisite is deprecated; use sia_scraper_rust CoursePrereqsModel instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 

@@ -1,4 +1,19 @@
-"""Typed course payload models used for Rust bridge parsing."""
+"""Typed course payload models used for Rust bridge parsing.
+
+.. deprecated::
+    Use `sia_scraper_rust.CourseInfoModel`, `sia_scraper_rust.GroupModel`,
+    and `sia_scraper_rust.ScheduleModel` directly instead. These Python models
+    will be removed in version 3.1.0.
+"""
+
+# ruff: noqa: E402
+import warnings
+
+warnings.warn(
+    "sia_scraper.models.course is deprecated; use sia_scraper_rust CourseInfoModel instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 

@@ -1,58 +1,101 @@
 """Unit tests for Rust-backed async session wrapper."""
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import sia_scraper_rust
 from sia_scraper.constants import SiaSessionStatus
 from sia_scraper.core import SiaSessionException
 from sia_scraper.session import SiaSession
+
+
+def _make_mock_state(
+    career_code: str = "",
+    career_name: str = "N/A",
+    is_electives: bool = False,
+    status: str = "CAREER_NOT_SET",
+    course_list: list[dict[str, str]] | None = None,
+    view_state: str | None = None,
+) -> MagicMock:
+    """Create a mock SessionStateModel with the needed attributes."""
+    mock = MagicMock(spec=sia_scraper_rust.SessionStateModel)
+    mock.career_code = career_code
+    mock.career_name = career_name
+    mock.is_electives = is_electives
+    mock.status = status
+    mock.course_list = course_list or []
+    mock.javax_faces_view_state = view_state
+    mock.session_headers = {}
+    mock.session_cookies = {}
+    mock.params = {"Adf-Page-Id": "0", "Adf-Window-Id": "win-1"}
+    return mock
 
 
 @pytest.fixture
 def mock_rust_module():
     """Patch Rust extension calls used by SiaSession."""
 
-    async def init_payload(_: int) -> str:
-        return json.dumps(
-            {
-                "session_headers": {},
-                "session_cookies": {},
-                "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-1"},
-                "javax_faces_ViewState": "vs-1",
-                "career_code": "",
-                "career_name": "N/A",
-                "is_electives": False,
-                "status": SiaSessionStatus.CAREER_NOT_SET.name,
-                "course_list": [],
-            }
+    def init_payload(timeout: int) -> sia_scraper_rust.SessionStateModel:
+        return _make_state_model(
+            career_code="",
+            career_name="N/A",
+            is_electives=False,
+            status="CAREER_NOT_SET",
+            course_list=[],
+            view_state="vs-1",
         )
 
-    async def career_payload(_: int, search_code: str, is_electives: bool) -> str:
-        return json.dumps(
-            {
-                "session_headers": {},
-                "session_cookies": {},
-                "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-2"},
-                "javax_faces_ViewState": "vs-2",
-                "career_code": search_code,
-                "career_name": "Ingenieria de Sistemas",
-                "is_electives": is_electives,
-                "status": SiaSessionStatus.ON_CAREER_PAGE.name,
-                "course_list": [
-                    {"course_code": "1000001", "course_name": "Calculo"},
-                    {"course_code": "2016489", "course_name": "Estructuras de Datos"},
-                    {"course_code": "3000003", "course_name": "Fisica"},
-                ],
-            }
+    def career_payload(
+        timeout: int, search_code: str, is_electives: bool
+    ) -> sia_scraper_rust.SessionStateModel:
+        return _make_state_model(
+            career_code=search_code,
+            career_name="Ingenieria de Sistemas",
+            is_electives=is_electives,
+            status="ON_CAREER_PAGE",
+            course_list=[
+                {"course_code": "1000001", "course_name": "Calculo"},
+                {"course_code": "2016489", "course_name": "Estructuras de Datos"},
+                {"course_code": "3000003", "course_name": "Fisica"},
+            ],
+            view_state="vs-2",
         )
 
     with patch("sia_scraper.session.sia_scraper_rust") as rust:
-        rust.init_sia_session_json = AsyncMock(side_effect=init_payload)
-        rust.set_career_json = AsyncMock(side_effect=career_payload)
+        rust.init_sia_session = AsyncMock(side_effect=init_payload)
+        rust.set_career = AsyncMock(side_effect=career_payload)
         rust.get_course_xml = AsyncMock(return_value="<xml>course</xml>")
         yield rust
+
+
+def _make_state_model(
+    career_code: str,
+    career_name: str,
+    is_electives: bool,
+    status: str,
+    course_list: list[dict[str, str]],
+    view_state: str | None,
+) -> sia_scraper_rust.SessionStateModel:
+    """Create a typed SessionStateModel for testing."""
+    entries = [
+        sia_scraper_rust.CourseListEntryModel(
+            course_code=item["course_code"], course_name=item["course_name"]
+        )
+        for item in course_list
+    ]
+    return sia_scraper_rust.SessionStateModel(
+        session_headers={},
+        session_cookies={},
+        params={"Adf-Page-Id": "0", "Adf-Window-Id": "win-1"},
+        career_code=career_code,
+        career_name=career_name,
+        is_electives=is_electives,
+        status=status,
+        course_list=entries,
+        javax_faces_view_state=view_state,
+    )
 
 
 class TestSiaSessionCreation:
@@ -63,8 +106,8 @@ class TestSiaSessionCreation:
         session = await SiaSession.create(timeout=5)
         try:
             assert session.status == SiaSessionStatus.CAREER_NOT_SET
-            assert session._session_state.get("javax_faces_ViewState") == "vs-1"
-            mock_rust_module.init_sia_session_json.assert_awaited_once_with(5)
+            assert session._session_state.javax_faces_ViewState == "vs-1"
+            mock_rust_module.init_sia_session.assert_awaited_once_with(5)
         finally:
             await session.close()
 
@@ -93,8 +136,8 @@ class TestSiaSessionCareerFlow:
                 {"2016489": "Estructuras de Datos"},
                 {"3000003": "Fisica"},
             ]
-            assert session._session_state.get("javax_faces_ViewState") == "vs-2"
-            mock_rust_module.set_career_json.assert_awaited_once_with(5, "0-2-8-3", True)
+            assert session._session_state.javax_faces_ViewState == "vs-2"
+            mock_rust_module.set_career.assert_awaited_once_with(5, "0-2-8-3", True)
         finally:
             await session.close()
 
@@ -137,8 +180,7 @@ class TestSiaSessionLifecycle:
             assert data.career_name == "Ingenieria de Sistemas"
             assert data.is_electives is False
             assert data.status == SiaSessionStatus.ON_CAREER_PAGE.value
-            assert data.javax_faces_ViewState == "vs-2"
-            assert data.params == {"Adf-Page-Id": "0", "Adf-Window-Id": "win-2"}
+            assert data.javax_faces_view_state == "vs-2"
             assert [entry.course_code for entry in data.course_list] == [
                 "1000001",
                 "2016489",

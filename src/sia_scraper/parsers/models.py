@@ -5,11 +5,19 @@ returned by SIA scraper functions, replacing implicit dict structures with
 type-safe Pydantic models for runtime validation.
 """
 
+# ruff: noqa: E402
 import re
+import warnings
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+import sia_scraper_rust
+
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="sia_scraper")
+
+# noqa: E402
 from ..constants.defaults import (
     DEFAULT_DURATION,
     DEFAULT_FACULTY,
@@ -402,9 +410,7 @@ class ScrapeResult(BaseModel):
 
     model_config = {"frozen": True, "populate_by_name": True}
 
-    successes: list[CourseInfo] = Field(
-        default_factory=list, description="Successfully scraped courses"
-    )
+    successes: list[Any] = Field(default_factory=list, description="Successfully scraped courses")
     failures: list[tuple[int, str]] = Field(
         default_factory=list, description="Failed scrape attempts as (index, error)"
     )
@@ -414,14 +420,14 @@ class ScrapeResult(BaseModel):
     @classmethod
     def create(
         cls,
-        successes: list[CourseInfo],
+        successes: list[sia_scraper_rust.CourseInfoModel],
         failures: list[tuple[int, str]],
     ) -> "ScrapeResult":
         """Create a ScrapeResult with calculated success rate."""
         total = len(successes) + len(failures)
         success_rate = (len(successes) / total * 100) if total > 0 else 0.0
         return cls(
-            successes=successes,
+            successes=list(successes),
             failures=failures,
             total=total,
             success_rate=round(success_rate, 2),

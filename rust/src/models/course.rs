@@ -220,19 +220,19 @@ impl GroupModel {
 #[pyclass(module = "sia_scraper_rust")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CourseInfoModel {
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub course_name: String,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub credits: i32,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub typology: String,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub available_spots: i64,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub scrape_timestamp: String,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub groups: Vec<GroupModel>,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub code: Option<String>,
 }
 
