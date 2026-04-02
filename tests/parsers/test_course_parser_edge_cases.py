@@ -491,8 +491,8 @@ class TestRustParserParity:
         # Rust should also parse successfully
         rust_result = sia_scraper_rust.parse_course_info(xml)  # type: ignore[attr-defined]
         # Both should return at least the course info (groups may differ in handling)
-        assert rust_result["course_name"] == python_result.course_name
-        assert rust_result["credits"] == python_result.credits
+        assert rust_result.course_name == python_result.course_name
+        assert rust_result.credits == python_result.credits
 
     def test_rust_course_no_groups(self):
         """Rust parser should handle course with no groups."""
@@ -505,7 +505,7 @@ class TestRustParserParity:
         rust_result = sia_scraper_rust.parse_course_info(xml)  # type: ignore[attr-defined]
 
         assert len(python_result.groups) == 0
-        assert len(rust_result["groups"]) == 0
+        assert len(rust_result.groups) == 0
 
     def test_rust_missing_credits_raises_error(self):
         """Rust parser should raise error for missing credits like Python."""
