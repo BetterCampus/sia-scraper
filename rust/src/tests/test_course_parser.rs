@@ -45,7 +45,7 @@ fn test_parse_course_xml_complete() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_course_info(xml);
+        let result = parse_course_info(py, xml);
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
@@ -80,7 +80,7 @@ fn test_parse_course_xml_typology_defaults_to_unknown() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_course_info(xml);
+        let result = parse_course_info(py, xml);
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
@@ -103,7 +103,7 @@ fn test_parse_course_xml_no_groups() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_course_info(xml);
+        let result = parse_course_info(py, xml);
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
@@ -134,7 +134,7 @@ fn test_parse_course_xml_missing_credits() {
         </html>
     "#;
 
-    let result = Python::with_gil(|_py| parse_course_info(xml));
+    let result = Python::with_gil(|py| parse_course_info(py, xml));
     assert!(result.is_err());
 }
 
@@ -150,7 +150,7 @@ fn test_parse_course_xml_missing_credits_span() {
         </html>
     "#;
 
-    let result = Python::with_gil(|_py| parse_course_info(xml));
+    let result = Python::with_gil(|py| parse_course_info(py, xml));
     assert!(result.is_err());
 }
 
@@ -167,7 +167,7 @@ fn test_parse_course_xml_typology_container_without_inner_span_defaults_unknown(
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_course_info(xml).unwrap();
+        let result = parse_course_info(py, xml).unwrap();
         let dict = result.as_ref(py);
         let typology = dict.get_item("typology").unwrap();
         assert_eq!(typology.extract::<String>().unwrap(), "Unknown");
@@ -195,7 +195,7 @@ fn test_parse_course_xml_group_defaults_and_group_name_extraction() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_course_info(xml).unwrap();
+        let result = parse_course_info(py, xml).unwrap();
         let dict = result.as_ref(py);
         let groups = dict.get_item("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
@@ -269,7 +269,7 @@ fn test_parse_course_xml_extract_label_value_without_span_uses_extracted_text() 
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_course_info(xml).unwrap();
+        let result = parse_course_info(py, xml).unwrap();
         let dict = result.as_ref(py);
         let groups = dict.get_item("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
@@ -300,8 +300,8 @@ fn test_parse_course_xml_group_without_panel_fails_strict_validation() {
         </html>
     "#;
 
-    Python::with_gil(|_py| {
-        let result = parse_course_info(xml);
+    Python::with_gil(|py| {
+        let result = parse_course_info(py, xml);
         assert!(result.is_err());
     });
 }
@@ -321,8 +321,8 @@ fn test_parse_course_xml_group_with_empty_panel_data_fails_strict_validation() {
         </html>
     "#;
 
-    Python::with_gil(|_py| {
-        let result = parse_course_info(xml);
+    Python::with_gil(|py| {
+        let result = parse_course_info(py, xml);
         assert!(result.is_err());
     });
 }
@@ -355,7 +355,7 @@ fn test_parse_course_xml_schedule_non_matching_pattern_is_ignored() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_course_info(xml).unwrap();
+        let result = parse_course_info(py, xml).unwrap();
         let dict = result.as_ref(py);
         let groups = dict.get_item("groups").unwrap();
         let groups_list: Vec<pyo3::Py<pyo3::types::PyAny>> = groups.extract().unwrap();
@@ -392,7 +392,7 @@ fn test_parse_course_xml_invalid_credits() {
         </html>
     "#;
 
-    let result = Python::with_gil(|_py| parse_course_info(xml));
+    let result = Python::with_gil(|py| parse_course_info(py, xml));
     assert!(result.is_err());
 }
 
@@ -407,7 +407,7 @@ fn test_parse_course_xml_missing_course_name() {
         </html>
     "#;
 
-    let result = Python::with_gil(|_py| parse_course_info(xml));
+    let result = Python::with_gil(|py| parse_course_info(py, xml));
     assert!(result.is_err());
 }
 
@@ -452,7 +452,7 @@ fn test_parse_prereqs_xml_complete() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml);
+        let result = parse_prereqs(py, xml);
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
@@ -501,7 +501,7 @@ fn test_parse_prereqs_xml_extracts_nested_header_values() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml).unwrap();
+        let result = parse_prereqs(py, xml).unwrap();
         let dict = result.as_ref(py);
         let conditions = dict.get_item("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
@@ -566,7 +566,7 @@ fn test_parse_prereqs_xml_extracts_sibling_header_values() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml).unwrap();
+        let result = parse_prereqs(py, xml).unwrap();
         let dict = result.as_ref(py);
         let conditions = dict.get_item("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
@@ -614,7 +614,7 @@ fn test_parse_prereqs_xml_no_conditions() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml);
+        let result = parse_prereqs(py, xml);
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
@@ -637,7 +637,7 @@ fn test_parse_prereqs_xml_typology_defaults_to_unknown() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml);
+        let result = parse_prereqs(py, xml);
         assert!(result.is_ok());
 
         let py_result = result.unwrap();
@@ -668,7 +668,7 @@ fn test_parse_prereqs_xml_skips_condition_with_too_few_subdivs() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml).unwrap();
+        let result = parse_prereqs(py, xml).unwrap();
         let dict = result.as_ref(py);
         let conditions = dict.get_item("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
@@ -701,8 +701,8 @@ fn test_parse_prereqs_xml_condition_with_too_few_headers_is_strict_error() {
         </html>
     "#;
 
-    Python::with_gil(|_py| {
-        let result = parse_prereqs(xml);
+    Python::with_gil(|py| {
+        let result = parse_prereqs(py, xml);
         assert!(result.is_err());
     });
 }
@@ -736,7 +736,7 @@ fn test_parse_prereqs_xml_fills_missing_header_values_with_empty_string() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml).unwrap();
+        let result = parse_prereqs(py, xml).unwrap();
         let dict = result.as_ref(py);
         let conditions = dict.get_item("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
@@ -778,7 +778,7 @@ fn test_parse_prereqs_xml_skips_prereq_row_with_few_spans() {
     "#;
 
     Python::with_gil(|py| {
-        let result = parse_prereqs(xml).unwrap();
+        let result = parse_prereqs(py, xml).unwrap();
         let dict = result.as_ref(py);
         let conditions = dict.get_item("conditions").unwrap();
         let conditions_list: Vec<pyo3::Py<pyo3::types::PyAny>> = conditions.extract().unwrap();
@@ -816,6 +816,6 @@ fn test_parse_prereqs_xml_missing_course_name() {
         </html>
     "#;
 
-    let result = Python::with_gil(|_py| parse_prereqs(xml));
+    let result = Python::with_gil(|py| parse_prereqs(py, xml));
     assert!(result.is_err());
 }

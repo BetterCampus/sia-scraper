@@ -29,15 +29,15 @@ proptest! {
 
     #[test]
     fn prop_parse_course_info_never_panics(input in random_input()) {
-        pyo3::Python::with_gil(|_| {
-            let _ = parse_course_info(&input);
+        pyo3::Python::with_gil(|py| {
+            let _ = parse_course_info(py, &input);
         });
     }
 
     #[test]
     fn prop_parse_prereqs_never_panics(input in random_input()) {
-        pyo3::Python::with_gil(|_| {
-            let _ = parse_prereqs(&input);
+        pyo3::Python::with_gil(|py| {
+            let _ = parse_prereqs(py, &input);
         });
     }
 
