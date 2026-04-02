@@ -74,7 +74,6 @@ class SiaScraper:
         if isinstance(session_data, dict):
             return self.load_session_dict(session_data)
 
-        # Handle Rust SessionStateModel
         self._load_session_from_model(session_data)
         return self
 
@@ -87,21 +86,12 @@ class SiaScraper:
             state.career_code.split("-") if state.career_code else []
         )
         self._sia_session._status = status.SiaSessionStatus[state.status]
-
-        from .session import _SessionRuntimeState
-
-        runtime = _SessionRuntimeState()
-        runtime.javax_faces_ViewState = state.javax_faces_view_state
-        runtime.course_list = [
+        self._sia_session._course_list = [
             {entry.course_code: entry.course_name} for entry in state.course_list
         ]
-        self._sia_session._session_state = runtime
-        self._sia_session._typed_state = state
 
     def load_session_dict(self, session_data: dict[str, object]) -> "SiaScraper":
         """Restore session from dict (legacy path)."""
-        from .session import _SessionRuntimeState
-
         self._sia_session._career_code = str(session_data.get("career_code", ""))
         self._sia_session._career_name = str(session_data.get("career_name", DEFAULT_CAREER_NAME))
         self._sia_session._is_electives = bool(session_data.get("is_electives", False))
@@ -118,10 +108,6 @@ class SiaScraper:
                 f"Invalid session status '{status_str}'. Allowed statuses are: {allowed_statuses}"
             )
             raise SiaSessionException(message) from exc
-
-        runtime = _SessionRuntimeState()
-        viewstate_val = session_data.get("javax_faces_ViewState")
-        runtime.javax_faces_ViewState = str(viewstate_val) if viewstate_val is not None else ""
 
         course_list_raw: list[dict[str, str]] = []
         raw_course_list = session_data.get("course_list")
@@ -145,47 +131,7 @@ class SiaScraper:
                         )
                 course_list_raw.append(item)
 
-        runtime.course_list = course_list_raw
-
-        typed_entries: list[sia_scraper_rust.CourseListEntryModel] = []
-        for row in course_list_raw:
-            if isinstance(row, dict) and len(row) == 1:
-                course_code, course_name = next(iter(row.items()))
-                typed_entries.append(
-                    sia_scraper_rust.CourseListEntryModel(
-                        course_code=course_code,
-                        course_name=course_name,
-                    )
-                )
-                typed_entries.append(
-                    sia_scraper_rust.CourseListEntryModel(
-                        course_code=next(iter(row.keys())),
-                        course_name=next(iter(row.values())),
-                    )
-                )
-
-        def safe_str_dict(d: object) -> dict[str, str]:
-            if not isinstance(d, dict):
-                return {}
-            result: dict[str, str] = {}
-            for k, v in d.items():
-                if isinstance(k, str) and isinstance(v, str):
-                    result[k] = v
-            return result
-
-        self._sia_session._typed_state = sia_scraper_rust.SessionStateModel(
-            session_headers=safe_str_dict(session_data.get("session_headers")),
-            session_cookies=safe_str_dict(session_data.get("session_cookies")),
-            params=safe_str_dict(session_data.get("params"))
-            or {"Adf-Page-Id": "1", "Adf-Window-Id": ""},
-            career_code=self._sia_session._career_code,
-            career_name=self._sia_session._career_name,
-            is_electives=self._sia_session._is_electives,
-            status=status_str,
-            course_list=typed_entries,
-            javax_faces_view_state=runtime.javax_faces_ViewState or None,
-        )
-
+        self._sia_session._course_list = course_list_raw
         return self
 
     def get_session_data(self) -> sia_scraper_rust.SessionStateModel:
@@ -220,9 +166,12 @@ class SiaScraper:
     async def get_course_info(
         self, course_index: int = 0, course_code: str = ""
     ) -> sia_scraper_rust.CourseInfoModel:
+        """Get course info using zero-copy Rust scraping."""
         resolved_index = self._resolve_course_index(course_index, course_code)
-        xml = await self._sia_session.get_course_xml(resolved_index)
-        return sia_scraper_rust.parse_course_info(xml)  # type: ignore[attr-defined]
+        course = await self._sia_session.scrape_course_info(resolved_index)
+        if course_code:
+            course.code = course_code
+        return course
 
     def get_course_index(self, course_code: str) -> int:
         if self._sia_session.status not in (
@@ -239,9 +188,9 @@ class SiaScraper:
     async def get_course_prereqs(
         self, course_index: int = 0, course_code: str = ""
     ) -> sia_scraper_rust.CoursePrereqsModel:
+        """Get course prerequisites using zero-copy Rust scraping."""
         resolved_index = self._resolve_course_index(course_index, course_code)
-        xml = await self._sia_session.get_course_xml(resolved_index)
-        return sia_scraper_rust.parse_prereqs(xml)  # type: ignore[attr-defined]
+        return await self._sia_session.scrape_course_prereqs(resolved_index)
 
     async def _scrape_abort_mode(
         self, paired: list[tuple[int, str]]

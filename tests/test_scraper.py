@@ -65,7 +65,8 @@ def mock_async_session_class():
         session.status = SiaSessionStatus.NO_SESSION
         session.init_session = AsyncMock()
         session.set_career = AsyncMock()
-        session.get_course_xml = AsyncMock()
+        session.scrape_course_info = AsyncMock()
+        session.scrape_course_prereqs = AsyncMock()
         session.close = AsyncMock()
         session.get_session_data = MagicMock(return_value=mock_state)
         mock_session_class.return_value = session
@@ -124,72 +125,61 @@ class TestSiaScraperScraping:
     """Test async scraping methods."""
 
     @pytest.mark.asyncio
-    async def test_get_course_info_by_index(self, mock_async_session_class, sia_course_detail_xml):
+    async def test_get_course_info_by_index(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
-        mock_session.get_course_xml.return_value = sia_course_detail_xml
+        mock_session.scrape_course_info.return_value = sia_scraper_rust.CourseInfoModel(
+            course_name="Test Course",
+            credits=3,
+            typology="DISCIPLINAR OBLIGATORIA",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
 
-        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
-            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
-                course_name="Test Course",
-                credits=3,
-                typology="DISCIPLINAR OBLIGATORIA",
-                available_spots=20,
-                scrape_timestamp="2024-01-01 12:00",
-                groups=[],
-                code=None,
-            )
+        out = await scraper.get_course_info(course_index=0)
 
-            out = await scraper.get_course_info(course_index=0)
-
-            assert isinstance(out, sia_scraper_rust.CourseInfoModel)
-            mock_session.get_course_xml.assert_awaited_once_with(0)
+        assert isinstance(out, sia_scraper_rust.CourseInfoModel)
+        mock_session.scrape_course_info.assert_awaited_once_with(0)
 
     @pytest.mark.asyncio
-    async def test_get_course_info_by_code(self, mock_async_session_class, sia_course_detail_xml):
+    async def test_get_course_info_by_code(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
         mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
-        mock_session.get_course_xml.return_value = sia_course_detail_xml
+        mock_session.scrape_course_info.return_value = sia_scraper_rust.CourseInfoModel(
+            course_name="Test Course",
+            credits=3,
+            typology="DISCIPLINAR OBLIGATORIA",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
 
-        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
-            rust_mock.parse_course_info.return_value = sia_scraper_rust.CourseInfoModel(
-                course_name="Test Course",
-                credits=3,
-                typology="DISCIPLINAR OBLIGATORIA",
-                available_spots=20,
-                scrape_timestamp="2024-01-01 12:00",
-                groups=[],
-                code=None,
-            )
+        out = await scraper.get_course_info(course_code="2016489")
 
-            out = await scraper.get_course_info(course_code="2016489")
-
-            assert isinstance(out, sia_scraper_rust.CourseInfoModel)
-            mock_session.get_course_xml.assert_awaited_once_with(1)
+        assert isinstance(out, sia_scraper_rust.CourseInfoModel)
+        mock_session.scrape_course_info.assert_awaited_once_with(1)
 
     @pytest.mark.asyncio
-    async def test_get_course_prereqs_by_index(
-        self, mock_async_session_class, sia_course_prereqs_xml
-    ):
+    async def test_get_course_prereqs_by_index(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
-        mock_session.get_course_xml.return_value = sia_course_prereqs_xml
+        mock_session.scrape_course_prereqs.return_value = sia_scraper_rust.CoursePrereqsModel(
+            course_name="Test",
+            code=None,
+            credits=3,
+            typology="DISCIPLINAR",
+            conditions=[],
+        )
 
-        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
-            rust_mock.parse_prereqs.return_value = sia_scraper_rust.CoursePrereqsModel(
-                course_name="Test",
-                code=None,
-                credits=3,
-                typology="DISCIPLINAR",
-                conditions=[],
-            )
+        out = await scraper.get_course_prereqs(course_index=0)
 
-            out = await scraper.get_course_prereqs(course_index=0)
-
-            assert isinstance(out, sia_scraper_rust.CoursePrereqsModel)
-            mock_session.get_course_xml.assert_awaited_once_with(0)
+        assert isinstance(out, sia_scraper_rust.CoursePrereqsModel)
+        mock_session.scrape_course_prereqs.assert_awaited_once_with(0)
 
     def test_get_course_index_invalid_status_raises(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
@@ -205,46 +195,43 @@ class TestSiaScraperBatchScraping:
     """Test async batch scrape modes."""
 
     @pytest.mark.asyncio
-    async def test_scrape_courses_abort_mode_sorted_alignment(
-        self, mock_async_session_class, sia_course_detail_xml
-    ):
+    async def test_scrape_courses_abort_mode_sorted_alignment(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
-        mock_session.get_course_xml.return_value = sia_course_detail_xml
 
-        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
-            rust_mock.parse_course_info.side_effect = [
-                sia_scraper_rust.CourseInfoModel(
-                    course_name=f"Course {idx}",
-                    credits=3,
-                    typology="DISCIPLINAR",
-                    available_spots=20,
-                    scrape_timestamp="2024-01-01 12:00",
-                    groups=[],
-                    code=None,
-                )
-                for idx in [3, 1, 2]
-            ]
-
-            out = await scraper.scrape_courses(
-                courses_indices=[3, 1, 2],
-                courses_codes=["QUIMICA", "ALGEBRA", "FISICA"],
-                error_mode=ErrorMode.ABORT,
+        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
+            return sia_scraper_rust.CourseInfoModel(
+                course_name=f"Course {index}",
+                credits=3,
+                typology="DISCIPLINAR",
+                available_spots=20,
+                scrape_timestamp="2024-01-01 12:00",
+                groups=[],
+                code=None,
             )
 
-            assert isinstance(out, list)
-            assert len(out) == 3
-            assert out[0].code == "ALGEBRA"
-            assert out[1].code == "FISICA"
-            assert out[2].code == "QUIMICA"
+        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
+
+        out = await scraper.scrape_courses(
+            courses_indices=[3, 1, 2],
+            courses_codes=["QUIMICA", "ALGEBRA", "FISICA"],
+            error_mode=ErrorMode.ABORT,
+        )
+
+        assert isinstance(out, list)
+        assert len(out) == 3
+        assert out[0].code == "ALGEBRA"
+        assert out[1].code == "FISICA"
+        assert out[2].code == "QUIMICA"
 
     @pytest.mark.asyncio
     async def test_scrape_courses_skip_mode_returns_result(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
+        mock_session = _mock_session(scraper)
 
-        with patch("sia_scraper.scraper.sia_scraper_rust") as rust_mock:
-            rust_mock.parse_course_info.side_effect = [
-                sia_scraper_rust.CourseInfoModel(
+        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
+            if index == 0:
+                return sia_scraper_rust.CourseInfoModel(
                     course_name="Course A",
                     credits=3,
                     typology="DISCIPLINAR",
@@ -252,18 +239,19 @@ class TestSiaScraperBatchScraping:
                     scrape_timestamp="2024-01-01 12:00",
                     groups=[],
                     code=None,
-                ),
-                RuntimeError("boom"),
-            ]
+                )
+            raise RuntimeError("boom")
 
-            out = await scraper.scrape_courses(
-                courses_indices=[0, 1],
-                courses_codes=["A", "B"],
-                error_mode=ErrorMode.SKIP,
-            )
+        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
 
-            assert isinstance(out, ScrapeResult)
-            assert len(out.successes) == 1
+        out = await scraper.scrape_courses(
+            courses_indices=[0, 1],
+            courses_codes=["A", "B"],
+            error_mode=ErrorMode.SKIP,
+        )
+
+        assert isinstance(out, ScrapeResult)
+        assert len(out.successes) == 1
 
 
 @pytest.mark.unit
@@ -333,8 +321,7 @@ class TestSiaScraperSessionState:
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
-        scraper.sia_session._session_state = MagicMock()
-        scraper.sia_session._session_state.course_list = [{"1000001": "Calculo"}]
+        scraper.sia_session._course_list = [{"1000001": "Calculo"}]
 
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.get_course_index("9999999")
