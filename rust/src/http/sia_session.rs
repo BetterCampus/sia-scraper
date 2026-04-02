@@ -421,14 +421,14 @@ impl SiaSession {
     /// `CourseInfoModel` containing parsed course data
     ///
     /// # Errors
-    /// Returns `HttpError` if the session is not on a career page, or if
+    /// Returns `HttpError` if the session is not on a career or course page, or if
     /// HTTP/parsing fails.
     pub async fn scrape_course_info(&self, course_index: i32) -> Result<CourseInfoModel, HttpError> {
         let state = self.get_state().await;
 
         if state.status != "ON_CAREER_PAGE" && state.status != "ON_COURSE_PAGE" {
             return Err(HttpError::InvalidInput(
-                "scrape_course_info: session not on career page".to_string(),
+                "scrape_course_info: session not on career or course page".to_string(),
             ));
         }
 
@@ -467,7 +467,7 @@ impl SiaSession {
     /// `CoursePrereqsModel` containing parsed prerequisite data
     ///
     /// # Errors
-    /// Returns `HttpError` if the session is not on a career page, or if
+    /// Returns `HttpError` if the session is not on a career or course page, or if
     /// HTTP/parsing fails.
     pub async fn scrape_course_prereqs(
         &self,
@@ -477,7 +477,7 @@ impl SiaSession {
 
         if state.status != "ON_CAREER_PAGE" && state.status != "ON_COURSE_PAGE" {
             return Err(HttpError::InvalidInput(
-                "scrape_course_prereqs: session not on career page".to_string(),
+                "scrape_course_prereqs: session not on career or course page".to_string(),
             ));
         }
 
@@ -730,7 +730,7 @@ mod tests {
         let result = session.scrape_course_info(0).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("not on career page"));
+        assert!(err.to_string().contains("not on career or course page"));
     }
 
     #[tokio::test]
@@ -758,7 +758,7 @@ mod tests {
         let result = session.scrape_course_prereqs(0).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("not on career page"));
+        assert!(err.to_string().contains("not on career or course page"));
     }
 
     #[tokio::test]
