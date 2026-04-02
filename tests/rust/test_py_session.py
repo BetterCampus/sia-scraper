@@ -59,7 +59,7 @@ class TestPySiaSessionPickle:
     def test_pickle_preserves_timeout(self) -> None:
         session = sia_scraper_rust.PySiaSession(timeout=45)
         pickled = pickle.dumps(session)
-        restored = pickle.loads(pickled)
+        _restored = pickle.loads(pickled)
         # Note: After unpickling, session is not initialized
         # This is expected behavior - user must call init_session() again
 
@@ -70,10 +70,10 @@ class TestPySiaSessionTypeHints:
     def test_type_hint_imports(self) -> None:
         """Verify that all types can be imported."""
         from sia_scraper_rust import (
-            PySiaSession,
-            SessionStateModel,
             CourseInfoModel,
             CoursePrereqsModel,
+            PySiaSession,
+            SessionStateModel,
         )
 
         assert PySiaSession is not None

@@ -911,7 +911,7 @@ class PySiaSession:
         """
         ...
 
-    async def __aenter__(self) -> "PySiaSession":
+    async def __aenter__(self) -> PySiaSession:
         """Async context manager entry.
 
         Returns self for use in `async with` statement.

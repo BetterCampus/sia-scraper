@@ -57,6 +57,8 @@ pub struct PySiaSession {
     timeout: u64,
 }
 
+/// Suppress non_local_definitions warning caused by PyO3 macro expansion.
+/// This is a known false positive with #[pymethods] in Rust 1.81+.
 #[pymethods]
 impl PySiaSession {
     /// Create a new PySiaSession instance.
