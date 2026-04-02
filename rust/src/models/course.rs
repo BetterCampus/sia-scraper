@@ -232,7 +232,7 @@ pub struct CourseInfoModel {
     pub scrape_timestamp: String,
     #[pyo3(get)]
     pub groups: Vec<GroupModel>,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub code: Option<String>,
 }
 

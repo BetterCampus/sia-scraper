@@ -1,8 +1,6 @@
 """Rust-backed async SIA session management."""
 
-import json
 from contextlib import asynccontextmanager
-from typing import TypedDict
 
 import sia_scraper_rust
 
@@ -10,35 +8,35 @@ from .constants import status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
 from .core.exceptions import ConcurrentAccessError
-from .models.session import CourseListEntryTyped, SessionStateTyped
 
 
-class _SessionRuntimeState(TypedDict, total=False):
+class _SessionRuntimeState:
     """Lightweight runtime state returned by Rust session helpers."""
 
-    javax_faces_ViewState: str | None
-    course_list: list[dict[str, str]]
+    __slots__ = ("javax_faces_ViewState", "course_list")
+
+    def __init__(self) -> None:
+        self.javax_faces_ViewState: str | None = None
+        self.course_list: list[dict[str, str]] = []
 
 
-def _validate_rust_session_payload(raw_payload: object) -> SessionStateTyped:
-    """Validate and decode typed Rust session payloads."""
-    if not isinstance(raw_payload, str):
-        raise TypeError("Rust session payload must be a JSON string")
-    payload = json.loads(raw_payload)
-    return SessionStateTyped.model_validate(payload)
+def _typed_state_to_runtime(
+    state: sia_scraper_rust.SessionStateModel,
+) -> _SessionRuntimeState:
+    """Convert typed Rust session state to runtime state."""
+    runtime = _SessionRuntimeState()
+    runtime.javax_faces_ViewState = state.javax_faces_view_state
+    runtime.course_list = [{entry.course_code: entry.course_name} for entry in state.course_list]
+    return runtime
 
 
-def _typed_course_list_to_legacy(
-    typed_course_list: list[CourseListEntryTyped],
-) -> list[dict[str, str]]:
-    return [{entry.course_code: entry.course_name} for entry in typed_course_list]
-
-
-def _legacy_course_list_to_typed(course_list: object) -> list[CourseListEntryTyped]:
+def _legacy_course_list_to_typed(
+    course_list: object,
+) -> list[sia_scraper_rust.CourseListEntryModel]:
     if not isinstance(course_list, list):
         raise TypeError("course_list must be a list")
 
-    typed_entries: list[CourseListEntryTyped] = []
+    typed_entries: list[sia_scraper_rust.CourseListEntryModel] = []
     for index, row in enumerate(course_list):
         if not isinstance(row, dict):
             raise TypeError(f"course_list[{index}] must be a dict")
@@ -46,7 +44,7 @@ def _legacy_course_list_to_typed(course_list: object) -> list[CourseListEntryTyp
             raise ValueError(f"course_list[{index}] must contain exactly one course entry")
         course_code, course_name = next(iter(row.items()))
         typed_entries.append(
-            CourseListEntryTyped(
+            sia_scraper_rust.CourseListEntryModel(
                 course_code=str(course_code),
                 course_name=str(course_name),
             )
@@ -90,8 +88,8 @@ class SiaSession:
         self._is_electives = False
         self._career_indices: list[str] = []
         self._status: status.SiaSessionStatus = status.SiaSessionStatus.NO_SESSION
-        self._session_state: _SessionRuntimeState = {}
-        self._typed_state: SessionStateTyped | None = None
+        self._session_state = _SessionRuntimeState()
+        self._typed_state: sia_scraper_rust.SessionStateModel | None = None
         self._active_operation: str | None = None
 
     @classmethod
@@ -143,7 +141,7 @@ class SiaSession:
     @property
     def course_list(self) -> list[dict[str, str]]:
         """Get loaded course list for the selected career."""
-        return self._session_state.get("course_list", [])
+        return self._session_state.course_list
 
     @property
     def career_indices(self) -> list[str]:
@@ -153,8 +151,7 @@ class SiaSession:
     async def init_session(self) -> None:
         """Initialize HTTP session with SIA and fetch initial ViewState."""
         async with self._operation("init_session"):
-            result = await sia_scraper_rust.init_sia_session_json(self._timeout)  # type: ignore[attr-defined]
-            typed_state = _validate_rust_session_payload(result)
+            typed_state = await sia_scraper_rust.init_sia_session(self._timeout)  # type: ignore[attr-defined]
             self._status = status.SiaSessionStatus[typed_state.status]
             self._career_code = typed_state.career_code
             self._career_name = typed_state.career_name
@@ -162,31 +159,24 @@ class SiaSession:
             self._career_indices = (
                 typed_state.career_code.split("-") if typed_state.career_code else []
             )
-            self._session_state = {
-                "javax_faces_ViewState": typed_state.javax_faces_ViewState,
-                "course_list": _typed_course_list_to_legacy(typed_state.course_list),
-            }
+            self._session_state = _typed_state_to_runtime(typed_state)
             self._typed_state = typed_state
 
     async def set_career(self, search_code: str, is_electives: bool = False) -> None:
         """Navigate to career and load course list."""
         async with self._operation("set_career"):
-            result = await sia_scraper_rust.set_career_json(  # type: ignore[attr-defined]
+            typed_state = await sia_scraper_rust.set_career(  # type: ignore[attr-defined]
                 self._timeout,
                 search_code,
                 is_electives,
             )
-            typed_state = _validate_rust_session_payload(result)
             self._career_code = typed_state.career_code
             self._career_indices = (
                 typed_state.career_code.split("-") if typed_state.career_code else []
             )
             self._is_electives = typed_state.is_electives
             self._career_name = typed_state.career_name
-            self._session_state = {
-                "javax_faces_ViewState": typed_state.javax_faces_ViewState,
-                "course_list": _typed_course_list_to_legacy(typed_state.course_list),
-            }
+            self._session_state = _typed_state_to_runtime(typed_state)
             self._status = status.SiaSessionStatus[typed_state.status]
             self._typed_state = typed_state
 
@@ -217,24 +207,24 @@ class SiaSession:
         """Close the session and cleanup resources."""
         async with self._operation("close"):
             self._status = status.SiaSessionStatus.NO_SESSION
-            self._session_state = {}
+            self._session_state = _SessionRuntimeState()
             self._typed_state = None
 
-    def get_session_data(self) -> SessionStateTyped:
+    def get_session_data(self) -> sia_scraper_rust.SessionStateModel:
         """Serialize session state for persistence."""
-        typed_course_list = _legacy_course_list_to_typed(self.course_list)
-        base_state = self._typed_state
+        if self._typed_state is not None:
+            return self._typed_state
 
-        return SessionStateTyped(
-            session_headers=base_state.session_headers if base_state else {},
-            session_cookies=base_state.session_cookies if base_state else {},
-            params=(base_state.params if base_state else {"Adf-Page-Id": "1", "Adf-Window-Id": ""}),
-            javax_faces_ViewState=self._session_state.get("javax_faces_ViewState"),
+        return sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
             career_code=self._career_code,
             career_name=self._career_name,
             is_electives=self._is_electives,
             status=self._status.value,
-            course_list=typed_course_list,
+            course_list=_legacy_course_list_to_typed(self.course_list),
+            javax_faces_view_state=self._session_state.javax_faces_ViewState,
         )
 
     async def __aenter__(self) -> "SiaSession":

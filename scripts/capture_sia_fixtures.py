@@ -180,8 +180,8 @@ def extract_replacements(scraper: SiaScraper, config: CaptureConfig) -> dict[str
 
     replacements: dict[str, str] = {}
 
-    if config.sanitize_viewstate and session_data.javax_faces_ViewState:
-        replacements[session_data.javax_faces_ViewState] = "SANITIZED_VIEWSTATE_TOKEN_12345"
+    if config.sanitize_viewstate and session_data.javax_faces_view_state:
+        replacements[session_data.javax_faces_view_state] = "SANITIZED_VIEWSTATE_TOKEN_12345"
 
     params = session_data.params
     if config.sanitize_window_id and "Adf-Window-Id" in params:
@@ -582,7 +582,24 @@ async def main() -> int:
         )
 
         print("[5/6] Saving session metadata...")
-        session_data = scraper.get_session_data().model_dump()
+        session_model = scraper.get_session_data()
+        session_data = {
+            "session_headers": dict(session_model.session_headers),
+            "session_cookies": dict(session_model.session_cookies),
+            "params": dict(session_model.params),
+            "javax_faces_ViewState": session_model.javax_faces_view_state,
+            "career_code": session_model.career_code,
+            "career_name": session_model.career_name,
+            "is_electives": session_model.is_electives,
+            "status": session_model.status,
+            "course_list": [
+                {
+                    "course_code": entry.course_code,
+                    "course_name": entry.course_name,
+                }
+                for entry in session_model.course_list
+            ],
+        }
         session_data = sanitize_json_data(session_data, replacements, config.sanitization_enabled)
         generated_files.append(
             save_json_fixture(

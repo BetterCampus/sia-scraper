@@ -11,7 +11,7 @@ python-packages = ["sia_scraper", "sia_scraper_rust"]
 
 [project]
 name = "sia-scraper"
-version = "1.0.0"
+version = "3.0.0-beta.1"
 description = "Library to extract academic information from the SIA"
 readme = "README.md"
 requires-python = ">=3.10"

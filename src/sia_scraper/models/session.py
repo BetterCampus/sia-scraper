@@ -1,4 +1,18 @@
-"""Typed session models for Rust/Python transport payloads."""
+"""Typed session models for Rust/Python transport payloads.
+
+.. deprecated::
+    Use `sia_scraper_rust.SessionStateModel` and `sia_scraper_rust.CourseListEntryModel`
+    directly instead. These Python models will be removed in version 3.1.0.
+"""
+
+# ruff: noqa: E402
+import warnings
+
+warnings.warn(
+    "sia_scraper.models.session is deprecated; use sia_scraper_rust.SessionStateModel instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
