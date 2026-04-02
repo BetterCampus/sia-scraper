@@ -1,0 +1,414 @@
+//! Python-accessible SiaSession wrapper with async methods.
+//!
+//! This module provides a stateful PyO3 wrapper around the Rust SiaSession,
+//! enabling Python code to maintain persistent session state across method calls.
+
+#![allow(non_local_definitions)]
+
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use pyo3::Python;
+use pyo3_asyncio::tokio::future_into_py;
+
+use crate::constants::SIA_BASE_URL;
+use crate::http::errors::HttpError;
+use crate::http::sia_session::SiaSession;
+use crate::models::session::SessionStateModel;
+
+impl From<HttpError> for PyErr {
+    fn from(err: HttpError) -> PyErr {
+        pyo3::exceptions::PyRuntimeError::new_err(err.to_string())
+    }
+}
+
+type SessionState = Option<SiaSession>;
+
+fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
+    dict.get_item(key)?
+        .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("Missing key: {key}")))
+}
+
+/// Stateful SIA session wrapper for Python.
+///
+/// This class wraps the Rust SiaSession and provides async methods
+/// that can be called from Python. The session maintains state across
+/// method calls, eliminating the need to pass session data back and forth.
+///
+/// Supports pickle serialization for session persistence and async context
+/// manager protocol for `async with PySiaSession() as session:` patterns.
+///
+/// # Example
+/// ```python
+/// import asyncio
+/// import sia_scraper_rust
+///
+/// async def main():
+///     async with sia_scraper_rust.PySiaSession(timeout=30) as session:
+///         await session.init_session()
+///         await session.set_career("0-2-8-3")
+///         course = await session.scrape_course_info(0)
+///         print(course.course_name)
+///
+/// asyncio.run(main())
+/// ```
+#[pyclass(module = "sia_scraper_rust")]
+pub struct PySiaSession {
+    inner: Arc<RwLock<SessionState>>,
+    timeout: u64,
+}
+
+/// Suppress non_local_definitions warning caused by PyO3 macro expansion.
+/// This is a known false positive with #[pymethods] in Rust 1.81+.
+#[pymethods]
+impl PySiaSession {
+    /// Create a new PySiaSession instance.
+    ///
+    /// The session is not immediately initialized - call init_session()
+    /// to establish the HTTP connection and fetch initial state.
+    ///
+    /// # Arguments
+    /// * `timeout` - Request timeout in seconds (default: 15)
+    ///
+    /// # Returns
+    /// New PySiaSession instance
+    ///
+    /// # Example
+    /// ```python
+    /// session = sia_scraper_rust.PySiaSession(timeout=30)
+    /// ```
+    #[new]
+    fn new(timeout: Option<u64>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(None)),
+            timeout: timeout.unwrap_or(15),
+        }
+    }
+
+    /// Initialize the SIA session and fetch initial ViewState.
+    ///
+    /// This must be called before any other session methods. It establishes
+    /// the HTTP session with the SIA server and extracts Oracle ADF parameters.
+    ///
+    /// # Returns
+    /// `SessionStateModel` with initial session state
+    ///
+    /// # Raises
+    /// RuntimeError: If connection fails or ViewState not found
+    ///
+    /// # Example
+    /// ```python
+    /// session = sia_scraper_rust.PySiaSession()
+    /// state = await session.init_session()
+    /// print(state.career_code)  # Empty until set_career is called
+    /// ```
+    fn init_session<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+        let timeout = self.timeout;
+        let base_url = SIA_BASE_URL.to_string();
+
+        future_into_py(py, async move {
+            let session = SiaSession::new(timeout, base_url)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            session
+                .init_session()
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            let state = session.get_state().await;
+
+            *inner.write().await = Some(session);
+
+            Ok(SessionStateModel::from_session_state(&state))
+        })
+    }
+
+    /// Navigate to a career and load the course list.
+    ///
+    /// # Arguments
+    /// * `search_code` - Career search code (e.g., "0-2-8-3")
+    /// * `electives` - True for elective courses, False for required (default: false)
+    ///
+    /// # Returns
+    /// `SessionStateModel` with career info and course list
+    ///
+    /// # Raises
+    /// RuntimeError: If session not initialized or navigation fails
+    ///
+    /// # Example
+    /// ```python
+    /// state = await session.set_career("0-2-8-3")
+    /// print(f"Loaded {len(state.course_list)} courses")
+    /// ```
+    fn set_career<'py>(
+        &self,
+        py: Python<'py>,
+        search_code: String,
+        electives: Option<bool>,
+    ) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+        let electives = electives.unwrap_or(false);
+
+        future_into_py(py, async move {
+            let session_guard = inner.read().await;
+            let session = session_guard
+                .as_ref()
+                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                    "Session not initialized. Call init_session() first."
+                ))?;
+
+            let state = session
+                .set_career(&search_code, electives)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Ok(SessionStateModel::from_session_state(&state))
+        })
+    }
+
+    /// Scrape course information for the given index.
+    ///
+    /// Combines HTTP fetch and parsing in a single Rust call, eliminating
+    /// string copying across the FFI boundary.
+    ///
+    /// # Arguments
+    /// * `course_index` - Index of course in course_list (0-based)
+    ///
+    /// # Returns
+    /// `CourseInfoModel` with complete course data
+    ///
+    /// # Raises
+    /// RuntimeError: If session not on career page or index out of range
+    ///
+    /// # Example
+    /// ```python
+    /// course = await session.scrape_course_info(0)
+    /// print(f"Course: {course.course_name}, Credits: {course.credits}")
+    /// ```
+    fn scrape_course_info<'py>(&self, py: Python<'py>, course_index: i32) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+
+        future_into_py(py, async move {
+            let session_guard = inner.read().await;
+            let session = session_guard
+                .as_ref()
+                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                    "Session not initialized. Call init_session() first."
+                ))?;
+
+            session
+                .scrape_course_info(course_index)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    /// Scrape prerequisite information for the given course index.
+    ///
+    /// # Arguments
+    /// * `course_index` - Index of course in course_list (0-based)
+    ///
+    /// # Returns
+    /// `CoursePrereqsModel` with prerequisite conditions
+    ///
+    /// # Raises
+    /// RuntimeError: If session not on career page or index out of range
+    ///
+    /// # Example
+    /// ```python
+    /// prereqs = await session.scrape_course_prereqs(0)
+    /// print(f"Prerequisites: {len(prereqs.conditions)} conditions")
+    /// ```
+    fn scrape_course_prereqs<'py>(
+        &self,
+        py: Python<'py>,
+        course_index: i32,
+    ) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+
+        future_into_py(py, async move {
+            let session_guard = inner.read().await;
+            let session = session_guard
+                .as_ref()
+                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                    "Session not initialized. Call init_session() first."
+                ))?;
+
+            session
+                .scrape_course_prereqs(course_index)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    /// Get the current session state.
+    ///
+    /// # Returns
+    /// `SessionStateModel` with current session state
+    ///
+    /// # Raises
+    /// RuntimeError: If session not initialized
+    ///
+    /// # Example
+    /// ```python
+    /// state = await session.get_state()
+    /// print(f"Status: {state.status}")
+    /// ```
+    fn get_state<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+
+        future_into_py(py, async move {
+            let session_guard = inner.read().await;
+            let session = session_guard
+                .as_ref()
+                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                    "Session not initialized. Call init_session() first."
+                ))?;
+
+            let state = session.get_state().await;
+            Ok(SessionStateModel::from_session_state(&state))
+        })
+    }
+
+    /// Get the request timeout in seconds.
+    ///
+    /// # Returns
+    /// Timeout value in seconds
+    ///
+    /// # Example
+    /// ```python
+    /// session = sia_scraper_rust.PySiaSession(timeout=30)
+    /// print(session.timeout)  # 30
+    /// ```
+    #[getter]
+    fn timeout(&self) -> u64 {
+        self.timeout
+    }
+
+    /// Check if the session has been initialized.
+    ///
+    /// # Returns
+    /// True if init_session() has been called, False otherwise
+    ///
+    /// # Example
+    /// ```python
+    /// session = sia_scraper_rust.PySiaSession()
+    /// print(session.is_initialized())  # False
+    /// await session.init_session()
+    /// print(session.is_initialized())  # True
+    /// ```
+    fn is_initialized(&self) -> bool {
+        self.inner
+            .try_read()
+            .map(|guard| guard.is_some())
+            .unwrap_or(false)
+    }
+
+    /// Support for pickle serialization.
+    ///
+    /// Gets the session state for pickling. Note that the actual
+    /// SiaSession contains async state that cannot be pickled, so
+    /// we only pickle the configuration (timeout).
+    fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("timeout", self.timeout)?;
+        Ok(dict.into_py(py))
+    }
+
+    /// Support for pickle deserialization.
+    ///
+    /// Restores session from pickled state. The session will need
+    /// to be re-initialized after unpickling.
+    fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
+        let dict = state.downcast::<pyo3::types::PyDict>()?;
+        self.timeout = required_item(dict, "timeout")?.extract()?;
+        // Re-initialize the inner to None since we can't restore the actual session
+        self.inner = Arc::new(RwLock::new(None));
+        Ok(())
+    }
+
+    /// String representation for debugging.
+    fn __repr__(&self) -> String {
+        format!("PySiaSession(timeout={})", self.timeout)
+    }
+
+    /// Async context manager entry - auto-initializes session if needed.
+    ///
+    /// If session is not already initialized, this will automatically
+    /// call init_session() upon entering the context.
+    ///
+    /// # Returns
+    /// Self (the session)
+    ///
+    /// # Raises
+    /// RuntimeError: If auto-initialization fails
+    ///
+    /// # Example
+    /// ```python
+    /// async with sia_scraper_rust.PySiaSession() as session:
+    ///     # Session is automatically initialized
+    ///     state = await session.get_state()
+    ///     # ... use session ...
+    /// ```
+    fn __aenter__<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let session_clone = self.clone();
+        let base_url = SIA_BASE_URL.to_string();
+
+        future_into_py(py, async move {
+            let needs_init = {
+                let guard = session_clone.inner.read().await;
+                guard.is_none()
+            };
+
+            if needs_init {
+                let session = SiaSession::new(session_clone.timeout, base_url)
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+                session.init_session()
+                    .await
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+                *session_clone.inner.write().await = Some(session);
+            }
+
+            Python::with_gil(|py| Ok(session_clone.into_py(py)))
+        })
+    }
+
+    /// Async context manager exit - cleanup (no-op).
+    ///
+    /// Currently a no-op since we don't have explicit cleanup to do.
+    /// The session can be re-used if needed.
+    fn __aexit__<'py>(
+        &self,
+        py: Python<'py>,
+        _exc_type: &PyAny,
+        _exc_val: &PyAny,
+        _exc_tb: &PyAny,
+    ) -> PyResult<&'py PyAny> {
+        future_into_py(py, async move {
+            Ok(Python::with_gil(|py| py.None()))
+        })
+    }
+}
+
+impl Clone for PySiaSession {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            timeout: self.timeout,
+        }
+    }
+}
+
+impl Default for PySiaSession {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(None)),
+            timeout: 15,
+        }
+    }
+}

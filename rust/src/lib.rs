@@ -623,6 +623,9 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<models::prerequisite::PrereqConditionModel>()?;
     m.add_class::<models::prerequisite::CoursePrereqsModel>()?;
     
+    // Register PySiaSession stateful wrapper
+    m.add_class::<http::PySiaSession>()?;
+    
     // Register parsing functions
     m.add_function(wrap_pyfunction!(parse_course_info, m)?)?;
     m.add_function(wrap_pyfunction!(parse_course_info_json, m)?)?;

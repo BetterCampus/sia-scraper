@@ -778,3 +778,164 @@ def get_course_xml(
     Returns:
         Awaitable resolving to raw XML string.
     """
+
+class PySiaSession:
+    """Stateful SIA session for performing authenticated HTTP operations.
+
+    This class wraps a Rust session and maintains state across method calls.
+    All methods that perform network I/O are async and must be awaited.
+
+    Supports:
+    - Async context manager: `async with PySiaSession() as session:`
+    - Pickle serialization: `pickle.dumps(session)` (session must be re-initialized)
+
+    Example:
+        >>> import asyncio
+        >>> import sia_scraper_rust
+        >>>
+        >>> async def main():
+        ...     async with sia_scraper_rust.PySiaSession(timeout=30) as session:
+        ...         # Session is automatically initialized on entry
+        ...         await session.set_career("0-2-8-3")
+        ...         course = await session.scrape_course_info(0)
+        ...         print(course.course_name)
+        >>>
+        >>> asyncio.run(main())
+    """
+
+    def __init__(self, timeout: int | None = None) -> None:
+        """Create a new PySiaSession.
+
+        Args:
+            timeout: Request timeout in seconds (default: 15).
+        """
+        ...
+
+    def init_session(self) -> Awaitable[SessionStateModel]:
+        """Initialize the SIA session and fetch initial ViewState.
+
+        Must be called before any other methods. Establishes HTTP session
+        with SIA server and extracts Oracle ADF parameters.
+
+        Returns:
+            SessionStateModel with initial session state.
+
+        Raises:
+            RuntimeError: If connection fails or ViewState not found.
+        """
+        ...
+
+    def set_career(
+        self,
+        search_code: str,
+        electives: bool | None = None,
+    ) -> Awaitable[SessionStateModel]:
+        """Navigate to a career and load the course list.
+
+        Args:
+            search_code: Career search code (e.g., "0-2-8-3").
+            electives: True for elective courses, False for required (default: False).
+
+        Returns:
+            SessionStateModel with career info and course list.
+
+        Raises:
+            RuntimeError: If session not initialized or navigation fails.
+        """
+        ...
+
+    def scrape_course_info(self, course_index: int) -> Awaitable[CourseInfoModel]:
+        """Scrape course information for the given index.
+
+        Combines HTTP fetch and parsing in a single Rust call, eliminating
+        string copying across the FFI boundary.
+
+        Args:
+            course_index: Index of course in course_list (0-based).
+
+        Returns:
+            CourseInfoModel with complete course data.
+
+        Raises:
+            RuntimeError: If session not on career page or index out of range.
+        """
+        ...
+
+    def scrape_course_prereqs(self, course_index: int) -> Awaitable[CoursePrereqsModel]:
+        """Scrape prerequisite information for the given course index.
+
+        Args:
+            course_index: Index of course in course_list (0-based).
+
+        Returns:
+            CoursePrereqsModel with prerequisite conditions.
+
+        Raises:
+            RuntimeError: If session not on career page or index out of range.
+        """
+        ...
+
+    def get_state(self) -> Awaitable[SessionStateModel]:
+        """Get the current session state.
+
+        Returns:
+            SessionStateModel with current session state.
+
+        Raises:
+            RuntimeError: If session not initialized.
+        """
+        ...
+
+    @property
+    def timeout(self) -> int:
+        """Get the request timeout in seconds.
+
+        Returns:
+            Timeout value in seconds (default: 15).
+        """
+        ...
+
+    def is_initialized(self) -> bool:
+        """Check if the session has been initialized.
+
+        Returns:
+            True if init_session() has been called, False otherwise.
+        """
+        ...
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Get state for pickle serialization.
+
+        Returns only the timeout configuration, not the actual session.
+        Session must be re-initialized after unpickling.
+        """
+        ...
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore session from pickled state.
+
+        The session will need to be re-initialized after unpickling.
+        """
+        ...
+
+    def __aenter__(self) -> Awaitable[PySiaSession]:
+        """Async context manager entry.
+
+        Automatically initializes session if not already initialized.
+
+        Returns:
+            Self for use in `async with` statement.
+        """
+        ...
+
+    def __aexit__(
+        self,
+        exc_type: type | None,
+        exc_val: BaseException | None,
+        exc_tb: Any | None,
+    ) -> Awaitable[None]:
+        """Async context manager exit.
+
+        Currently a no-op.
+        """
+        ...
