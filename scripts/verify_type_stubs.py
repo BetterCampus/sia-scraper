@@ -21,7 +21,6 @@ Exit codes:
 
 import re
 import sys
-import ast
 from pathlib import Path
 
 
