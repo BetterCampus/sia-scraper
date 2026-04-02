@@ -509,29 +509,27 @@ fn test_parse_prereqs_xml_extracts_nested_header_values() {
 
         let cond = conditions_list[0].as_ref(py);
         assert_eq!(
-            cond.getattr("condition")
+            cond.getattr("condition").unwrap().extract::<i32>().unwrap(),
+            1
+        );
+        assert_eq!(
+            cond.getattr("prereq_type")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
-            "1"
-        );
-        assert_eq!(
-            cond.getattr("type").unwrap().extract::<String>().unwrap(),
             "M"
         );
-        assert_eq!(
-            cond.getattr("all_required")
-                .unwrap()
-                .extract::<String>()
-                .unwrap(),
-            "N"
-        );
+        assert!(!cond
+            .getattr("all_required")
+            .unwrap()
+            .extract::<bool>()
+            .unwrap());
         assert_eq!(
             cond.getattr("number_of_courses")
                 .unwrap()
-                .extract::<String>()
+                .extract::<i32>()
                 .unwrap(),
-            "1"
+            1
         );
     });
 }
@@ -574,29 +572,27 @@ fn test_parse_prereqs_xml_extracts_sibling_header_values() {
 
         let cond = conditions_list[0].as_ref(py);
         assert_eq!(
-            cond.getattr("condition")
+            cond.getattr("condition").unwrap().extract::<i32>().unwrap(),
+            2
+        );
+        assert_eq!(
+            cond.getattr("prereq_type")
                 .unwrap()
                 .extract::<String>()
                 .unwrap(),
-            "2"
-        );
-        assert_eq!(
-            cond.getattr("type").unwrap().extract::<String>().unwrap(),
             "O"
         );
-        assert_eq!(
-            cond.getattr("all_required")
-                .unwrap()
-                .extract::<String>()
-                .unwrap(),
-            "S"
-        );
+        assert!(cond
+            .getattr("all_required")
+            .unwrap()
+            .extract::<bool>()
+            .unwrap());
         assert_eq!(
             cond.getattr("number_of_courses")
                 .unwrap()
-                .extract::<String>()
+                .extract::<i32>()
                 .unwrap(),
-            "3"
+            3
         );
     });
 }
@@ -744,7 +740,7 @@ fn test_parse_prereqs_xml_fills_missing_header_values_with_empty_string() {
 
         let cond = conditions_list[0].as_ref(py);
         let number_of_courses = cond.getattr("number_of_courses").unwrap();
-        assert_eq!(number_of_courses.extract::<String>().unwrap(), "0");
+        assert_eq!(number_of_courses.extract::<i32>().unwrap(), 0);
     });
 }
 
