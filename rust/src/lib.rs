@@ -597,7 +597,7 @@ fn get_course_xml<'p>(
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         let xml = session
-            .get_course_xml(&search_code, electives, course_index)
+            .get_course_xml_internal(&search_code, electives, course_index)
             .await
             .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
