@@ -1,59 +1,124 @@
-"""Tests for typed Rust bridge prerequisite models."""
+"""Tests for Rust PyClass prerequisite models."""
 
-import pytest
-from pydantic import ValidationError
-
-from sia_scraper.models.prerequisite import CoursePrereqsTyped
+import sia_scraper_rust
 
 
-class TestCoursePrereqsTyped:
-    def test_valid_payload(self):
-        payload = {
-            "course_name": "PROGRAMACION I (2016489)",
-            "code": None,
-            "credits": 3,
-            "typology": "DISCIPLINAR OBLIGATORIA",
-            "conditions": [
-                {
-                    "condition": 1,
-                    "type": "M",
-                    "all_required": True,
-                    "number_of_courses": 1,
-                    "prerequisites": [
-                        {
-                            "course_code": "1000001",
-                            "course_name": "CALCULO",
-                        }
-                    ],
-                }
-            ],
-        }
+class TestPrerequisiteModel:
+    """Tests for PrerequisiteModel covering both positional and keyword argument construction."""
 
-        parsed = CoursePrereqsTyped.model_validate(payload)
-        assert parsed.course_name == "PROGRAMACION I (2016489)"
-        assert parsed.credits == 3
-        assert parsed.conditions[0].prereq_type == "M"
-        assert parsed.conditions[0].number_of_courses == 1
+    def test_creation_with_positional_args(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        assert prereq.course_code == "1000001"
+        assert prereq.course_name == "CALCULO"
 
-    def test_strict_invalid_credits(self):
-        with pytest.raises(ValidationError):
-            CoursePrereqsTyped.model_validate(
-                {
-                    "course_name": "X",
-                    "code": None,
-                    "credits": "3",
-                    "typology": "Y",
-                    "conditions": [],
-                }
-            )
+    def test_repr_output(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        assert "PrerequisiteModel" in repr(prereq)
+        assert "1000001" in repr(prereq)
 
-    def test_model_dump_returns_dict(self):
-        model = CoursePrereqsTyped(
-            course_name="X",
-            code=None,
-            credits=1,
-            typology="Y",
-            conditions=[],
+    def test_creation_with_keyword_args(self):
+        prereq = sia_scraper_rust.PrerequisiteModel(
+            course_code="1000001",
+            course_name="CALCULO",
         )
-        dumped = model.model_dump()
-        assert dumped["course_name"] == "X"
+        assert prereq.course_code == "1000001"
+        assert prereq.course_name == "CALCULO"
+
+
+class TestPrereqConditionModel:
+    """Tests for PrereqConditionModel covering both positional and keyword argument construction."""
+
+    def test_creation_with_positional_args(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
+        assert cond.condition == 1
+        assert cond.prereq_type == "M"
+        assert cond.all_required is True
+        assert cond.number_of_courses == 1
+        assert len(cond.prerequisites) == 1
+
+    def test_repr_output(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
+        assert "PrereqConditionModel" in repr(cond)
+        assert "1" in repr(cond)
+
+    def test_str_output(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
+        str_output = str(cond)
+        assert "Condition" in str_output
+        assert "M" in str_output
+
+    def test_creation_with_keyword_args(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(
+            condition=1,
+            prereq_type="M",
+            all_required=True,
+            number_of_courses=1,
+            prerequisites=[prereq],
+        )
+        assert cond.condition == 1
+        assert cond.prereq_type == "M"
+        assert cond.all_required is True
+        assert cond.number_of_courses == 1
+        assert len(cond.prerequisites) == 1
+
+
+class TestCoursePrereqsModel:
+    """Tests for CoursePrereqsModel using keyword arguments (non-standard parameter order makes positional construction error-prone)."""
+
+    def test_creation_with_keyword_args(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
+        course_prereqs = sia_scraper_rust.CoursePrereqsModel(
+            course_name="PROGRAMACION I (2016489)",
+            code=None,
+            credits=3,
+            typology="DISCIPLINAR OBLIGATORIA",
+            conditions=[cond],
+        )
+        assert course_prereqs.course_name == "PROGRAMACION I (2016489)"
+        assert course_prereqs.credits == 3
+        assert len(course_prereqs.conditions) == 1
+
+    def test_repr_output(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
+        course_prereqs = sia_scraper_rust.CoursePrereqsModel(
+            course_name="PROGRAMACION I",
+            code=None,
+            credits=3,
+            typology="DISCIPLINAR OBLIGATORIA",
+            conditions=[cond],
+        )
+        assert "CoursePrereqsModel" in repr(course_prereqs)
+
+    def test_nested_prerequisites_accessible(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
+        course_prereqs = sia_scraper_rust.CoursePrereqsModel(
+            course_name="PROGRAMACION I",
+            code=None,
+            credits=3,
+            typology="DISCIPLINAR OBLIGATORIA",
+            conditions=[cond],
+        )
+        assert course_prereqs.conditions[0].prerequisites[0].course_code == "1000001"
+
+    def test_multiple_conditions(self):
+        prereq1 = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        prereq2 = sia_scraper_rust.PrerequisiteModel("1000002", "ALGEBRA")
+        cond1 = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq1])
+        cond2 = sia_scraper_rust.PrereqConditionModel(2, "O", False, 2, [prereq1, prereq2])
+        course_prereqs = sia_scraper_rust.CoursePrereqsModel(
+            course_name="PROGRAMACION II",
+            code=None,
+            credits=3,
+            typology="DISCIPLINAR OBLIGATORIA",
+            conditions=[cond1, cond2],
+        )
+        assert len(course_prereqs.conditions) == 2
+        assert course_prereqs.conditions[0].prereq_type == "M"
+        assert course_prereqs.conditions[1].prereq_type == "O"
