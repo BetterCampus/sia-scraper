@@ -433,6 +433,11 @@ impl SiaSession {
         }
 
         let course_list = &state.course_list;
+        if course_list.is_empty() {
+            return Err(HttpError::InvalidInput(
+                "scrape_course_info: course list is empty".to_string(),
+            ));
+        }
         if course_index < 0 || course_index as usize >= course_list.len() {
             return Err(HttpError::InvalidInput(format!(
                 "course index {} out of range (0-{})",
@@ -477,6 +482,11 @@ impl SiaSession {
         }
 
         let course_list = &state.course_list;
+        if course_list.is_empty() {
+            return Err(HttpError::InvalidInput(
+                "scrape_course_prereqs: course list is empty".to_string(),
+            ));
+        }
         if course_index < 0 || course_index as usize >= course_list.len() {
             return Err(HttpError::InvalidInput(format!(
                 "course index {} out of range (0-{})",
