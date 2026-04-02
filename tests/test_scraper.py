@@ -9,7 +9,7 @@ import sia_scraper_rust
 from sia_scraper.constants import DEFAULT_TIMEOUT, SiaSessionStatus
 from sia_scraper.core import SiaSessionException
 from sia_scraper.parsers.models import ErrorMode, ScrapeResult
-from sia_scraper.scraper import SiaScraper, create_career_session, init_sia_scraper
+from sia_scraper.scraper import SiaScraper, init_sia_scraper
 
 
 def _mock_session(scraper: SiaScraper) -> Any:

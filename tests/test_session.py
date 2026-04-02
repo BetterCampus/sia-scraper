@@ -1,6 +1,5 @@
 """Unit tests for Rust-backed async session wrapper."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
