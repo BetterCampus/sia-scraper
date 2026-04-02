@@ -1,7 +1,6 @@
 """Async SIA scraper facade backed by Rust session workflow."""
 
 import asyncio
-import warnings
 from collections.abc import Callable
 
 import sia_scraper_rust
@@ -11,8 +10,6 @@ from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
 from .parsers.models import ErrorMode, ScrapeResult
 from .session import SiaSession
-
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="sia_scraper")
 
 
 class SiaScraper:
@@ -113,7 +110,14 @@ class SiaScraper:
         self._sia_session._career_indices = career_code.split("-") if career_code else []
 
         status_str = str(session_data.get("status", "NO_SESSION"))
-        self._sia_session._status = status.SiaSessionStatus[status_str]
+        try:
+            self._sia_session._status = status.SiaSessionStatus[status_str]
+        except KeyError as exc:
+            allowed_statuses = ", ".join(sorted(status.SiaSessionStatus.__members__.keys()))
+            message = (
+                f"Invalid session status '{status_str}'. Allowed statuses are: {allowed_statuses}"
+            )
+            raise SiaSessionException(message) from exc
 
         runtime = _SessionRuntimeState()
         viewstate_val = session_data.get("javax_faces_ViewState")
@@ -121,16 +125,38 @@ class SiaScraper:
 
         course_list_raw: list[dict[str, str]] = []
         raw_course_list = session_data.get("course_list")
+        if raw_course_list is not None and not isinstance(raw_course_list, list):
+            raise SiaSessionException("Invalid session_data: 'course_list' must be a list")
+
         if isinstance(raw_course_list, list):
-            for item in raw_course_list:
-                if isinstance(item, dict):
-                    course_list_raw.append(item)
+            for index, item in enumerate(raw_course_list):
+                if not isinstance(item, dict):
+                    raise SiaSessionException(
+                        f"Invalid session_data: 'course_list[{index}]' must be a dict"
+                    )
+                if len(item) != 1:
+                    raise SiaSessionException(
+                        f"Invalid session_data: 'course_list[{index}]' must contain exactly one entry"
+                    )
+                for k, v in item.items():
+                    if not isinstance(k, str) or not isinstance(v, str):
+                        raise SiaSessionException(
+                            f"Invalid session_data: 'course_list[{index}]' key and value must be strings"
+                        )
+                course_list_raw.append(item)
 
         runtime.course_list = course_list_raw
 
         typed_entries: list[sia_scraper_rust.CourseListEntryModel] = []
         for row in course_list_raw:
-            if isinstance(row, dict) and row:
+            if isinstance(row, dict) and len(row) == 1:
+                course_code, course_name = next(iter(row.items()))
+                typed_entries.append(
+                    sia_scraper_rust.CourseListEntryModel(
+                        course_code=course_code,
+                        course_name=course_name,
+                    )
+                )
                 typed_entries.append(
                     sia_scraper_rust.CourseListEntryModel(
                         course_code=next(iter(row.keys())),
@@ -256,7 +282,7 @@ class SiaScraper:
                     if error_mode == ErrorMode.RETRY and attempt < attempts - 1:
                         await asyncio.sleep(retry_delay)
 
-            if last_error and error_mode == ErrorMode.SKIP:
+            if last_error:
                 failures.append((index, last_error))
 
             if progress_callback:

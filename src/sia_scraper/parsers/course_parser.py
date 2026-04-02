@@ -7,15 +7,14 @@ responses returned by SIA's web interface.
 # ruff: noqa: E402
 import os
 import re
-import warnings
 from datetime import datetime
 from typing import Any
+from warnings import catch_warnings
 
 from loguru import logger
 
-import sia_scraper_rust
-
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="sia_scraper")
+with catch_warnings():
+    import sia_scraper_rust
 
 # noqa: E402
 from ..constants.business import (

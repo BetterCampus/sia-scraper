@@ -310,7 +310,7 @@ class TestSiaScraperSessionState:
 
     def test_load_session_invalid_status_raises(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
-        with pytest.raises(KeyError):
+        with pytest.raises(SiaSessionException):
             scraper.load_session(
                 {
                     "session_headers": {},
@@ -439,7 +439,7 @@ class TestInitSiaScraperEdgeCases:
 
     @pytest.mark.asyncio
     async def test_init_sia_scraper_with_invalid_session_data(self):
-        with pytest.raises(KeyError):
+        with pytest.raises(SiaSessionException):
             await init_sia_scraper(
                 "0-2-8-3",
                 False,

@@ -9,7 +9,7 @@
 import warnings
 
 warnings.warn(
-    "sia_scraper.models.session is deprecated; use sia_scraper_rust SessionStateModel instead",
+    "sia_scraper.models.session is deprecated; use sia_scraper_rust.SessionStateModel instead",
     DeprecationWarning,
     stacklevel=2,
 )

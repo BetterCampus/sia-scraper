@@ -7,15 +7,14 @@ type-safe Pydantic models for runtime validation.
 
 # ruff: noqa: E402
 import re
-import warnings
 from enum import Enum
 from typing import Any
+from warnings import catch_warnings
 
 from pydantic import BaseModel, Field, field_validator
 
-import sia_scraper_rust
-
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="sia_scraper")
+with catch_warnings():
+    import sia_scraper_rust
 
 # noqa: E402
 from ..constants.defaults import (

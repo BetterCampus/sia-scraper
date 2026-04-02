@@ -1,7 +1,5 @@
 """SIA scraper public package API."""
 
-import warnings
-
 import sia_scraper_rust
 
 from .constants import SiaSessionStatus
@@ -9,12 +7,6 @@ from .core import SiaSessionException
 from .scraper import SiaScraper, create_career_session, init_sia_scraper
 from .session import SiaSession
 from .utils import format_date
-
-warnings.warn(
-    "sia_scraper module is deprecated; use sia_scraper_rust directly for 3.0 migration",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 CourseInfoModel = sia_scraper_rust.CourseInfoModel
 CoursePrereqsModel = sia_scraper_rust.CoursePrereqsModel

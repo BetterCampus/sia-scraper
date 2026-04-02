@@ -587,7 +587,7 @@ async def main() -> int:
             "session_headers": dict(session_model.session_headers),
             "session_cookies": dict(session_model.session_cookies),
             "params": dict(session_model.params),
-            "javax_faces_view_state": session_model.javax_faces_view_state,
+            "javax_faces_ViewState": session_model.javax_faces_view_state,
             "career_code": session_model.career_code,
             "career_name": session_model.career_name,
             "is_electives": session_model.is_electives,

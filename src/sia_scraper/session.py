@@ -1,6 +1,5 @@
 """Rust-backed async SIA session management."""
 
-import warnings
 from contextlib import asynccontextmanager
 
 import sia_scraper_rust
@@ -9,8 +8,6 @@ from .constants import status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
 from .core.exceptions import ConcurrentAccessError
-
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="sia_scraper")
 
 
 class _SessionRuntimeState:

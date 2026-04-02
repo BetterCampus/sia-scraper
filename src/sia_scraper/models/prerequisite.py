@@ -10,7 +10,7 @@
 import warnings
 
 warnings.warn(
-    "sia_scraper.models.prerequisite is deprecated; use sia_scraper_rust CoursePrereqsModel instead",
+    "sia_scraper.models.prerequisite is deprecated; use sia_scraper_rust.CoursePrereqsModel instead",
     DeprecationWarning,
     stacklevel=2,
 )

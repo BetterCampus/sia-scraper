@@ -1,6 +1,6 @@
 """Unit tests for Rust-backed async session wrapper."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -8,28 +8,6 @@ import sia_scraper_rust
 from sia_scraper.constants import SiaSessionStatus
 from sia_scraper.core import SiaSessionException
 from sia_scraper.session import SiaSession
-
-
-def _make_mock_state(
-    career_code: str = "",
-    career_name: str = "N/A",
-    is_electives: bool = False,
-    status: str = "CAREER_NOT_SET",
-    course_list: list[dict[str, str]] | None = None,
-    view_state: str | None = None,
-) -> MagicMock:
-    """Create a mock SessionStateModel with the needed attributes."""
-    mock = MagicMock(spec=sia_scraper_rust.SessionStateModel)
-    mock.career_code = career_code
-    mock.career_name = career_name
-    mock.is_electives = is_electives
-    mock.status = status
-    mock.course_list = course_list or []
-    mock.javax_faces_view_state = view_state
-    mock.session_headers = {}
-    mock.session_cookies = {}
-    mock.params = {"Adf-Page-Id": "0", "Adf-Window-Id": "win-1"}
-    return mock
 
 
 @pytest.fixture

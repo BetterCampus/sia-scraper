@@ -10,7 +10,7 @@
 import warnings
 
 warnings.warn(
-    "sia_scraper.models.course is deprecated; use sia_scraper_rust CourseInfoModel instead",
+    "sia_scraper.models.course is deprecated; use sia_scraper_rust.CourseInfoModel instead",
     DeprecationWarning,
     stacklevel=2,
 )
