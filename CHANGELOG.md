@@ -121,6 +121,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `get_plain_text`: ~1.37x faster in Rust baseline
   - `get_course_list`: ~1.62x faster in Rust baseline
 
+---
+
+## [3.0.0-alpha.1] - 2026-04-02
+
+### Phase 6 Complete: Rust PyClass Models
+
+This alpha release marks the completion of Phase 6 of the Rust migration plan, introducing Rust PyClass models as the primary data interchange format.
+
+### Breaking Changes
+
+- **Pydantic models deprecated**: All Pydantic models in `sia_scraper.models` are now deprecated in favor of Rust `#[pyclass]` models
+  - `sia_scraper.models.course.CourseInfoTyped` → use `sia_scraper_rust.CourseInfoModel`
+  - `sia_scraper.models.course.GroupTyped` → use `sia_scraper_rust.GroupModel`
+  - `sia_scraper.models.course.ScheduleTyped` → use `sia_scraper_rust.ScheduleModel`
+  - `sia_scraper.models.prerequisite.PrereqConditionTyped` → use `sia_scraper_rust.PrereqConditionModel`
+  - `sia_scraper.models.prerequisite.CoursePrereqsTyped` → use `sia_scraper_rust.CoursePrereqsModel`
+  - `sia_scraper.models.session.SessionStateTyped` → use `sia_scraper_rust.SessionStateModel`
+  - `sia_scraper.models.session.CourseListEntryTyped` → use `sia_scraper_rust.CourseListEntryModel`
+- **Return types changed**: Parser functions now return Rust PyClass models directly instead of Pydantic models
+- **Pickle support**: `SessionStateModel` implements `__getstate__`/`__setstate__` for pickle serialization
+
+### Added
+
+- **Rust PyClass models** (8 models):
+  - `ScheduleModel` with `__repr__`, `__str__`, pickle support
+  - `GroupModel` with `__repr__`, `__str__`, pickle support  
+  - `CourseInfoModel` with `__repr__`, `__str__`, mutable `code` field, pickle support
+  - `PrerequisiteModel` with `__repr__`, `__str__`, pickle support
+  - `PrereqConditionModel` with `__repr__`, `__str__`, pickle support
+  - `CoursePrereqsModel` with `__repr__`, `__str__`, pickle support
+  - `CourseListEntryModel` with `__repr__`, `__str__`, pickle support
+  - `SessionStateModel` with `__repr__`, `__str__`, `is_ready()`, pickle support
+- **Type stubs**: Complete `sia_scraper_rust.pyi` with all model definitions and method signatures
+- **Model integration tests**: Comprehensive test coverage for Rust models including:
+  - Creation with positional and keyword arguments
+  - `__repr__` and `__str__` output verification
+  - Nested model traversal (groups → schedules, conditions → prerequisites)
+  - Pickle serialization/deserialization roundtrips
+  - Edge cases (None values, empty lists, special characters, large numbers)
+
+### Performance
+
+- **Direct Rust model return path**: Rust structs exposed directly to Python via `#[pyclass]`, reducing FFI overhead
+
+### Deprecated
+
+- `sia_scraper.models` module - will be removed in v3.1.0 final release
+- Use `sia_scraper_rust` for all model needs
+
+### Code Quality
+
+- `cargo clippy`: Zero warnings
+- `ruff check && ruff format`: Clean
+- `pyright`: Zero errors
+- Python test coverage: Maintained at >90%
+
 ## [1.0.0] - 2026-03-30
 
 ### Added
