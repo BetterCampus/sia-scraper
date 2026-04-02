@@ -1,4 +1,4 @@
-"""Integration tests for Rust PyClass models."""
+"""Integration tests for Rust PyClass models focusing on nested model traversal, edge cases, and serialization."""
 
 import pickle
 
@@ -6,6 +6,8 @@ import sia_scraper_rust
 
 
 class TestCourseModelIntegration:
+    """Integration tests for course models testing nested relationships and data integrity."""
+
     def test_nested_model_traversal(self):
         schedule = sia_scraper_rust.ScheduleModel("Lunes", "08:00", "10:00", "A101")
         group = sia_scraper_rust.GroupModel(
@@ -59,6 +61,8 @@ class TestCourseModelIntegration:
 
 
 class TestPrerequisiteModelIntegration:
+    """Integration tests for prerequisite models testing complex nested structures."""
+
     def test_nested_prerequisite_traversal(self):
         prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
         cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
@@ -90,6 +94,8 @@ class TestPrerequisiteModelIntegration:
 
 
 class TestSessionModelIntegration:
+    """Integration tests for session models testing pickle serialization and state preservation."""
+
     def test_session_state_pickle_preserves_nested_models(self):
         entry = sia_scraper_rust.CourseListEntryModel("1000001", "Calculo")
         state = sia_scraper_rust.SessionStateModel(
@@ -129,6 +135,8 @@ class TestSessionModelIntegration:
 
 
 class TestModelEdgeCases:
+    """Edge case tests for model handling of special characters, large numbers, and complex structures."""
+
     def test_model_with_special_characters(self):
         course = sia_scraper_rust.CourseInfoModel(
             course_name="CÁLCULO AVANZADO (CON ÉXITOS)",

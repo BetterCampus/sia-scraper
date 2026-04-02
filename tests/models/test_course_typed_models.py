@@ -4,6 +4,8 @@ import sia_scraper_rust
 
 
 class TestScheduleModel:
+    """Tests for ScheduleModel covering both positional and keyword argument construction."""
+
     def test_creation_with_positional_args(self):
         schedule = sia_scraper_rust.ScheduleModel("Lunes", "08:00", "10:00", "A101")
         assert schedule.day == "Lunes"
@@ -23,9 +25,23 @@ class TestScheduleModel:
         assert "08:00" in str_output
         assert "10:00" in str_output
 
+    def test_creation_with_keyword_args(self):
+        schedule = sia_scraper_rust.ScheduleModel(
+            day="Lunes",
+            start_time="08:00",
+            end_time="10:00",
+            classroom="A101",
+        )
+        assert schedule.day == "Lunes"
+        assert schedule.start_time == "08:00"
+        assert schedule.end_time == "10:00"
+        assert schedule.classroom == "A101"
+
 
 class TestGroupModel:
-    def test_creation_with_positional_args(self):
+    """Tests for GroupModel using keyword arguments (positional construction with 9 params is an anti-pattern)."""
+
+    def test_creation_with_keyword_args(self):
         schedule = sia_scraper_rust.ScheduleModel("Lunes", "08:00", "10:00", "A101")
         group = sia_scraper_rust.GroupModel(
             group_name="GRUPO 01",
@@ -76,7 +92,9 @@ class TestGroupModel:
 
 
 class TestCourseInfoModel:
-    def test_creation_with_positional_args(self):
+    """Tests for CourseInfoModel using keyword arguments (positional construction with 7 params is an anti-pattern)."""
+
+    def test_creation_with_keyword_args(self):
         course = sia_scraper_rust.CourseInfoModel(
             course_name="CALCULO AVANZADO",
             credits=4,

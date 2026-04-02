@@ -6,7 +6,9 @@ import sia_scraper_rust
 
 
 class TestCourseListEntryModel:
-    def test_creation(self):
+    """Tests for CourseListEntryModel covering both positional and keyword argument construction."""
+
+    def test_creation_with_positional_args(self):
         entry = sia_scraper_rust.CourseListEntryModel("1000001", "Calculo")
         assert entry.course_code == "1000001"
         assert entry.course_name == "Calculo"
@@ -16,9 +18,19 @@ class TestCourseListEntryModel:
         assert "CourseListEntryModel" in repr(entry)
         assert "1000001" in repr(entry)
 
+    def test_creation_with_keyword_args(self):
+        entry = sia_scraper_rust.CourseListEntryModel(
+            course_code="1000001",
+            course_name="Calculo",
+        )
+        assert entry.course_code == "1000001"
+        assert entry.course_name == "Calculo"
+
 
 class TestSessionStateModel:
-    def test_creation_with_all_fields(self):
+    """Tests for SessionStateModel using keyword arguments (positional construction with 9 params is an anti-pattern)."""
+
+    def test_creation_with_keyword_args(self):
         entry = sia_scraper_rust.CourseListEntryModel("1000001", "Calculo")
         state = sia_scraper_rust.SessionStateModel(
             session_headers={"User-Agent": "test"},

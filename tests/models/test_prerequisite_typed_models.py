@@ -4,7 +4,9 @@ import sia_scraper_rust
 
 
 class TestPrerequisiteModel:
-    def test_creation(self):
+    """Tests for PrerequisiteModel covering both positional and keyword argument construction."""
+
+    def test_creation_with_positional_args(self):
         prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
         assert prereq.course_code == "1000001"
         assert prereq.course_name == "CALCULO"
@@ -14,9 +16,19 @@ class TestPrerequisiteModel:
         assert "PrerequisiteModel" in repr(prereq)
         assert "1000001" in repr(prereq)
 
+    def test_creation_with_keyword_args(self):
+        prereq = sia_scraper_rust.PrerequisiteModel(
+            course_code="1000001",
+            course_name="CALCULO",
+        )
+        assert prereq.course_code == "1000001"
+        assert prereq.course_name == "CALCULO"
+
 
 class TestPrereqConditionModel:
-    def test_creation(self):
+    """Tests for PrereqConditionModel covering both positional and keyword argument construction."""
+
+    def test_creation_with_positional_args(self):
         prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
         cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
         assert cond.condition == 1
@@ -38,9 +50,26 @@ class TestPrereqConditionModel:
         assert "Condition" in str_output
         assert "M" in str_output
 
+    def test_creation_with_keyword_args(self):
+        prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
+        cond = sia_scraper_rust.PrereqConditionModel(
+            condition=1,
+            prereq_type="M",
+            all_required=True,
+            number_of_courses=1,
+            prerequisites=[prereq],
+        )
+        assert cond.condition == 1
+        assert cond.prereq_type == "M"
+        assert cond.all_required is True
+        assert cond.number_of_courses == 1
+        assert len(cond.prerequisites) == 1
+
 
 class TestCoursePrereqsModel:
-    def test_creation(self):
+    """Tests for CoursePrereqsModel using keyword arguments (non-standard parameter order makes positional construction error-prone)."""
+
+    def test_creation_with_keyword_args(self):
         prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
         cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
         course_prereqs = sia_scraper_rust.CoursePrereqsModel(
