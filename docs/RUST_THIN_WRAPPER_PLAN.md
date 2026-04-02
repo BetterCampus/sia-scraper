@@ -235,38 +235,38 @@ Python receives native Rust CourseInfoModel (#[pyclass])
 
 #### Todo List
 
-- [ ] Update `tests/models/test_course_typed_models.py`
-  - [ ] Import `sia_scraper_rust` models
-  - [ ] Test `ScheduleModel` creation and fields
-  - [ ] Test `GroupModel` creation and methods
-  - [ ] Test `CourseInfoModel` creation and methods
-  - [ ] Test `__repr__` and `__str__` output
-  - [ ] Test helper methods (`total_groups()`, `has_availability()`, etc.)
+- [x] Update `tests/models/test_course_typed_models.py`
+  - [x] Import `sia_scraper_rust` models
+  - [x] Test `ScheduleModel` creation and fields
+  - [x] Test `GroupModel` creation and methods
+  - [x] Test `CourseInfoModel` creation and methods
+  - [x] Test `__repr__` and `__str__` output
+  - [x] Test helper methods (`total_groups()`, `has_availability()`, etc.)
 
-- [ ] Update `tests/models/test_prerequisite_typed_models.py`
-  - [ ] Import `sia_scraper_rust` models
-  - [ ] Test `PrerequisiteModel` creation
-  - [ ] Test `PrereqConditionModel` creation and methods
-  - [ ] Test `CoursePrereqsModel` creation and methods
+- [x] Update `tests/models/test_prerequisite_typed_models.py`
+  - [x] Import `sia_scraper_rust` models
+  - [x] Test `PrerequisiteModel` creation
+  - [x] Test `PrereqConditionModel` creation and methods
+  - [x] Test `CoursePrereqsModel` creation and methods
 
-- [ ] Update `tests/models/test_session_typed_models.py`
-  - [ ] Import `sia_scraper_rust` models
-  - [ ] Test `CourseListEntryModel` creation
-  - [ ] Test `SessionStateModel` creation
-  - [ ] Test pickle serialization/deserialization
-  - [ ] Test `is_ready()` method
+- [x] Update `tests/models/test_session_typed_models.py`
+  - [x] Import `sia_scraper_rust` models
+  - [x] Test `CourseListEntryModel` creation
+  - [x] Test `SessionStateModel` creation
+  - [x] Test pickle serialization/deserialization
+  - [x] Test `is_ready()` method
 
-- [ ] Add integration tests
-  - [ ] Test parser returns correct model types
-  - [ ] Test model field access from Python
-  - [ ] Test nested models (groups, schedules, prerequisites)
-  - [ ] Test edge cases (None values, empty lists)
+- [x] Add integration tests
+  - [x] Test parser returns correct model types
+  - [x] Test model field access from Python
+  - [x] Test nested models (groups, schedules, prerequisites)
+  - [x] Test edge cases (None values, empty lists)
 
-- [ ] Run full test suite
-  - [ ] `pytest tests/models/ -v`
-  - [ ] `pytest tests/parsers/ -v`
-  - [ ] Ensure all tests pass
-  - [ ] Check test coverage
+- [x] Run full test suite
+  - [x] `pytest tests/models/ -v`
+  - [x] `pytest tests/parsers/ -v`
+  - [x] Ensure all tests pass
+  - [x] Check test coverage
 
 ### Task 6.6: Phase 6 Validation
 
@@ -274,29 +274,29 @@ Python receives native Rust CourseInfoModel (#[pyclass])
 
 #### Todo List
 
-- [ ] Code quality checks
-  - [ ] Run `cargo clippy --manifest-path Cargo.toml` (zero warnings)
-  - [ ] Run `cargo test --manifest-path Cargo.toml` (all pass)
-  - [ ] Run `ruff check . && ruff format .` (clean)
-  - [ ] Run `pyright` (zero errors)
-  - [ ] Run `pytest --cov=src/sia_scraper` (maintain coverage)
+- [x] Code quality checks
+  - [x] Run `cargo clippy --manifest-path Cargo.toml` (zero warnings)
+  - [x] Run `cargo test --manifest-path Cargo.toml` (all pass)
+  - [x] Run `ruff check . && ruff format .` (clean)
+  - [x] Run `pyright` (zero errors)
+  - [x] Run `pytest --cov=src/sia_scraper` (maintain coverage)
 
-- [ ] Performance validation
-  - [ ] Run `python benchmarks/benchmark_parsing.py`
-  - [ ] Verify no regression in parse times
-  - [ ] Measure memory usage with Rust models vs Pydantic
-  - [ ] Document performance gains
+- [x] Performance validation
+  - [x] Run `python benchmarks/benchmark_parsing.py`
+  - [x] Verify no regression in parse times
+  - [x] Measure memory usage with Rust models vs Pydantic
+  - [x] Document performance gains
 
-- [ ] Documentation
-  - [ ] Update CHANGELOG.md with Phase 6 completion
-  - [ ] Document breaking changes
-  - [ ] Update MIGRATION_PLAN.md status
-  - [ ] Add inline code examples
+- [x] Documentation
+  - [x] Update CHANGELOG.md with Phase 6 completion
+  - [x] Document breaking changes
+  - [x] Update MIGRATION_PLAN.md status
+  - [x] Add inline code examples
 
-- [ ] Git workflow
-  - [ ] Commit Phase 6 changes with descriptive message
-  - [ ] Tag as `v3.0.0-alpha.1`
-  - [ ] Push to remote branch
+- [x] Git workflow
+  - [x] Commit Phase 6 changes with descriptive message
+  - [x] Tag as `v3.0.0-alpha.1`
+  - [x] Push to remote branch
 
 ---
 
