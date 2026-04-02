@@ -39,8 +39,41 @@ pub struct SiaSession {
 }
 
 impl SiaSession {
+    /// Create a new SiaSession with default retry configuration.
     pub fn new(timeout_secs: u64, base_url: String) -> Result<Self, HttpError> {
         Self::with_retry_config(timeout_secs, base_url, RetryConfig::sia_optimized())
+    }
+
+    /// Create a new SiaSession from saved SessionState.
+    ///
+    /// This constructor is used to restore a session from previously
+    /// persisted state (e.g., after pickle/unpickle or loading from file).
+    ///
+    /// The session will use the provided state directly without re-fetching
+    /// the initial page. The HTTP client is initialized fresh to allow
+    /// cookie restoration.
+    ///
+    /// # Arguments
+    /// * `timeout_secs` - Request timeout in seconds
+    /// * `base_url` - Base URL for SIA
+    /// * `state` - Previously saved SessionState to restore
+    ///
+    /// # Returns
+    /// New SiaSession instance with restored state
+    pub fn from_state(
+        timeout_secs: u64,
+        base_url: String,
+        state: SessionState,
+    ) -> Result<Self, HttpError> {
+        let config = HttpClientConfig::sia_default().with_timeout(timeout_secs);
+        let client = AsyncHttpClient::with_config(config)?;
+
+        Ok(Self {
+            client,
+            state: Arc::new(RwLock::new(state)),
+            base_url,
+            retry_config: RetryConfig::sia_optimized(),
+        })
     }
 
     pub fn with_retry_config(

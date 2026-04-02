@@ -174,23 +174,27 @@ def sanitize_json_data(value: Any, replacements: dict[str, str], enabled: bool) 
     return value
 
 
-def extract_replacements(scraper: SiaScraper, config: CaptureConfig) -> dict[str, str]:
+async def extract_replacements(scraper: SiaScraper, config: CaptureConfig) -> dict[str, str]:
     """Extract sensitive runtime values and map them to placeholders."""
-    session_data = scraper.get_session_data()
+    session_data = await scraper.get_session_data()
 
     replacements: dict[str, str] = {}
 
-    if config.sanitize_viewstate and session_data.javax_faces_view_state:
-        replacements[session_data.javax_faces_view_state] = "SANITIZED_VIEWSTATE_TOKEN_12345"
+    if config.sanitize_viewstate and session_data["state_dict"].get("javax_faces_view_state"):
+        replacements[session_data["state_dict"]["javax_faces_view_state"]] = (
+            "SANITIZED_VIEWSTATE_TOKEN_12345"
+        )
 
-    params = session_data.params
+    params = session_data["state_dict"].get("params", {})
     if config.sanitize_window_id and "Adf-Window-Id" in params:
         replacements[params["Adf-Window-Id"]] = "SANITIZED_WINDOW_ID_67890"
     if config.sanitize_page_id and "Adf-Page-Id" in params:
         replacements[params["Adf-Page-Id"]] = "SANITIZED_PAGE_ID_000"
 
     if config.sanitize_cookies:
-        for cookie_name, cookie_value in session_data.session_cookies.items():
+        for cookie_name, cookie_value in (
+            session_data["state_dict"].get("session_cookies", {}).items()
+        ):
             if isinstance(cookie_value, str) and cookie_value:
                 replacements[cookie_value] = f"SANITIZED_{cookie_name}_VALUE"
 
@@ -395,7 +399,7 @@ async def main() -> int:
         print("[1/6] Creating SIA session...")
         await scraper.create_session()
 
-        replacements = extract_replacements(scraper, config)
+        replacements = await extract_replacements(scraper, config)
 
         print("[2/6] Capturing initial page...")
         initial_html = (
@@ -416,7 +420,7 @@ async def main() -> int:
 
         print("[3/6] Capturing regular courses flow...")
         await scraper.set_career(config.career_code, is_electives=False)
-        replacements = extract_replacements(scraper, config)
+        replacements = await extract_replacements(scraper, config)
 
         regular_page_xml = (
             "<html><body>Career page HTML capture is not available in async-only mode."
@@ -568,7 +572,7 @@ async def main() -> int:
             try:
                 await elective_scraper.create_session()
                 await elective_scraper.set_career(config.career_code, is_electives=True)
-                elective_replacements = extract_replacements(elective_scraper, config)
+                elective_replacements = await extract_replacements(elective_scraper, config)
 
                 electives_page_xml = (
                     "<html><body>Electives page HTML capture is not available in async-only mode."
@@ -655,23 +659,18 @@ async def main() -> int:
         )
 
         print("[5/6] Saving session metadata...")
-        session_model = scraper.get_session_data()
+        session_model = await scraper.get_session_data()
+        state_dict = session_model["state_dict"]
         session_data = {
-            "session_headers": dict(session_model.session_headers),
-            "session_cookies": dict(session_model.session_cookies),
-            "params": dict(session_model.params),
-            "javax_faces_ViewState": session_model.javax_faces_view_state,
-            "career_code": session_model.career_code,
-            "career_name": session_model.career_name,
-            "is_electives": session_model.is_electives,
-            "status": session_model.status,
-            "course_list": [
-                {
-                    "course_code": entry.course_code,
-                    "course_name": entry.course_name,
-                }
-                for entry in session_model.course_list
-            ],
+            "session_headers": dict(state_dict.get("session_headers", {})),
+            "session_cookies": dict(state_dict.get("session_cookies", {})),
+            "params": dict(state_dict.get("params", {})),
+            "javax_faces_ViewState": state_dict.get("javax_faces_view_state"),
+            "career_code": state_dict.get("career_code", ""),
+            "career_name": state_dict.get("career_name", ""),
+            "is_electives": state_dict.get("is_electives", False),
+            "status": state_dict.get("status", ""),
+            "course_list": state_dict.get("course_list", []),
         }
         session_data = sanitize_json_data(session_data, replacements, config.sanitization_enabled)
         generated_files.append(

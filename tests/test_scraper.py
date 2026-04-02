@@ -326,22 +326,29 @@ class TestSiaScraperSessionState:
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.get_course_index("9999999")
 
-    def test_get_session_data_returns_session_state(self, mock_async_session_class):
+    @pytest.mark.asyncio
+    async def test_get_session_data_returns_session_state(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
 
-        mock_state = _make_state_model(
-            career_code="0-2-8-3",
-            career_name="Ing",
-            is_electives=False,
-            status="ON_CAREER_PAGE",
-            course_list=[],
-            view_state="vs",
-        )
-
         mock_session = _mock_session(scraper)
-        mock_session.get_session_data.return_value = mock_state
-        result = scraper.get_session_data()
-        assert result.career_code == "0-2-8-3"
+        mock_session.get_session_data = AsyncMock(
+            return_value={
+                "timeout": 15,
+                "state_dict": {
+                    "session_headers": {},
+                    "session_cookies": {},
+                    "params": {},
+                    "javax_faces_view_state": "vs",
+                    "career_code": "0-2-8-3",
+                    "career_name": "Ing",
+                    "is_electives": False,
+                    "status": "ON_CAREER_PAGE",
+                    "course_list": [],
+                },
+            }
+        )
+        result = await scraper.get_session_data()
+        assert result["state_dict"]["career_code"] == "0-2-8-3"
 
 
 @pytest.mark.unit

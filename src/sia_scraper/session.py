@@ -130,13 +130,17 @@ class SiaSession:
             return await self._rust_session.scrape_course_prereqs(course_index)
 
     async def get_state(self) -> sia_scraper_rust.SessionStateModel:
-        """Get current session state from Rust."""
+        """Get current session state from Rust and sync local cache."""
         async with self._operation("get_state"):
-            return await self._rust_session.get_state()
+            state = await self._rust_session.get_state()
+            self._sync_state_from_rust(state)
+            return state
 
     async def close(self) -> None:
-        """Reset session state (Rust session doesn't require explicit close)."""
+        """Reset session state and clear Rust session."""
         async with self._operation("close"):
+            if self._rust_session.is_initialized():
+                await self._rust_session.reset()
             self._status = status.SiaSessionStatus.NO_SESSION
             self._career_code = ""
             self._career_name = DEFAULT_CAREER_NAME
@@ -144,25 +148,30 @@ class SiaSession:
             self._career_indices = []
             self._course_list = []
 
-    def get_session_data(self) -> sia_scraper_rust.SessionStateModel:
+    async def get_session_data(self) -> dict:
         """Serialize session state for persistence."""
-        return sia_scraper_rust.SessionStateModel(
-            session_headers={},
-            session_cookies={},
-            params={"Adf-Page-Id": "1", "Adf-Window-Id": ""},
-            career_code=self._career_code,
-            career_name=self._career_name,
-            is_electives=self._is_electives,
-            status=self._status.value,
-            course_list=[
-                sia_scraper_rust.CourseListEntryModel(
-                    course_code=next(iter(row.keys())),
-                    course_name=next(iter(row.values())),
-                )
-                for row in self._course_list
-            ],
-            javax_faces_view_state=None,
-        )
+        return await self._rust_session.get_session_data()
+
+    @classmethod
+    async def from_state(cls, state: dict) -> "SiaSession":
+        """Restore a session from previously saved state.
+
+        Args:
+            state: Dictionary with session state (timeout, state_dict)
+
+        Returns:
+            Restored SiaSession instance
+
+        Example:
+            >>> saved_state = await session.get_session_data()
+            >>> new_session = await SiaSession.from_state(saved_state)
+        """
+        timeout = state.get("timeout", 15)
+        session = cls(timeout)
+        session._rust_session = await sia_scraper_rust.PySiaSession.from_state(state)
+        state_model = await session._rust_session.get_state()
+        session._sync_state_from_rust(state_model)
+        return session
 
     async def __aenter__(self) -> "SiaSession":
         return self

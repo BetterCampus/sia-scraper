@@ -68,6 +68,26 @@ def mock_rust_session():
     mock_instance = MagicMock()
     mock_instance.init_session = AsyncMock(side_effect=init_side_effect)
     mock_instance.set_career = AsyncMock(side_effect=career_side_effect)
+    mock_instance.get_session_data = AsyncMock(
+        side_effect=lambda: {
+            "timeout": 15,
+            "state_dict": {
+                "session_headers": {},
+                "session_cookies": {},
+                "params": {"Adf-Page-Id": "0", "Adf-Window-Id": "win-1"},
+                "javax_faces_view_state": "vs-2",
+                "career_code": "0-2-8-3",
+                "career_name": "Ingenieria de Sistemas",
+                "is_electives": False,
+                "status": "ON_CAREER_PAGE",
+                "course_list": [
+                    {"course_code": "1000001", "course_name": "Calculo"},
+                    {"course_code": "2016489", "course_name": "Estructuras de Datos"},
+                    {"course_code": "3000003", "course_name": "Fisica"},
+                ],
+            },
+        }
+    )
 
     def scrape_course_info_side_effect(idx: int) -> sia_scraper_rust.CourseInfoModel:
         return sia_scraper_rust.CourseInfoModel(
@@ -92,7 +112,8 @@ def mock_rust_session():
     mock_instance.scrape_course_info = AsyncMock(side_effect=scrape_course_info_side_effect)
     mock_instance.scrape_course_prereqs = AsyncMock(side_effect=scrape_prereqs_side_effect)
     mock_instance.get_state = AsyncMock(side_effect=lambda: career_side_effect("0-2-8-3", False))
-    mock_instance.is_initialized = lambda: False  # Simulate uninitialized session
+    mock_instance.is_initialized = MagicMock(return_value=True)  # Simulate initialized session
+    mock_instance.reset = AsyncMock()
 
     with patch("sia_scraper.session.sia_scraper_rust.PySiaSession") as MockPySiaSession:
         MockPySiaSession.return_value = mock_instance
@@ -174,7 +195,7 @@ class TestSiaSessionScraping:
             await session.close()
 
     @pytest.mark.asyncio
-    async def test_scrape_course_info_before_career_raises(self):
+    async def test_course_list_before_career_is_empty(self):
         session = SiaSession()
         course_list_before = session.course_list
         assert course_list_before == []  # No courses before init
@@ -205,13 +226,13 @@ class TestSiaSessionLifecycle:
         session = await SiaSession.create(timeout=5)
         try:
             await session.set_career("0-2-8-3")
-            data = session.get_session_data()
+            data = await session.get_session_data()
 
-            assert data.career_code == "0-2-8-3"
-            assert data.career_name == "Ingenieria de Sistemas"
-            assert data.is_electives is False
-            assert data.status == SiaSessionStatus.ON_CAREER_PAGE.value
-            assert [entry.course_code for entry in data.course_list] == [
+            assert data["state_dict"]["career_code"] == "0-2-8-3"
+            assert data["state_dict"]["career_name"] == "Ingenieria de Sistemas"
+            assert data["state_dict"]["is_electives"] is False
+            assert data["state_dict"]["status"] == "ON_CAREER_PAGE"
+            assert [c["course_code"] for c in data["state_dict"]["course_list"]] == [
                 "1000001",
                 "2016489",
                 "3000003",

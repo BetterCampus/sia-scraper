@@ -36,9 +36,11 @@ class SiaScraper:
         init_session: bool = True,
     ) -> "SiaScraper":
         """Factory to create and optionally initialize an async scraper."""
-        scraper = cls(timeout=timeout, session_data=session_data, init_session=init_session)
+        scraper = cls(timeout=timeout, session_data=session_data, init_session=False)
 
         if session_data is None and init_session:
+            await scraper.create_session()
+        elif isinstance(session_data, dict) and "state_dict" in session_data:
             await scraper.create_session()
 
         return scraper
@@ -72,10 +74,19 @@ class SiaScraper:
     ) -> "SiaScraper":
         """Restore lightweight async session state from serialized data."""
         if isinstance(session_data, dict):
+            if "state_dict" in session_data:
+                asyncio.get_event_loop().run_until_complete(
+                    self._load_session_from_state_dict(session_data)
+                )
+                return self
             return self.load_session_dict(session_data)
 
         self._load_session_from_model(session_data)
         return self
+
+    async def _load_session_from_state_dict(self, session_data: dict[str, object]) -> None:
+        """Load session from new Rust state dict format."""
+        self._sia_session = await SiaSession.from_state(session_data)
 
     def _load_session_from_model(self, state: sia_scraper_rust.SessionStateModel) -> None:
         """Load session from typed Rust model."""
@@ -134,8 +145,8 @@ class SiaScraper:
         self._sia_session._course_list = course_list_raw
         return self
 
-    def get_session_data(self) -> sia_scraper_rust.SessionStateModel:
-        return self._sia_session.get_session_data()
+    async def get_session_data(self) -> dict:
+        return await self._sia_session.get_session_data()
 
     async def close_session(self) -> "SiaScraper":
         await self._sia_session.close()
