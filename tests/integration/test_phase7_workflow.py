@@ -14,6 +14,7 @@ from sia_scraper import SiaScraper, SiaSession
 
 
 @pytest.mark.integration
+@pytest.mark.network
 class TestPhase7Workflow:
     """Integration tests validating Phase 7 unified Rust pipeline."""
 
@@ -125,6 +126,7 @@ class TestPhase7Workflow:
 
 
 @pytest.mark.integration
+@pytest.mark.network
 class TestPhase7SessionPersistence:
     """Test session state persistence using unified Rust pipeline."""
 
@@ -157,15 +159,16 @@ class TestPhase7SessionPersistence:
         # Restore from state
         session2 = await SiaSession.from_state(state)
 
-        assert session2.career_code == "0-2-8-3"
-        assert len(session2.course_list) > 0
+        try:
+            assert session2.career_code == "0-2-8-3"
+            assert len(session2.course_list) > 0
 
-        # Verify can continue using restored session
-        course = await session2.scrape_course_info(0)
-        assert course is not None
-        assert course.course_name
-
-        await session2.close()
+            # Verify can continue using restored session
+            course = await session2.scrape_course_info(0)
+            assert course is not None
+            assert course.course_name
+        finally:
+            await session2.close()
 
     @pytest.mark.asyncio
     async def test_session_state_contains_http_state(self) -> None:
@@ -184,6 +187,7 @@ class TestPhase7SessionPersistence:
 
 
 @pytest.mark.integration
+@pytest.mark.network
 class TestPhase7ErrorHandling:
     """Test error handling with real SIA server."""
 
@@ -203,18 +207,19 @@ class TestPhase7ErrorHandling:
             # Get valid range
             course_count = len(scraper.course_list)
 
-            with pytest.raises((RuntimeError, ValueError, Exception)):
+            with pytest.raises(RuntimeError, match="out of range|invalid index|negative"):
                 await scraper.get_course_info(course_count + 100)
 
     @pytest.mark.asyncio
     async def test_error_before_set_career(self) -> None:
         """Test that scraping before set_career raises appropriate error."""
         async with await SiaScraper.create(timeout=30) as scraper:
-            with pytest.raises((RuntimeError, ValueError, Exception)):
+            with pytest.raises(RuntimeError, match="career not set|not initialized"):
                 await scraper.get_course_info(0)
 
 
 @pytest.mark.integration
+@pytest.mark.network
 class TestPhase7Electives:
     """Test scraping electives (is_electives=True)."""
 
@@ -226,12 +231,15 @@ class TestPhase7Electives:
 
             assert scraper.sia_session.is_electives is True
 
-            if len(scraper.course_list) > 0:
-                course = await scraper.get_course_info(0)
-                assert isinstance(course, sia_scraper_rust.CourseInfoModel)
+            if len(scraper.course_list) == 0:
+                pytest.skip("SIA returned no elective courses for career 0-2-8-3")
+
+            course = await scraper.get_course_info(0)
+            assert isinstance(course, sia_scraper_rust.CourseInfoModel)
 
 
 @pytest.mark.integration
+@pytest.mark.network
 class TestPhase7PySiaSessionDirect:
     """Test PySiaSession directly (bypassing Python wrapper)."""
 

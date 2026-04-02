@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Phase 7 benchmark: Unified Rust pipeline vs legacy approach.
+"""Phase 7 benchmark: Unified Rust pipeline performance measurement.
 
 This benchmark measures the performance of the Phase 7 unified pipeline
 which combines HTTP fetch + parsing in a single Rust call (zero FFI string copy).
@@ -9,7 +9,7 @@ Key Performance Benefits of Phase 7:
 - Single Rust call: HTTP fetch + HTML parsing in one operation
 - Memory efficient: No Python heap allocation for XML strings
 
-Comparison Context:
+Context:
 - The legacy approach required: Python calls Rust (HTTP) → XML string crosses FFI
   → Python calls Rust (parse) → dict crosses FFI → Python creates model
 - Phase 7 approach: Python calls Rust (scrape_course_info) → Rust does HTTP+parse
@@ -51,6 +51,15 @@ async def benchmark_unified_pipeline(scraper: SiaScraper, indices: list[int]) ->
     Returns:
         Dictionary with timing metrics
     """
+    if not indices:
+        return {
+            "times": [],
+            "total_ms": 0.0,
+            "mean_ms": 0.0,
+            "min_ms": 0.0,
+            "max_ms": 0.0,
+        }
+
     times: list[float] = []
 
     for idx in indices:
@@ -69,7 +78,16 @@ async def benchmark_unified_pipeline(scraper: SiaScraper, indices: list[int]) ->
 
 
 async def benchmark_prereqs_pipeline(scraper: SiaScraper, indices: list[int]) -> dict[str, Any]:
-    """Benchmark scrape_course_prereqs() unified pipeline."""
+    """Benchmark scrape_course_info() unified pipeline."""
+    if not indices:
+        return {
+            "times": [],
+            "total_ms": 0.0,
+            "mean_ms": 0.0,
+            "min_ms": 0.0,
+            "max_ms": 0.0,
+        }
+
     times: list[float] = []
 
     for idx in indices:
