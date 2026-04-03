@@ -326,10 +326,13 @@ class TestSequentialOperationsStillWork:
         session = await SiaSession.create()
 
         try:
-            mock_rust_session.set_career.side_effect = RuntimeError("Simulated error")
+            mock_rust_session.set_career.side_effect = sia_scraper_rust.NetworkError(
+                "Simulated error"
+            )
 
-            with pytest.raises(SiaSessionException, match="Simulated error"):
+            with pytest.raises(SiaSessionException, match="Simulated error") as exc_info:
                 await session.set_career("0-2-8-3")
+            assert type(exc_info.value) is SiaSessionException
 
             mock_rust_session.set_career.side_effect = None
             mock_rust_session.set_career.return_value = _make_state_model(
