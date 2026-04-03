@@ -160,19 +160,58 @@ asyncio.run(main())
 
 ### Error Handling
 
+Sia-scraper provides a typed exception hierarchy with two independent trees:
+
+**Rust exceptions** (from `sia_scraper_rust`, re-exported via `sia_scraper.core.exceptions`):
+
+```
+Exception
+  └── SiaScraperException
+        ├── NetworkError       -- DNS, connection refused, unreachable
+        ├── HttpStatusError    -- HTTP 4xx/5xx responses
+        ├── SiaTimeoutError    -- Request timeout
+        ├── ParseError         -- Response cannot be parsed
+        └── SessionError       -- Session not initialized or expired
+```
+
+**Python exceptions** (from `sia_scraper.core.exceptions`):
+
+```
+Exception
+  └── SiaSessionException
+        ├── SessionNotSet      -- Operation without active session
+        ├── CareerNotSet       -- Course operation without career selected
+        ├── TimeoutError       -- Legacy timeout (prefer SiaTimeoutError)
+        ├── InvalidStatus      -- Incompatible action for current state
+        └── ConcurrentAccessError -- Concurrent access detected
+```
+
 ```python
-from sia_scraper import SiaSessionException
+from sia_scraper.core.exceptions import (
+    SiaSessionException,       # Python session errors
+    SiaScraperException,       # Rust base exception
+    NetworkError,              # Connection failures
+    HttpStatusError,           # HTTP 4xx/5xx
+    SiaTimeoutError,           # Request timeouts
+    ParseError,                # Parse failures
+    SessionError,              # Session state errors
+)
 
 try:
-    await scraper.set_career("0-2-8-3")
-    course = await scraper.get_course_info(course_code="2016489")
-    print(course.course_name)
-except SiaSessionException.TimeoutError:
+    async with await SiaScraper.create() as scraper:
+        await scraper.set_career("0-2-8-3")
+        course = await scraper.get_course_info(course_code="2016489")
+        print(course.course_name)
+except NetworkError:
+    print("Connection failed. Check network.")
+except HttpStatusError as exc:
+    print(f"SIA returned HTTP error: {exc}")
+except SiaTimeoutError:
     print("SIA timeout. Retry later.")
 except SiaSessionException.CareerNotSet:
     print("Career not set.")
-finally:
-    await scraper.close_session()
+except SiaScraperException as exc:
+    print(f"Rust error: {exc}")
 ```
 
 ## Documentation

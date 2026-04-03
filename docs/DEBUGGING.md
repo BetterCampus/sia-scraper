@@ -147,6 +147,83 @@ Checks:
 - Confirm `search_code` format is `level-campus-faculty-career`.
 - Test another known career code.
 
+## 5) Understanding Rust exception types
+
+The scraper raises granular exceptions from the Rust layer. Here's how to interpret them:
+
+### `NetworkError`
+
+**Cause:** DNS resolution failure, connection refused, or network unreachable.
+
+**What to check:**
+
+- Verify SIA server is reachable: `curl -I https://sia.unal.edu.co`
+- Check your network connection and firewall rules
+- If behind a proxy, ensure proxy settings are configured
+
+```python
+from sia_scraper.core.exceptions import NetworkError
+
+try:
+    await scraper.create_session()
+except NetworkError as exc:
+    print(f"Network issue: {exc}")
+    # Check connectivity before retrying
+```
+
+### `HttpStatusError`
+
+**Cause:** SIA returned an HTTP 4xx or 5xx response.
+
+**What to check:**
+
+- The error message contains the HTTP status code (e.g., "500 Internal Server Error")
+- 4xx errors usually indicate invalid requests (check career code format)
+- 5xx errors indicate SIA server issues (retry later)
+
+```python
+from sia_scraper.core.exceptions import HttpStatusError
+
+try:
+    await scraper.set_career("0-2-8-3")
+except HttpStatusError as exc:
+    status_code = str(exc)
+    if "404" in status_code:
+        print("Career not found - verify the code")
+    elif "500" in status_code:
+        print("SIA server error - retry later")
+```
+
+### `SiaTimeoutError`
+
+**Cause:** Request exceeded the configured timeout.
+
+**What to check:**
+
+- SIA may be slow during peak hours
+- Increase timeout in `SiaScraper.create(timeout=60)`
+- Check for network latency issues
+
+### `ParseError`
+
+**Cause:** SIA response could not be parsed (HTML structure changed).
+
+**What to check:**
+
+- SIA may have updated their UI
+- Run with `SIA_DEBUG=1` to see raw responses
+- Check if the issue affects all courses or specific ones
+
+### `SessionError`
+
+**Cause:** Session not initialized or has expired.
+
+**What to check:**
+
+- Ensure `create_session()` or `init_session()` was called first
+- Session may have timed out - recreate it
+- The Python wrapper translates this to `SessionNotSet` or `CareerNotSet`
+
 ## Debug command checklist
 
 Run these checks locally after changes:

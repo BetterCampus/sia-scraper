@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Typed Error Hierarchy (Phase 8)**: Complete Rust-to-Python exception mapping
+  - 5 granular Rust exception types: `NetworkError`, `HttpStatusError`, `SiaTimeoutError`, `ParseError`, `SessionError`
+  - All inherit from `SiaScraperException` base class
+  - HTTP-facing Rust endpoints map `HttpError` variants to specific Python exceptions
+  - Python `SiaSession` wrapper translates Rust exceptions to Python-native exceptions
+  - Comprehensive test suite (32 tests) covering exception raising, inheritance, and translation
+  - Zero-Panic Policy: No `.unwrap()` or `.expect()` in production Rust code
+
 ### Breaking Changes
 
 - **Typed session payloads**: `init_sia_session` and `set_career` now return typed JSON payloads via `init_sia_session_json` and `set_career_json` endpoints; Python wrappers consume typed models end-to-end
