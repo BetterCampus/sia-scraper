@@ -72,7 +72,7 @@ class SiaTimeoutError(SiaScraperException):
 
     Example:
         >>> try:
-        ...     await session.get_course_xml(0)
+        ...     await session.scrape_course_info(0)
         ... except sia_scraper_rust.SiaTimeoutError as e:
         ...     print(f"Timeout: {e}")
     """
