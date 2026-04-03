@@ -362,7 +362,7 @@ class TestHttpErrorExceptionMapping:
         """HttpStatusError should be catchable as Exception."""
         try:
             await sia_scraper_rust.async_get("http://httpstat.us/404")
-        except Exception:
-            pass
+        except Exception as exc:
+            assert isinstance(exc, sia_scraper_rust.HttpStatusError)
         else:
             raise AssertionError("Expected HttpStatusError to be raised")
