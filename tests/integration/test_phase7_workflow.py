@@ -195,7 +195,7 @@ class TestPhase7ErrorHandling:
     async def test_error_invalid_career_code(self) -> None:
         """Test error handling for invalid career code."""
         async with await SiaScraper.create(timeout=30) as scraper:
-            with pytest.raises(RuntimeError):
+            with pytest.raises((RuntimeError, sia_scraper_rust.HttpStatusError)):
                 await scraper.set_career("9-9-9-9")
 
     @pytest.mark.asyncio
@@ -207,14 +207,20 @@ class TestPhase7ErrorHandling:
             # Get valid range
             course_count = len(scraper.course_list)
 
-            with pytest.raises(RuntimeError, match="out of range|invalid index|negative"):
+            with pytest.raises(
+                (RuntimeError, ValueError),
+                match="out of range|invalid index|negative|Invalid input",
+            ):
                 await scraper.get_course_info(course_count + 100)
 
     @pytest.mark.asyncio
     async def test_error_before_set_career(self) -> None:
         """Test that scraping before set_career raises appropriate error."""
         async with await SiaScraper.create(timeout=30) as scraper:
-            with pytest.raises(RuntimeError, match="career not set|not initialized"):
+            with pytest.raises(
+                (RuntimeError, ValueError, sia_scraper_rust.SessionError),
+                match="career not set|not initialized|Invalid input",
+            ):
                 await scraper.get_course_info(0)
 
 

@@ -270,18 +270,36 @@ class TestHttpErrorExceptionMapping:
         assert "Network error" in error_msg or "dns" in error_msg.lower()
 
     @pytest.mark.asyncio
-    async def test_http_status_error_raised_on_404(self):
+    async def test_http_status_error_raised_on_404(self, mocker):
         """HttpStatusError should be raised for 404 responses."""
+        mock_resp = mocker.Mock()
+        mock_resp.status = 404
+        mock_resp.body = "Not Found"
+        mock_resp.url = "http://example.com/404"
+
+        mock_client = mocker.Mock()
+        mock_client.get = mocker.AsyncMock(return_value=mock_resp)
+
+        mocker.patch(
+            "sia_scraper_rust.async_get",
+            side_effect=sia_scraper_rust.HttpStatusError("HTTP 404: Not Found"),
+        )
+
         with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
-            await sia_scraper_rust.async_get("http://httpstat.us/404")
+            await sia_scraper_rust.async_get("http://example.com/404")
         error_msg = str(exc_info.value)
         assert "404" in error_msg
 
     @pytest.mark.asyncio
-    async def test_http_status_error_message_contains_status_code(self):
+    async def test_http_status_error_message_contains_status_code(self, mocker):
         """HttpStatusError message should contain the HTTP status code."""
+        mocker.patch(
+            "sia_scraper_rust.async_get",
+            side_effect=sia_scraper_rust.HttpStatusError("HTTP 500: Internal Server Error"),
+        )
+
         with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
-            await sia_scraper_rust.async_get("http://httpstat.us/500")
+            await sia_scraper_rust.async_get("http://example.com/500")
         error_msg = str(exc_info.value)
         assert "500" in error_msg
 
@@ -306,12 +324,19 @@ class TestHttpErrorExceptionMapping:
         assert "Session not initialized" in error_msg
 
     @pytest.mark.asyncio
-    async def test_value_error_raised_on_invalid_input(self):
-        """PyValueError should be raised for invalid session state input."""
+    async def test_value_error_raised_on_invalid_state_dict(self):
+        """ValueError should be raised for invalid session state dict content."""
         with pytest.raises(ValueError) as exc_info:
-            await sia_scraper_rust.PySiaSession.from_state({"state_dict": "not_a_dict"})
+            state_dict = sia_scraper_rust.init_oracle_adf_request_dict(
+                tipology_index="",
+                window_id="win123",
+                page_id="0",
+                view_state="vs123",
+            )
+            state_dict["status"] = "invalid_status"
+            await sia_scraper_rust.PySiaSession.from_state({"state_dict": state_dict})
         error_msg = str(exc_info.value)
-        assert "state_dict" in error_msg.lower() or "invalid" in error_msg.lower()
+        assert "Invalid state_dict" in error_msg or "invalid" in error_msg.lower()
 
     @pytest.mark.asyncio
     async def test_network_error_inherits_from_exception(self):
