@@ -196,11 +196,8 @@ class TestPhase7ErrorHandling:
         """Test error handling for invalid career code."""
         async with await SiaScraper.create(timeout=30) as scraper:
             with pytest.raises(
-                (
-                    RuntimeError,
-                    sia_scraper_rust.HttpStatusError,
-                    sia_scraper_rust.SiaScraperException,
-                ),
+                sia_scraper_rust.HttpStatusError,
+                match="career|invalid|not found|404|400",
             ):
                 await scraper.set_career("9-9-9-9")
 
