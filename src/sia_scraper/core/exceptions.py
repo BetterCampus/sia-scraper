@@ -2,16 +2,50 @@
 
 This module defines all custom exceptions used throughout the sia_scraper library
 for handling session-related errors.
+
+The Rust extension provides granular exception types that are re-exported here
+for convenience. Python-level exceptions remain independent to maintain a clean
+separation between the Python API and the Rust implementation.
+
+Rust exceptions (re-exported from sia_scraper_rust):
+    - NetworkError: Network connectivity failures
+    - HttpStatusError: HTTP error responses (4xx, 5xx)
+    - SiaTimeoutError: Request timeout errors
+    - ParseError: HTML/XML parsing failures
+    - SessionError: Session state/lifecycle errors
+    - SiaScraperException: Base exception for all Rust exceptions
 """
+
+from sia_scraper_rust import (
+    HttpStatusError,
+    NetworkError,
+    ParseError,
+    SessionError,
+    SiaScraperException,
+    SiaTimeoutError,
+)
 
 
 class SiaSessionException(Exception):
-    """Base exception for SIA session-related errors."""
+    """Base exception for SIA session-related errors.
+
+    This exception hierarchy is independent of the Rust exception hierarchy.
+    Rust exceptions are caught and re-raised as appropriate Python exceptions
+    by the session wrapper layer.
+
+    Subclasses:
+        - SessionNotSet: Operation attempted without active session
+        - CareerNotSet: Operation attempted without selecting a career
+        - TimeoutError: Request timeout (legacy, prefer SiaTimeoutError)
+        - InvalidStatus: Operation incompatible with current session state
+        - ConcurrentAccessError: Concurrent operation detected
+    """
 
     SessionNotSet: type["SessionNotSet"]
     CareerNotSet: type["CareerNotSet"]
     TimeoutError: type["TimeoutError"]
     InvalidStatus: type["InvalidStatus"]
+    ConcurrentAccessError: type["ConcurrentAccessError"]
 
 
 class SessionNotSet(SiaSessionException):
@@ -40,6 +74,10 @@ class TimeoutError(SiaSessionException):
     """Raised when SIA HTTP requests exceed the configured timeout.
 
     This typically indicates SIA server overload or network issues.
+
+    Note:
+        The Rust extension raises SiaTimeoutError for timeout conditions.
+        This Python exception is retained for backward compatibility.
     """
 
     def __init__(self) -> None:
@@ -106,3 +144,18 @@ SiaSessionException.CareerNotSet = CareerNotSet  # type: ignore[attr-defined]
 SiaSessionException.TimeoutError = TimeoutError  # type: ignore[attr-defined]
 SiaSessionException.InvalidStatus = InvalidStatus  # type: ignore[attr-defined]
 SiaSessionException.ConcurrentAccessError = ConcurrentAccessError  # type: ignore[attr-defined]
+
+__all__ = [
+    "SiaSessionException",
+    "SessionNotSet",
+    "CareerNotSet",
+    "TimeoutError",
+    "InvalidStatus",
+    "ConcurrentAccessError",
+    "SiaScraperException",
+    "NetworkError",
+    "HttpStatusError",
+    "SiaTimeoutError",
+    "ParseError",
+    "SessionError",
+]
