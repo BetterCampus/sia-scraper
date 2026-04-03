@@ -8,6 +8,7 @@ import sia_scraper_rust
 from .constants import http, status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
+from .core.exceptions import SiaScraperException
 from .parsers.models import ErrorMode, ScrapeResult
 from .session import SiaSession
 
@@ -238,6 +239,10 @@ class SiaScraper:
                     last_error = ""
                     break
                 except (RuntimeError, ValueError, SiaSessionException) as exc:
+                    last_error = str(exc)
+                    if error_mode == ErrorMode.RETRY and attempt < attempts - 1:
+                        await asyncio.sleep(retry_delay)
+                except SiaScraperException as exc:
                     last_error = str(exc)
                     if error_mode == ErrorMode.RETRY and attempt < attempts - 1:
                         await asyncio.sleep(retry_delay)
