@@ -211,8 +211,8 @@ class TestPhase7ErrorHandling:
             course_count = len(scraper.course_list)
 
             with pytest.raises(
-                (RuntimeError, ValueError),
-                match="out of range|invalid index|negative|Invalid input",
+                ValueError,
+                match="out of range|invalid index|Invalid input",
             ):
                 await scraper.get_course_info(course_count + 100)
 
@@ -221,7 +221,7 @@ class TestPhase7ErrorHandling:
         """Test that scraping before set_career raises appropriate error."""
         async with await SiaScraper.create(timeout=30) as scraper:
             with pytest.raises(
-                (RuntimeError, ValueError, sia_scraper_rust.SessionError),
+                sia_scraper_rust.SessionError,
                 match="career not set|not initialized|Invalid input",
             ):
                 await scraper.get_course_info(0)

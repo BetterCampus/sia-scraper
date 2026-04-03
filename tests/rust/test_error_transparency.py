@@ -162,27 +162,27 @@ class TestGetPlainText:
 
 
 class TestExceptionInheritance:
-    """Verify that new exception types inherit from Exception."""
+    """Verify that new exception types inherit from SiaScraperException."""
 
-    def test_network_error_inherits_from_exception(self):
-        """NetworkError should inherit from Exception."""
-        assert issubclass(sia_scraper_rust.NetworkError, Exception)
+    def test_network_error_inherits_from_sia_scraper_exception(self):
+        """NetworkError should inherit from SiaScraperException."""
+        assert issubclass(sia_scraper_rust.NetworkError, sia_scraper_rust.SiaScraperException)
 
-    def test_http_status_error_inherits_from_exception(self):
-        """HttpStatusError should inherit from Exception."""
-        assert issubclass(sia_scraper_rust.HttpStatusError, Exception)
+    def test_http_status_error_inherits_from_sia_scraper_exception(self):
+        """HttpStatusError should inherit from SiaScraperException."""
+        assert issubclass(sia_scraper_rust.HttpStatusError, sia_scraper_rust.SiaScraperException)
 
-    def test_sia_timeout_error_inherits_from_exception(self):
-        """SiaTimeoutError should inherit from Exception."""
-        assert issubclass(sia_scraper_rust.SiaTimeoutError, Exception)
+    def test_sia_timeout_error_inherits_from_sia_scraper_exception(self):
+        """SiaTimeoutError should inherit from SiaScraperException."""
+        assert issubclass(sia_scraper_rust.SiaTimeoutError, sia_scraper_rust.SiaScraperException)
 
-    def test_parse_error_inherits_from_exception(self):
-        """ParseError should inherit from Exception."""
-        assert issubclass(sia_scraper_rust.ParseError, Exception)
+    def test_parse_error_inherits_from_sia_scraper_exception(self):
+        """ParseError should inherit from SiaScraperException."""
+        assert issubclass(sia_scraper_rust.ParseError, sia_scraper_rust.SiaScraperException)
 
-    def test_session_error_inherits_from_exception(self):
-        """SessionError should inherit from Exception."""
-        assert issubclass(sia_scraper_rust.SessionError, Exception)
+    def test_session_error_inherits_from_sia_scraper_exception(self):
+        """SessionError should inherit from SiaScraperException."""
+        assert issubclass(sia_scraper_rust.SessionError, sia_scraper_rust.SiaScraperException)
 
     def test_sia_scraper_exception_inherits_from_exception(self):
         """SiaScraperException should inherit from Exception."""
@@ -298,6 +298,7 @@ class TestHttpErrorExceptionMapping:
         """SiaTimeoutError should be raised when request exceeds timeout."""
         import socket
         import threading
+        import time
 
         # Create a server socket that accepts but never responds
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -310,20 +311,23 @@ class TestHttpErrorExceptionMapping:
         def accept_and_block():
             conn, _ = server.accept()
             conn.recv(1024)  # Read the request
-            # Never respond - let the client timeout
+            # Keep socket open past client timeout to avoid EOF/reset
+            time.sleep(5)
+            conn.close()
 
         t = threading.Thread(target=accept_and_block, daemon=True)
         t.start()
 
-        with pytest.raises(sia_scraper_rust.SiaTimeoutError) as exc_info:
-            await sia_scraper_rust.async_get_with_config(
-                f"http://127.0.0.1:{port}",
-                timeout=1,
-            )
-        error_msg = str(exc_info.value)
-        assert "Timeout" in error_msg
-
-        server.close()
+        try:
+            with pytest.raises(sia_scraper_rust.SiaTimeoutError) as exc_info:
+                await sia_scraper_rust.async_get_with_config(
+                    f"http://127.0.0.1:{port}",
+                    timeout=1,
+                )
+            error_msg = str(exc_info.value)
+            assert "Timeout" in error_msg
+        finally:
+            server.close()
 
     @pytest.mark.asyncio
     async def test_session_error_raised_on_uninitialized_session(self):
@@ -337,14 +341,13 @@ class TestHttpErrorExceptionMapping:
     @pytest.mark.asyncio
     async def test_value_error_raised_on_invalid_state_dict(self):
         """ValueError should be raised for invalid session state dict content."""
+        # Initialize a session to get a valid state_dict shape
+        session = sia_scraper_rust.PySiaSession()
+        state = await session.init_session()
+        state_dict = state.state_dict
+        # Mutate a specific field to trigger validation error
+        state_dict["status"] = "invalid_status"
         with pytest.raises(ValueError) as exc_info:
-            state_dict = sia_scraper_rust.init_oracle_adf_request_dict(
-                tipology_index="",
-                window_id="win123",
-                page_id="0",
-                view_state="vs123",
-            )
-            state_dict["status"] = "invalid_status"
             await sia_scraper_rust.PySiaSession.from_state({"state_dict": state_dict})
         error_msg = str(exc_info.value)
         assert "Invalid state_dict" in error_msg or "invalid" in error_msg.lower()

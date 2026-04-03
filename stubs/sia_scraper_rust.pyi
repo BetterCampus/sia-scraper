@@ -45,10 +45,14 @@ class NetworkError(SiaScraperException):
     - Network unreachable errors
 
     Example:
-        >>> try:
-        ...     await session.init_session()
-        ... except sia_scraper_rust.NetworkError as e:
-        ...     print(f"Network error: {e}")
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.init_session()
+        ...     except sia_scraper_rust.NetworkError as e:
+        ...         print(f"Network error: {e}")
+        >>> asyncio.run(main())
     """
 
 class HttpStatusError(SiaScraperException):
@@ -58,10 +62,14 @@ class HttpStatusError(SiaScraperException):
     Typically raised for 4xx and 5xx responses that indicate server or client errors.
 
     Example:
-        >>> try:
-        ...     await session.set_career("0-2-8-3")
-        ... except sia_scraper_rust.HttpStatusError as e:
-        ...     print(f"HTTP error: {e}")
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.set_career("0-2-8-3")
+        ...     except sia_scraper_rust.HttpStatusError as e:
+        ...         print(f"HTTP error: {e}")
+        >>> asyncio.run(main())
     """
 
 class SiaTimeoutError(SiaScraperException):
@@ -71,12 +79,15 @@ class SiaTimeoutError(SiaScraperException):
     Timeout errors are typically transient and may succeed on retry.
 
     Example:
+        >>> import asyncio
         >>> import sia_scraper_rust
-        >>> session = sia_scraper_rust.PySiaSession(timeout=1)
-        >>> try:
-        ...     await session.scrape_course_info(0)
-        ... except sia_scraper_rust.SiaTimeoutError as e:
-        ...     print(f"Timeout: {e}")
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession(timeout=1)
+        ...     try:
+        ...         await session.scrape_course_info(0)
+        ...     except sia_scraper_rust.SiaTimeoutError as e:
+        ...         print(f"Timeout: {e}")
+        >>> asyncio.run(main())
     """
 
 class ParseError(SiaScraperException):
@@ -102,10 +113,14 @@ class SessionError(SiaScraperException):
     - Invalid session state for operation
 
     Example:
-        >>> try:
-        ...     await session.set_career("0-2-8-3")
-        ... except sia_scraper_rust.SessionError as e:
-        ...     print(f"Session error: {e}")
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.set_career("0-2-8-3")
+        ...     except sia_scraper_rust.SessionError as e:
+        ...         print(f"Session error: {e}")
+        >>> asyncio.run(main())
     """
 
 class ScheduleModel:
