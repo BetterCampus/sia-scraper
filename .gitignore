@@ -31,3 +31,6 @@ src/sia_scraper_rust/*.so
 src/sia_scraper_rust/*.pyd
 src/sia_scraper_rust/*.dll
 src/sia_scraper_rust/*.dylib
+
+# Local PyO3 Python interpreter path (copy from .cargo/config.toml.example)
+.cargo/config.toml
