@@ -71,6 +71,8 @@ class SiaTimeoutError(SiaScraperException):
     Timeout errors are typically transient and may succeed on retry.
 
     Example:
+        >>> import sia_scraper_rust
+        >>> session = sia_scraper_rust.PySiaSession(timeout=1)
         >>> try:
         ...     await session.scrape_course_info(0)
         ... except sia_scraper_rust.SiaTimeoutError as e:

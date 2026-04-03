@@ -292,6 +292,8 @@ class TestHttpErrorExceptionMapping:
         assert "500" in error_msg
 
     @pytest.mark.asyncio
+    @pytest.mark.network
+    @pytest.mark.flaky
     async def test_sia_timeout_error_raised_on_timeout(self):
         """SiaTimeoutError should be raised when request exceeds timeout."""
         import socket
@@ -358,11 +360,15 @@ class TestHttpErrorExceptionMapping:
             raise AssertionError("Expected NetworkError to be raised")
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_http_status_error_inherits_from_exception(self):
         """HttpStatusError should be catchable as Exception."""
         try:
             await sia_scraper_rust.async_get("http://httpstat.us/404")
         except Exception as exc:
-            assert isinstance(exc, sia_scraper_rust.HttpStatusError)
+            # Assert that the caught exception is actually HttpStatusError
+            assert isinstance(exc, sia_scraper_rust.HttpStatusError), (
+                f"Expected HttpStatusError, got {type(exc).__name__}"
+            )
         else:
             raise AssertionError("Expected HttpStatusError to be raised")
