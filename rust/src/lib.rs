@@ -380,7 +380,7 @@ fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyA
             .map_err(pyo3::PyErr::from)?;
 
         let resp = client
-            .get(&url_clone)
+            .post(&url_clone, &body_clone)
             .await
             .map_err(pyo3::PyErr::from)?;
 

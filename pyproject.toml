@@ -28,6 +28,7 @@ dev = [
     "pytest-asyncio",
     "pytest-mock",
     "pytest-cov",
+    "pytest-httpserver",
     "pyright",
     "ruff~=0.15.8",
     "lxml-stubs",
