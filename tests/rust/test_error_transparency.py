@@ -294,13 +294,34 @@ class TestHttpErrorExceptionMapping:
     @pytest.mark.asyncio
     async def test_sia_timeout_error_raised_on_timeout(self):
         """SiaTimeoutError should be raised when request exceeds timeout."""
+        import socket
+        import threading
+
+        # Create a server socket that accepts but never responds
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        _, port = server.getsockname()
+
+        # Thread that accepts one connection and blocks forever
+        def accept_and_block():
+            conn, _ = server.accept()
+            conn.recv(1024)  # Read the request
+            # Never respond - let the client timeout
+
+        t = threading.Thread(target=accept_and_block, daemon=True)
+        t.start()
+
         with pytest.raises(sia_scraper_rust.SiaTimeoutError) as exc_info:
             await sia_scraper_rust.async_get_with_config(
-                "http://10.255.255.1",
+                f"http://127.0.0.1:{port}",
                 timeout=1,
             )
         error_msg = str(exc_info.value)
         assert "Timeout" in error_msg
+
+        server.close()
 
     @pytest.mark.asyncio
     async def test_session_error_raised_on_uninitialized_session(self):
