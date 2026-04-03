@@ -172,9 +172,9 @@ class TestExceptionInheritance:
         """HttpStatusError should inherit from Exception."""
         assert issubclass(sia_scraper_rust.HttpStatusError, Exception)
 
-    def test_timeout_error_inherits_from_exception(self):
-        """TimeoutError should inherit from Exception."""
-        assert issubclass(sia_scraper_rust.TimeoutError, Exception)
+    def test_sia_timeout_error_inherits_from_exception(self):
+        """SiaTimeoutError should inherit from Exception."""
+        assert issubclass(sia_scraper_rust.SiaTimeoutError, Exception)
 
     def test_parse_error_inherits_from_exception(self):
         """ParseError should inherit from Exception."""

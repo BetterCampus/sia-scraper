@@ -614,7 +614,7 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     )?;
     m.add("NetworkError", error::NetworkError::type_object(py))?;
     m.add("HttpStatusError", error::HttpStatusError::type_object(py))?;
-    m.add("TimeoutError", error::TimeoutError::type_object(py))?;
+    m.add("SiaTimeoutError", error::SiaTimeoutError::type_object(py))?;
     m.add("ParseError", error::ParseError::type_object(py))?;
     m.add("SessionError", error::SessionError::type_object(py))?;
     

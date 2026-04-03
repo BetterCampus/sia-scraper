@@ -38,7 +38,7 @@ create_exception!(
 
 create_exception!(
     sia_scraper_rust,
-    TimeoutError,
+    SiaTimeoutError,
     pyo3::exceptions::PyException
 );
 
@@ -117,7 +117,7 @@ impl From<crate::http::errors::HttpError> for pyo3::PyErr {
                 HttpStatusError::new_err(format!("HTTP {status}: {message}"))
             }
             HttpError::TimeoutError { timeout, operation } => {
-                TimeoutError::new_err(format!("Timeout after {timeout}s during {operation}"))
+                SiaTimeoutError::new_err(format!("Timeout after {timeout}s during {operation}"))
             }
             HttpError::ParseError(msg) => ParseError::new_err(msg),
             HttpError::InvalidInput(msg) => SessionError::new_err(msg),

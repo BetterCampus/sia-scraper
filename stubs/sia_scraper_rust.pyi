@@ -64,7 +64,7 @@ class HttpStatusError(Exception):
         ...     print(f"HTTP error: {e}")
     """
 
-class TimeoutError(Exception):
+class SiaTimeoutError(Exception):
     """Exception raised when a request times out before completing.
 
     Contains the timeout value and the operation that timed out.
@@ -73,7 +73,7 @@ class TimeoutError(Exception):
     Example:
         >>> try:
         ...     await session.get_course_xml(0)
-        ... except sia_scraper_rust.TimeoutError as e:
+        ... except sia_scraper_rust.SiaTimeoutError as e:
         ...     print(f"Timeout: {e}")
     """
 
