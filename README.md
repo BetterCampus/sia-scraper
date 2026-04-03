@@ -164,7 +164,7 @@ Sia-scraper provides a typed exception hierarchy with two independent trees:
 
 **Rust exceptions** (from `sia_scraper_rust`, re-exported via `sia_scraper.core.exceptions`):
 
-```
+```text
 Exception
   └── SiaScraperException
         ├── NetworkError       -- DNS, connection refused, unreachable
@@ -176,7 +176,7 @@ Exception
 
 **Python exceptions** (from `sia_scraper.core.exceptions`):
 
-```
+```text
 Exception
   └── SiaSessionException
         ├── SessionNotSet      -- Operation without active session

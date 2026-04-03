@@ -19,11 +19,13 @@ import pytest
 
 import sia_scraper_rust
 from sia_scraper.core.exceptions import (
+    CareerNotSet,
     ConcurrentAccessError,
     HttpStatusError,
     NetworkError,
     ParseError,
     SessionError,
+    SessionNotSet,
     SiaScraperException,
     SiaSessionException,
     SiaTimeoutError,
@@ -255,7 +257,7 @@ class TestSessionExceptionTranslation:
         session = SiaSession()
         session._rust_session = mock_rust_session
 
-        with pytest.raises(SiaSessionException.SessionNotSet):
+        with pytest.raises(SessionNotSet):
             await session.init_session()
 
     @pytest.mark.asyncio
@@ -284,7 +286,7 @@ class TestSessionExceptionTranslation:
         session = SiaSession()
         session._rust_session = mock_rust_session
 
-        with pytest.raises(SiaSessionException.SessionNotSet):
+        with pytest.raises(SessionNotSet):
             await session.set_career("0-2-8-3")
 
     @pytest.mark.asyncio
@@ -298,7 +300,7 @@ class TestSessionExceptionTranslation:
         session = SiaSession()
         session._rust_session = mock_rust_session
 
-        with pytest.raises(SiaSessionException.CareerNotSet):
+        with pytest.raises(CareerNotSet):
             await session.set_career("0-2-8-3")
 
     @pytest.mark.asyncio
