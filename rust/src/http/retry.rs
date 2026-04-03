@@ -81,12 +81,14 @@ pub fn calculate_delay(attempt: u32, config: &RetryConfig) -> Duration {
 
 pub fn should_retry(error: &crate::http::errors::HttpError, config: &RetryConfig) -> bool {
     match error {
-        crate::http::errors::HttpError::Timeout { .. } => config.retry_on_timeout,
-        crate::http::errors::HttpError::ConnectionFailed(_) => config.retry_on_connection_error,
-        crate::http::errors::HttpError::HttpStatus { status, .. } => {
+        crate::http::errors::HttpError::TimeoutError { .. } => config.retry_on_timeout,
+        crate::http::errors::HttpError::NetworkError(_) => config.retry_on_connection_error,
+        crate::http::errors::HttpError::HttpStatusError { status, .. } => {
             config.retry_on_status.contains(status)
         }
-        _ => false,
+        crate::http::errors::HttpError::ParseError(_) => true,
+        crate::http::errors::HttpError::InvalidInput(_) => false,
+        crate::http::errors::HttpError::SessionError(_) => false,
     }
 }
 
@@ -110,16 +112,19 @@ mod tests {
     #[test]
     fn test_should_retry_timeout() {
         let config = RetryConfig::default();
-        let error = crate::http::errors::HttpError::Timeout { timeout: 15 };
+        let error = crate::http::errors::HttpError::TimeoutError {
+            timeout: 15,
+            operation: "request".to_string(),
+        };
         assert!(should_retry(&error, &config));
     }
 
     #[test]
     fn test_should_retry_503() {
         let config = RetryConfig::default();
-        let error = crate::http::errors::HttpError::HttpStatus {
+        let error = crate::http::errors::HttpError::HttpStatusError {
             status: 503,
-            url: Some("test".to_string()),
+            message: "test".to_string(),
         };
         assert!(should_retry(&error, &config));
     }
@@ -127,9 +132,9 @@ mod tests {
     #[test]
     fn test_should_not_retry_400() {
         let config = RetryConfig::default();
-        let error = crate::http::errors::HttpError::HttpStatus {
+        let error = crate::http::errors::HttpError::HttpStatusError {
             status: 400,
-            url: Some("test".to_string()),
+            message: "test".to_string(),
         };
         assert!(!should_retry(&error, &config));
     }

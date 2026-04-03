@@ -463,26 +463,26 @@ Python receives native Rust CourseInfoModel (#[pyclass])
 
 #### Todo List
 
-- [ ] Update `rust/src/http/errors.rs`
-  - [ ] Add `#[derive(Error, Debug, Clone)]` to `HttpError`
-  - [ ] Add `NetworkError(String)` variant
-  - [ ] Add `HttpStatusError { status: u16, message: String }` variant
-  - [ ] Add `TimeoutError { timeout: u64, operation: String }` variant
-  - [ ] Add `ParseError(String)` variant
-  - [ ] Add `InvalidInput(String)` variant
-  - [ ] Add `SessionError(String)` variant
-  - [ ] Implement `is_retryable(&self) -> bool` method
-  - [ ] Add rustdoc comments for each variant
+- [x] Update `rust/src/http/errors.rs`
+  - [x] Add `#[derive(Error, Debug, Clone)]` to `HttpError`
+  - [x] Add `NetworkError(String)` variant
+  - [x] Add `HttpStatusError { status: u16, message: String }` variant
+  - [x] Add `TimeoutError { timeout: u64, operation: String }` variant
+  - [x] Add `ParseError(String)` variant
+  - [x] Add `InvalidInput(String)` variant
+  - [x] Add `SessionError(String)` variant
+  - [x] Implement `is_retryable(&self) -> bool` method
+  - [x] Add rustdoc comments for each variant
 
-- [ ] Update error conversions
-  - [ ] Implement `From<reqwest::Error> for HttpError`
-  - [ ] Implement `From<SiaScraperError> for HttpError`
-  - [ ] Update all error usage in `sia_session.rs`
+- [x] Update error conversions
+  - [x] Implement `From<reqwest::Error> for HttpError`
+  - [x] Implement `From<SiaScraperError> for HttpError`
+  - [x] Update all error usage in `sia_session.rs`
 
-- [ ] Test error types
-  - [ ] Add unit tests for each error variant
-  - [ ] Test `is_retryable()` logic
-  - [ ] Test error message formatting
+- [x] Test error types
+  - [x] Add unit tests for each error variant
+  - [x] Test `is_retryable()` logic
+  - [x] Test error message formatting
 
 ### Task 8.2: Create Python Exception Types
 
