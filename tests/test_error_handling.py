@@ -317,4 +317,3 @@ class TestSessionExceptionTranslation:
         with pytest.raises(SiaSessionException) as exc_info:
             await session.set_career("0-2-8-3")
         assert "Career selection failed" in str(exc_info.value)
-

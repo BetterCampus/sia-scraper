@@ -312,6 +312,43 @@ class CourseInfoModel:
             ...                          "2026-04-02 10:00:00", [], "1000001")
         """
 
+class ScrapeResult:
+    """Result of a batch scraping operation.
+
+    Contains both successful course extractions and recorded failures,
+    along with convenience methods for analyzing results.
+
+    Attributes:
+        successes: List of successfully scraped CourseInfoModel instances.
+        failures: List of tuples (course_index, error_message) for failed courses.
+
+    Example:
+        >>> result = await session.scrape_courses([0, 1, 2], mode="skip")
+        >>> print(f"Success rate: {result.success_rate():.1%}")
+        >>> for course in result.successes:
+        ...     print(course.course_name)
+        >>> for index, error in result.failures:
+        ...     print(f"Course {index} failed: {error}")
+    """
+
+    successes: list[CourseInfoModel]
+    failures: list[tuple[int, str]]
+
+    def total(self) -> int:
+        """Return total number of courses processed (successes + failures)."""
+        ...
+
+    def success_rate(self) -> float:
+        """Return success rate as a fraction (0.0 to 1.0).
+
+        Returns 1.0 if no courses were processed.
+        """
+        ...
+
+    def __repr__(self) -> str:
+        """Return human-readable summary."""
+        ...
+
 class CourseListEntryModel:
     """Represents a single course entry in the course list.
 
@@ -978,6 +1015,49 @@ class PySiaSession:
             HttpStatusError: If server returns error status.
             SiaTimeoutError: If request times out.
             ParseError: If response cannot be parsed.
+        """
+        ...
+
+    def scrape_courses(
+        self,
+        indices: list[int],
+        mode: str,
+        retries: int | None = None,
+        delay: int | None = None,
+    ) -> Awaitable[ScrapeResult]:
+        """Scrape multiple courses sequentially with configurable error handling.
+
+        Iterates over the provided course indices and attempts to scrape each one.
+        Errors are handled according to the specified mode:
+
+        - "abort": Stop immediately on the first error.
+        - "skip": Record the failure and continue to the next course.
+        - "retry": Retry failed courses up to retries times with exponential
+          backoff before recording as a failure.
+
+        Args:
+            indices: List of course indices to scrape (0-based).
+            mode: Error handling mode: "abort", "skip", or "retry".
+            retries: Maximum retry attempts per course (default: 3).
+                Used only in "retry" mode.
+            delay: Base delay between retries in milliseconds (default: 800).
+
+        Returns:
+            ScrapeResult with successes and failures lists.
+
+        Raises:
+            SessionError: If session not initialized or in Abort mode on first failure.
+            ValueError: If mode is not one of "abort", "skip", "retry".
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
+
+        Example:
+            >>> result = await session.scrape_courses([0, 1, 2], mode="skip")
+            >>> print(f"Success rate: {result.success_rate():.1%}")
+            >>> for course in result.successes:
+            ...     print(course.course_name)
         """
         ...
 
