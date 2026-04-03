@@ -27,27 +27,27 @@ create_exception!(
 create_exception!(
     sia_scraper_rust,
     NetworkError,
-    pyo3::exceptions::PyException
+    SiaScraperException
 );
 
 create_exception!(
     sia_scraper_rust,
     HttpStatusError,
-    pyo3::exceptions::PyException
+    SiaScraperException
 );
 
 create_exception!(
     sia_scraper_rust,
     SiaTimeoutError,
-    pyo3::exceptions::PyException
+    SiaScraperException
 );
 
-create_exception!(sia_scraper_rust, ParseError, pyo3::exceptions::PyException);
+create_exception!(sia_scraper_rust, ParseError, SiaScraperException);
 
 create_exception!(
     sia_scraper_rust,
     SessionError,
-    pyo3::exceptions::PyException
+    SiaScraperException
 );
 
 /// Custom error types for SIA Scraper operations.
