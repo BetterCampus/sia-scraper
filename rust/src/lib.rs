@@ -341,12 +341,12 @@ fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
     let url_clone = url.clone();
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let client = AsyncHttpClient::new(15, url_clone.clone())
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         let resp = client
             .get(&url_clone)
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
@@ -374,12 +374,12 @@ fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyA
     let body_clone = body.clone();
     future_into_py::<_, pyo3::Py<pyo3::types::PyDict>>(py, async move {
         let client = AsyncHttpClient::new(15, url_clone.clone())
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         let resp = client
             .post(&url_clone, &body_clone)
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
@@ -420,12 +420,12 @@ fn async_get_with_config<'p>(
             .with_user_agent(&user_agent);
 
         let client = AsyncHttpClient::with_config(config)
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         let resp = client
             .get(&url_clone)
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
@@ -455,12 +455,12 @@ fn init_sia_session<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&'p Py
 
     future_into_py::<_, crate::models::session::SessionStateModel>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         session
             .init_session()
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         let state = session.get_state().await;
         Ok(crate::models::session::SessionStateModel::from_session_state(&state))
@@ -479,11 +479,11 @@ fn init_sia_session_json<'p>(py: Python<'p>, timeout: Option<u64>) -> PyResult<&
 
     future_into_py(py, async move {
         let session = SiaSession::new(timeout, base_url)
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
         session
             .init_session()
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
         let state = session.get_state().await;
         session_state_json(&state).map_err(pyo3::PyErr::from)
     })
@@ -515,17 +515,17 @@ fn set_career<'p>(
 
     future_into_py::<_, crate::models::session::SessionStateModel>(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         session
             .init_session()
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         let state = session
             .set_career(&search_code, electives)
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
         Ok(crate::models::session::SessionStateModel::from_session_state(&state))
     })
 }
@@ -548,15 +548,15 @@ fn set_career_json<'p>(
 
     future_into_py(py, async move {
         let session = SiaSession::new(timeout, base_url)
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
         session
             .init_session()
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
         let state = session
             .set_career(&search_code, electives)
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
         session_state_json(&state).map_err(pyo3::PyErr::from)
     })
 }
@@ -589,17 +589,17 @@ fn get_course_xml<'p>(
 
     future_into_py(py, async move {
         let session = SiaSession::new(timeout, base_url.clone())
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         session
             .init_session()
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         let xml = session
             .get_course_xml_internal(&search_code, electives, course_index)
             .await
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            .map_err(pyo3::PyErr::from)?;
 
         Ok::<String, pyo3::PyErr>(xml)
     })

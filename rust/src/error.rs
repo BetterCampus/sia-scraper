@@ -111,17 +111,14 @@ impl From<SiaScraperError> for pyo3::PyErr {
 impl From<crate::http::errors::HttpError> for pyo3::PyErr {
     fn from(e: crate::http::errors::HttpError) -> Self {
         use crate::http::errors::HttpError;
+        let message = e.to_string();
         match e {
-            HttpError::NetworkError(msg) => NetworkError::new_err(msg),
-            HttpError::HttpStatusError { status, message } => {
-                HttpStatusError::new_err(format!("HTTP {status}: {message}"))
-            }
-            HttpError::TimeoutError { timeout, operation } => {
-                SiaTimeoutError::new_err(format!("Timeout after {timeout}s during {operation}"))
-            }
-            HttpError::ParseError(msg) => ParseError::new_err(msg),
-            HttpError::InvalidInput(msg) => SessionError::new_err(msg),
-            HttpError::SessionError(msg) => SessionError::new_err(msg),
+            HttpError::NetworkError(_) => NetworkError::new_err(message),
+            HttpError::HttpStatusError { .. } => HttpStatusError::new_err(message),
+            HttpError::TimeoutError { .. } => SiaTimeoutError::new_err(message),
+            HttpError::ParseError(_) => ParseError::new_err(message),
+            HttpError::InvalidInput(_) => pyo3::exceptions::PyValueError::new_err(message),
+            HttpError::SessionError(_) => SessionError::new_err(message),
         }
     }
 }

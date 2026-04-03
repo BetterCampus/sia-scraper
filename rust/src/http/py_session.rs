@@ -14,6 +14,7 @@ use pyo3::Python;
 use pyo3_asyncio::tokio::future_into_py;
 
 use crate::constants::SIA_BASE_URL;
+use crate::error::SessionError;
 use crate::http::sia_session::SiaSession;
 use crate::models::session::SessionStateModel;
 
@@ -104,12 +105,12 @@ impl PySiaSession {
 
         future_into_py(py, async move {
             let session = SiaSession::new(timeout, base_url)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             session
                 .init_session()
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             let state = session.get_state().await;
 
@@ -149,14 +150,14 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
             let state = session
                 .set_career(&search_code, electives)
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             Ok(SessionStateModel::from_session_state(&state))
         })
@@ -188,14 +189,14 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
             session
                 .scrape_course_info(course_index)
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                .map_err(pyo3::PyErr::from)
         })
     }
 
@@ -226,14 +227,14 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
             session
                 .scrape_course_prereqs(course_index)
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                .map_err(pyo3::PyErr::from)
         })
     }
 
@@ -257,7 +258,7 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
@@ -358,11 +359,11 @@ impl PySiaSession {
 
             if needs_init {
                 let session = SiaSession::new(session_clone.timeout, base_url)
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                    .map_err(pyo3::PyErr::from)?;
 
                 session.init_session()
                     .await
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                    .map_err(pyo3::PyErr::from)?;
 
                 *session_clone.inner.write().await = Some(session);
             }
@@ -450,7 +451,7 @@ impl PySiaSession {
         future_into_py::<_, PyObject>(py, async move {
             let base_url = SIA_BASE_URL.to_string();
             let sia_session = SiaSession::from_state(timeout, base_url, session_state)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             let inner = Arc::new(RwLock::new(Some(sia_session)));
 
@@ -487,7 +488,7 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
