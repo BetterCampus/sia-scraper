@@ -343,8 +343,9 @@ class TestHttpErrorExceptionMapping:
         """ValueError should be raised for invalid session state dict content."""
         # Initialize a session to get a valid state_dict shape
         session = sia_scraper_rust.PySiaSession()
-        state = await session.init_session()
-        state_dict = state.state_dict
+        await session.init_session()
+        data = await session.get_session_data()
+        state_dict = data["state_dict"]
         # Mutate a specific field to trigger validation error
         state_dict["status"] = "invalid_status"
         with pytest.raises(ValueError) as exc_info:
