@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import sia_scraper_rust
-from sia_scraper.core.exceptions import ConcurrentAccessError
+from sia_scraper.core.exceptions import ConcurrentAccessError, SiaSessionException
 from sia_scraper.session import SiaSession
 
 
@@ -328,7 +328,7 @@ class TestSequentialOperationsStillWork:
         try:
             mock_rust_session.set_career.side_effect = RuntimeError("Simulated error")
 
-            with pytest.raises(RuntimeError):
+            with pytest.raises(SiaSessionException, match="Simulated error"):
                 await session.set_career("0-2-8-3")
 
             mock_rust_session.set_career.side_effect = None
