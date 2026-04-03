@@ -1,6 +1,7 @@
 //! Async SIA Session manager with retry logic.
 
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
@@ -15,6 +16,7 @@ use crate::http::session::SessionState;
 use crate::http::types::HttpResponse;
 use crate::models::course::CourseInfoModel;
 use crate::models::prerequisite::CoursePrereqsModel;
+use crate::models::scrape_result::{ErrorMode, ScrapeResult};
 use crate::parsers::adf_request::OracleAdfRequestBuilderState;
 use crate::parsers::course_parser::{parse_course_model, parse_prereqs_model};
 use crate::parsers::table_parser::get_course_list;
@@ -598,6 +600,107 @@ impl SiaSession {
     pub fn retry_config(&self) -> &RetryConfig {
         &self.retry_config
     }
+
+    /// Scrape multiple courses sequentially with configurable error handling.
+    ///
+    /// Iterates over the provided course indices and attempts to scrape each one.
+    /// Errors are handled according to the specified `ErrorMode`:
+    ///
+    /// - `Abort`: Returns immediately on the first error.
+    /// - `Skip`: Records the failure and continues to the next course.
+    /// - `Retry`: Retries up to `max_retries` times with exponential backoff
+    ///   before recording as a failure.
+    ///
+    /// # Arguments
+    /// * `indices` - Course indices to scrape
+    /// * `mode` - Error handling strategy
+    /// * `max_retries` - Maximum retry attempts per course (used only in Retry mode)
+    /// * `retry_delay_ms` - Base delay between retries in milliseconds
+    ///
+    /// # Returns
+    /// `ScrapeResult` containing successes and failures
+    ///
+    /// # Errors
+    /// Returns `HttpError::AbortError` on first failure when mode is Abort.
+    pub async fn scrape_courses_batch(
+        &self,
+        indices: Vec<i32>,
+        mode: ErrorMode,
+        max_retries: u32,
+        retry_delay_ms: u64,
+    ) -> Result<ScrapeResult, HttpError> {
+        let mut result = ScrapeResult::new();
+        let total = indices.len();
+
+        for (position, &index) in indices.iter().enumerate() {
+            log::info!(
+                "Scraping course {}/{} (index {})",
+                position + 1,
+                total,
+                index
+            );
+
+            let course = self.scrape_course_with_retry(index, max_retries, retry_delay_ms).await;
+
+            match course {
+                Ok(info) => {
+                    result.successes.push(info);
+                }
+                Err(e) => match mode {
+                    ErrorMode::Abort => {
+                        return Err(HttpError::SessionError(format!(
+                            "Aborted at course index {}: {}",
+                            index, e
+                        )));
+                    }
+                    ErrorMode::Skip => {
+                        result.failures.push((index as usize, e.to_string()));
+                    }
+                    ErrorMode::Retry => {
+                        result.failures.push((index as usize, e.to_string()));
+                    }
+                },
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Attempt to scrape a single course with retry logic.
+    ///
+    /// # Arguments
+    /// * `index` - Course index to scrape
+    /// * `max_retries` - Maximum number of retry attempts
+    /// * `retry_delay_ms` - Base delay between retries in milliseconds
+    ///
+    /// # Returns
+    /// `CourseInfoModel` on success, or the last `HttpError` on failure.
+    async fn scrape_course_with_retry(
+        &self,
+        index: i32,
+        max_retries: u32,
+        retry_delay_ms: u64,
+    ) -> Result<CourseInfoModel, HttpError> {
+        let mut last_error: Option<HttpError> = None;
+
+        for attempt in 0..=max_retries {
+            match self.scrape_course_info(index).await {
+                Ok(info) => return Ok(info),
+                Err(e) => {
+                    if !should_retry(&e, &self.retry_config) || attempt == max_retries {
+                        return Err(e);
+                    }
+                    last_error = Some(e);
+                    let delay = Duration::from_millis(retry_delay_ms * (attempt as u64 + 1));
+                    sleep(delay).await;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or(HttpError::NetworkError(
+            "Unknown error during course scraping".to_string(),
+        )))
+    }
 }
 
 #[cfg(test)]
@@ -885,5 +988,38 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("course list is empty"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_mode_empty_indices() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![], ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.total(), 0);
+        assert_eq!(result.success_rate(), 1.0);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_skip_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1], ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1], ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_err());
     }
 }
