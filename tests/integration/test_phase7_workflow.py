@@ -222,7 +222,7 @@ class TestPhase7ErrorHandling:
         async with await SiaScraper.create(timeout=30) as scraper:
             with pytest.raises(
                 sia_scraper_rust.SessionError,
-                match="career not set|not initialized|Invalid input",
+                match="career not set|not initialized",
             ):
                 await scraper.get_course_info(0)
 
