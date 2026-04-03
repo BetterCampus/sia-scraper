@@ -192,16 +192,16 @@ class TestExceptionInheritance:
 class TestExceptionMessages:
     """Verify that exception messages are correctly preserved when surfaced to Python."""
 
-    def test_network_error_message(self):
-        """NetworkError should preserve the error message."""
+    def test_sia_scraper_exception_message(self):
+        """SiaScraperException should preserve the error message."""
         with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
             sia_scraper_rust.extract_view_state("<div>No ViewState</div>")
         error_msg = str(exc_info.value)
         assert isinstance(error_msg, str)
         assert len(error_msg) > 0
 
-    def test_session_error_message_from_invalid_input(self):
-        """SessionError should contain the invalid input message."""
+    def test_sia_scraper_exception_message_from_invalid_input(self):
+        """SiaScraperException should contain the invalid input message."""
         with pytest.raises(sia_scraper_rust.SiaScraperException, match="window_id is required"):
             sia_scraper_rust.init_oracle_adf_request_dict(
                 tipology_index="",
@@ -210,8 +210,8 @@ class TestExceptionMessages:
                 view_state=None,
             )
 
-    def test_parse_error_message_contains_context(self):
-        """Parse error should contain context about what failed to parse."""
+    def test_sia_scraper_exception_parse_message_contains_context(self):
+        """SiaScraperException from parsing should contain context about what failed."""
         with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
             sia_scraper_rust.parse_course_info("")
         error_msg = str(exc_info.value).lower()
@@ -222,8 +222,8 @@ class TestExceptionMessages:
 class TestExceptionCatchability:
     """Verify that exceptions can be caught using generic Exception handler."""
 
-    def test_network_error_caught_as_exception(self):
-        """NetworkError should be catchable as Exception."""
+    def test_sia_scraper_exception_caught_in_extract_view_state(self):
+        """SiaScraperException from extract_view_state should be catchable as Exception."""
         caught = False
         try:
             sia_scraper_rust.extract_view_state("<div>No ViewState</div>")
@@ -231,8 +231,8 @@ class TestExceptionCatchability:
             caught = True
         assert caught
 
-    def test_session_error_caught_as_exception(self):
-        """SessionError should be catchable as Exception."""
+    def test_sia_scraper_exception_caught_in_init_oracle_adf_request_dict(self):
+        """SiaScraperException from init_oracle_adf_request_dict should be catchable as Exception."""
         caught = False
         try:
             sia_scraper_rust.init_oracle_adf_request_dict(
@@ -244,3 +244,91 @@ class TestExceptionCatchability:
         except Exception:
             caught = True
         assert caught
+
+
+class TestHttpErrorExceptionMapping:
+    """Verify HttpError variants are correctly mapped to Python exceptions.
+
+    These tests trigger actual HTTP-layer failures to ensure the
+    From<HttpError> for PyErr conversion raises the correct exception types.
+    """
+
+    @pytest.mark.asyncio
+    async def test_network_error_raised_on_connection_refused(self):
+        """NetworkError should be raised when connection is refused."""
+        with pytest.raises(sia_scraper_rust.NetworkError) as exc_info:
+            await sia_scraper_rust.async_get("http://localhost:1")
+        error_msg = str(exc_info.value)
+        assert "Network error" in error_msg or "Connection" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_network_error_raised_on_invalid_host(self):
+        """NetworkError should be raised for unresolvable hostnames."""
+        with pytest.raises(sia_scraper_rust.NetworkError) as exc_info:
+            await sia_scraper_rust.async_get("http://this-host-does-not-exist.invalid")
+        error_msg = str(exc_info.value)
+        assert "Network error" in error_msg or "dns" in error_msg.lower()
+
+    @pytest.mark.asyncio
+    async def test_http_status_error_raised_on_404(self):
+        """HttpStatusError should be raised for 404 responses."""
+        with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
+            await sia_scraper_rust.async_get("http://httpstat.us/404")
+        error_msg = str(exc_info.value)
+        assert "404" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_http_status_error_message_contains_status_code(self):
+        """HttpStatusError message should contain the HTTP status code."""
+        with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
+            await sia_scraper_rust.async_get("http://httpstat.us/500")
+        error_msg = str(exc_info.value)
+        assert "500" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_sia_timeout_error_raised_on_timeout(self):
+        """SiaTimeoutError should be raised when request exceeds timeout."""
+        with pytest.raises(sia_scraper_rust.SiaTimeoutError) as exc_info:
+            await sia_scraper_rust.async_get_with_config(
+                "http://10.255.255.1",
+                timeout=1,
+            )
+        error_msg = str(exc_info.value)
+        assert "Timeout" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_session_error_raised_on_uninitialized_session(self):
+        """SessionError should be raised when using uninitialized session."""
+        session = sia_scraper_rust.PySiaSession()
+        with pytest.raises(sia_scraper_rust.SessionError) as exc_info:
+            await session.set_career("0-2-8-3")
+        error_msg = str(exc_info.value)
+        assert "Session not initialized" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_value_error_raised_on_invalid_input(self):
+        """PyValueError should be raised for invalid session state input."""
+        with pytest.raises(ValueError) as exc_info:
+            await sia_scraper_rust.PySiaSession.from_state({"state_dict": "not_a_dict"})
+        error_msg = str(exc_info.value)
+        assert "state_dict" in error_msg.lower() or "invalid" in error_msg.lower()
+
+    @pytest.mark.asyncio
+    async def test_network_error_inherits_from_exception(self):
+        """NetworkError should be catchable as Exception."""
+        try:
+            await sia_scraper_rust.async_get("http://localhost:1")
+        except Exception:
+            pass
+        else:
+            raise AssertionError("Expected NetworkError to be raised")
+
+    @pytest.mark.asyncio
+    async def test_http_status_error_inherits_from_exception(self):
+        """HttpStatusError should be catchable as Exception."""
+        try:
+            await sia_scraper_rust.async_get("http://httpstat.us/404")
+        except Exception:
+            pass
+        else:
+            raise AssertionError("Expected HttpStatusError to be raised")
