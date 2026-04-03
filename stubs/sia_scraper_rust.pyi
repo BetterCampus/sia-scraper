@@ -36,7 +36,7 @@ class SiaScraperException(Exception):
         ...     print(f"Parse error: {e}")
     """
 
-class NetworkError(Exception):
+class NetworkError(SiaScraperException):
     """Exception raised for network connectivity failures.
 
     This exception is raised when network operations fail due to:
@@ -51,7 +51,7 @@ class NetworkError(Exception):
         ...     print(f"Network error: {e}")
     """
 
-class HttpStatusError(Exception):
+class HttpStatusError(SiaScraperException):
     """Exception raised for HTTP responses with non-success status codes.
 
     Contains the HTTP status code and a descriptive message about the error.
@@ -64,7 +64,7 @@ class HttpStatusError(Exception):
         ...     print(f"HTTP error: {e}")
     """
 
-class SiaTimeoutError(Exception):
+class SiaTimeoutError(SiaScraperException):
     """Exception raised when a request times out before completing.
 
     Contains the timeout value and the operation that timed out.
@@ -77,7 +77,7 @@ class SiaTimeoutError(Exception):
         ...     print(f"Timeout: {e}")
     """
 
-class ParseError(Exception):
+class ParseError(SiaScraperException):
     """Exception raised when response content cannot be parsed as expected.
 
     This exception indicates the response body could not be parsed,
@@ -90,7 +90,7 @@ class ParseError(Exception):
         ...     print(f"Parse error: {e}")
     """
 
-class SessionError(Exception):
+class SessionError(SiaScraperException):
     """Exception raised for session state errors.
 
     This exception indicates the session is in an invalid state for

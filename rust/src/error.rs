@@ -24,31 +24,15 @@ create_exception!(
     pyo3::exceptions::PyException
 );
 
-create_exception!(
-    sia_scraper_rust,
-    NetworkError,
-    pyo3::exceptions::PyException
-);
+create_exception!(sia_scraper_rust, NetworkError, SiaScraperException);
 
-create_exception!(
-    sia_scraper_rust,
-    HttpStatusError,
-    pyo3::exceptions::PyException
-);
+create_exception!(sia_scraper_rust, HttpStatusError, SiaScraperException);
 
-create_exception!(
-    sia_scraper_rust,
-    SiaTimeoutError,
-    pyo3::exceptions::PyException
-);
+create_exception!(sia_scraper_rust, SiaTimeoutError, SiaScraperException);
 
-create_exception!(sia_scraper_rust, ParseError, pyo3::exceptions::PyException);
+create_exception!(sia_scraper_rust, ParseError, SiaScraperException);
 
-create_exception!(
-    sia_scraper_rust,
-    SessionError,
-    pyo3::exceptions::PyException
-);
+create_exception!(sia_scraper_rust, SessionError, SiaScraperException);
 
 /// Custom error types for SIA Scraper operations.
 ///
