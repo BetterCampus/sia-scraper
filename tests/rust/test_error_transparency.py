@@ -269,37 +269,25 @@ class TestHttpErrorExceptionMapping:
         error_msg = str(exc_info.value)
         assert "Network error" in error_msg or "dns" in error_msg.lower()
 
+    @pytest.mark.network
     @pytest.mark.asyncio
-    async def test_http_status_error_raised_on_404(self, mocker):
+    async def test_http_status_error_raised_on_404(self):
         """HttpStatusError should be raised for 404 responses."""
-        mock_resp = mocker.Mock()
-        mock_resp.status = 404
-        mock_resp.body = "Not Found"
-        mock_resp.url = "http://example.com/404"
-
-        mock_client = mocker.Mock()
-        mock_client.get = mocker.AsyncMock(return_value=mock_resp)
-
-        mocker.patch(
-            "sia_scraper_rust.async_get",
-            side_effect=sia_scraper_rust.HttpStatusError("HTTP 404: Not Found"),
-        )
-
+        # Use httpbin.org which returns proper 404 responses
+        # This tests the actual Rust error conversion chain
         with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
-            await sia_scraper_rust.async_get("http://example.com/404")
+            await sia_scraper_rust.async_get("https://httpbin.org/status/404")
         error_msg = str(exc_info.value)
         assert "404" in error_msg
 
+    @pytest.mark.network
     @pytest.mark.asyncio
-    async def test_http_status_error_message_contains_status_code(self, mocker):
+    async def test_http_status_error_message_contains_status_code(self):
         """HttpStatusError message should contain the HTTP status code."""
-        mocker.patch(
-            "sia_scraper_rust.async_get",
-            side_effect=sia_scraper_rust.HttpStatusError("HTTP 500: Internal Server Error"),
-        )
-
+        # Use httpbin.org which returns proper 500 responses
+        # This tests the actual Rust error conversion chain
         with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
-            await sia_scraper_rust.async_get("http://example.com/500")
+            await sia_scraper_rust.async_get("https://httpbin.org/status/500")
         error_msg = str(exc_info.value)
         assert "500" in error_msg
 
