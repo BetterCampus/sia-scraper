@@ -269,25 +269,21 @@ class TestHttpErrorExceptionMapping:
         error_msg = str(exc_info.value)
         assert "Network error" in error_msg or "dns" in error_msg.lower()
 
-    @pytest.mark.network
     @pytest.mark.asyncio
-    async def test_http_status_error_raised_on_404(self):
+    async def test_http_status_error_raised_on_404(self, httpserver):
         """HttpStatusError should be raised for 404 responses."""
-        # Use httpbin.org which returns proper 404 responses
-        # This tests the actual Rust error conversion chain
+        httpserver.expect_request("/test").respond_with_data("", status=404)
         with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
-            await sia_scraper_rust.async_get("https://httpbin.org/status/404")
+            await sia_scraper_rust.async_get(httpserver.url_for("/test"))
         error_msg = str(exc_info.value)
         assert "404" in error_msg
 
-    @pytest.mark.network
     @pytest.mark.asyncio
-    async def test_http_status_error_message_contains_status_code(self):
+    async def test_http_status_error_message_contains_status_code(self, httpserver):
         """HttpStatusError message should contain the HTTP status code."""
-        # Use httpbin.org which returns proper 500 responses
-        # This tests the actual Rust error conversion chain
+        httpserver.expect_request("/test").respond_with_data("", status=500)
         with pytest.raises(sia_scraper_rust.HttpStatusError) as exc_info:
-            await sia_scraper_rust.async_get("https://httpbin.org/status/500")
+            await sia_scraper_rust.async_get(httpserver.url_for("/test"))
         error_msg = str(exc_info.value)
         assert "500" in error_msg
 
@@ -346,12 +342,12 @@ class TestHttpErrorExceptionMapping:
         await session.init_session()
         data = await session.get_session_data()
         state_dict = data["state_dict"]
-        # Mutate a specific field to trigger validation error
-        state_dict["status"] = "invalid_status"
+        # Pass invalid type for a required string field to trigger ValueError
+        state_dict["career_code"] = 12345  # Should be string, not int
         with pytest.raises(ValueError) as exc_info:
             await sia_scraper_rust.PySiaSession.from_state({"state_dict": state_dict})
         error_msg = str(exc_info.value)
-        assert "Invalid state_dict" in error_msg or "invalid" in error_msg.lower()
+        assert "Invalid state_dict" in error_msg or "career_code" in error_msg.lower()
 
     @pytest.mark.asyncio
     async def test_network_error_inherits_from_exception(self):
@@ -364,13 +360,12 @@ class TestHttpErrorExceptionMapping:
             raise AssertionError("Expected NetworkError to be raised")
 
     @pytest.mark.asyncio
-    @pytest.mark.network
-    async def test_http_status_error_inherits_from_exception(self):
+    async def test_http_status_error_inherits_from_exception(self, httpserver):
         """HttpStatusError should be catchable as Exception."""
+        httpserver.expect_request("/test").respond_with_data("", status=404)
         try:
-            await sia_scraper_rust.async_get("http://httpstat.us/404")
+            await sia_scraper_rust.async_get(httpserver.url_for("/test"))
         except Exception as exc:
-            # Assert that the caught exception is actually HttpStatusError
             assert isinstance(exc, sia_scraper_rust.HttpStatusError), (
                 f"Expected HttpStatusError, got {type(exc).__name__}"
             )

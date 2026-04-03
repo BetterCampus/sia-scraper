@@ -348,6 +348,9 @@ fn async_get<'p>(py: Python<'p>, url: String) -> PyResult<&'p PyAny> {
             .await
             .map_err(pyo3::PyErr::from)?;
 
+        resp.raise_for_status()
+            .map_err(pyo3::PyErr::from)?;
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
             dict.set_item("status", resp.status)?;
@@ -377,8 +380,11 @@ fn async_post<'p>(py: Python<'p>, url: String, body: String) -> PyResult<&'p PyA
             .map_err(pyo3::PyErr::from)?;
 
         let resp = client
-            .post(&url_clone, &body_clone)
+            .get(&url_clone)
             .await
+            .map_err(pyo3::PyErr::from)?;
+
+        resp.raise_for_status()
             .map_err(pyo3::PyErr::from)?;
 
         Python::with_gil(|py| {
