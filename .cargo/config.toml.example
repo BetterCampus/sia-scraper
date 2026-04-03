@@ -1,0 +1,3 @@
+[env]
+# Copy this file to .cargo/config.toml and update the path to your Python interpreter
+# PYO3_PYTHON = "/path/to/your/python"

@@ -18,14 +18,25 @@ jobs:
         with:
           components: clippy,rustfmt
 
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: Cache Cargo build artifacts
         uses: Swatinem/rust-cache@v2
 
       - name: Cargo check
         run: cargo check
+        env:
+          PYO3_PYTHON: python
 
       - name: Cargo clippy (warnings are errors)
         run: cargo clippy --all-targets --all-features -- -D warnings
+        env:
+          PYO3_PYTHON: python
 
       - name: Cargo test (library, no extension-module)
         run: cargo test --lib --no-default-features
+        env:
+          PYO3_PYTHON: python

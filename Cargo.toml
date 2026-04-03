@@ -15,6 +15,9 @@ extension-module = ["pyo3/extension-module"]
 full-error-collection = []
 fail-fast = []
 
+# For running `cargo test` without linking to Python
+# Use: cargo test --no-default-features --features full-error-collection
+
 [dependencies]
 pyo3 = { version = "0.20", features = ["auto-initialize"] }
 scraper = "0.20"

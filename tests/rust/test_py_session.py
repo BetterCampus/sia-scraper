@@ -31,25 +31,25 @@ class TestPySiaSessionErrorHandling:
     @pytest.mark.asyncio
     async def test_set_career_before_init_raises(self) -> None:
         session = sia_scraper_rust.PySiaSession()
-        with pytest.raises(RuntimeError, match="not initialized"):
+        with pytest.raises(sia_scraper_rust.SessionError, match="not initialized"):
             await session.set_career("0-2-8-3")
 
     @pytest.mark.asyncio
     async def test_scrape_course_info_before_init_raises(self) -> None:
         session = sia_scraper_rust.PySiaSession()
-        with pytest.raises(RuntimeError, match="not initialized"):
+        with pytest.raises(sia_scraper_rust.SessionError, match="not initialized"):
             await session.scrape_course_info(0)
 
     @pytest.mark.asyncio
     async def test_scrape_course_prereqs_before_init_raises(self) -> None:
         session = sia_scraper_rust.PySiaSession()
-        with pytest.raises(RuntimeError, match="not initialized"):
+        with pytest.raises(sia_scraper_rust.SessionError, match="not initialized"):
             await session.scrape_course_prereqs(0)
 
     @pytest.mark.asyncio
     async def test_get_state_before_init_raises(self) -> None:
         session = sia_scraper_rust.PySiaSession()
-        with pytest.raises(RuntimeError, match="not initialized"):
+        with pytest.raises(sia_scraper_rust.SessionError, match="not initialized"):
             await session.get_state()
 
     def test_is_initialized_before_init(self) -> None:

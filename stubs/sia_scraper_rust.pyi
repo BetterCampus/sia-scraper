@@ -36,6 +36,93 @@ class SiaScraperException(Exception):
         ...     print(f"Parse error: {e}")
     """
 
+class NetworkError(SiaScraperException):
+    """Exception raised for network connectivity failures.
+
+    This exception is raised when network operations fail due to:
+    - DNS resolution failures
+    - Connection refused errors
+    - Network unreachable errors
+
+    Example:
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.init_session()
+        ...     except sia_scraper_rust.NetworkError as e:
+        ...         print(f"Network error: {e}")
+        >>> asyncio.run(main())
+    """
+
+class HttpStatusError(SiaScraperException):
+    """Exception raised for HTTP responses with non-success status codes.
+
+    Contains the HTTP status code and a descriptive message about the error.
+    Typically raised for 4xx and 5xx responses that indicate server or client errors.
+
+    Example:
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.set_career("0-2-8-3")
+        ...     except sia_scraper_rust.HttpStatusError as e:
+        ...         print(f"HTTP error: {e}")
+        >>> asyncio.run(main())
+    """
+
+class SiaTimeoutError(SiaScraperException):
+    """Exception raised when a request times out before completing.
+
+    Contains the timeout value and the operation that timed out.
+    Timeout errors are typically transient and may succeed on retry.
+
+    Example:
+        >>> import asyncio
+        >>> import sia_scraper_rust
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession(timeout=1)
+        ...     try:
+        ...         await session.scrape_course_info(0)
+        ...     except sia_scraper_rust.SiaTimeoutError as e:
+        ...         print(f"Timeout: {e}")
+        >>> asyncio.run(main())
+    """
+
+class ParseError(SiaScraperException):
+    """Exception raised when response content cannot be parsed as expected.
+
+    This exception indicates the response body could not be parsed,
+    possibly due to unexpected response format or encoding issues.
+
+    Example:
+        >>> try:
+        ...     sia_scraper_rust.parse_course_info("<invalid>")
+        ... except sia_scraper_rust.ParseError as e:
+        ...     print(f"Parse error: {e}")
+    """
+
+class SessionError(SiaScraperException):
+    """Exception raised for session state errors.
+
+    This exception indicates the session is in an invalid state for
+    the requested operation, such as:
+    - Session not initialized
+    - Session expired
+    - Invalid session state for operation
+
+    Example:
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.set_career("0-2-8-3")
+        ...     except sia_scraper_rust.SessionError as e:
+        ...         print(f"Session error: {e}")
+        >>> asyncio.run(main())
+    """
+
 class ScheduleModel:
     """Represents a single class schedule entry with day, time, and location.
 
@@ -821,7 +908,11 @@ class PySiaSession:
             SessionStateModel with initial session state.
 
         Raises:
-            RuntimeError: If connection fails or ViewState not found.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
+            SessionError: If ViewState not found.
         """
         ...
 
@@ -840,7 +931,12 @@ class PySiaSession:
             SessionStateModel with career info and course list.
 
         Raises:
-            RuntimeError: If session not initialized or navigation fails.
+            SessionError: If session not initialized.
+            ValueError: If search_code is invalid.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -857,7 +953,12 @@ class PySiaSession:
             CourseInfoModel with complete course data.
 
         Raises:
-            RuntimeError: If session not on career page or index out of range.
+            SessionError: If session not initialized.
+            ValueError: If course_index is out of range.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -871,7 +972,12 @@ class PySiaSession:
             CoursePrereqsModel with prerequisite conditions.
 
         Raises:
-            RuntimeError: If session not on career page or index out of range.
+            SessionError: If session not initialized.
+            ValueError: If course_index is out of range.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -882,7 +988,7 @@ class PySiaSession:
             SessionStateModel with current session state.
 
         Raises:
-            RuntimeError: If session not initialized.
+            SessionError: If session not initialized.
         """
         ...
 
@@ -925,6 +1031,13 @@ class PySiaSession:
 
         Returns:
             Self for use in `async with` statement.
+
+        Raises:
+            SessionError: If session not initialized.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -973,7 +1086,13 @@ class PySiaSession:
             New PySiaSession with restored state.
 
         Raises:
-            RuntimeError: If state restoration fails.
+            KeyError: If 'state_dict' key is missing from input.
+            TypeError: If state_dict is not a dictionary.
+            ValueError: If state_dict contains invalid model data.
+            SessionError: If state_dict is invalid or restoration fails.
+            NetworkError: If connection fails during restoration.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
 
         Example:
             >>> state = {"timeout": 15, "state_dict": {...}}
@@ -991,7 +1110,7 @@ class PySiaSession:
             Dictionary with session data suitable for pickling/serialization.
 
         Raises:
-            RuntimeError: If session not initialized.
+            SessionError: If session not initialized.
 
         Example:
             >>> data = await session.get_session_data()

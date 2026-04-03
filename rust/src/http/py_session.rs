@@ -14,6 +14,7 @@ use pyo3::Python;
 use pyo3_asyncio::tokio::future_into_py;
 
 use crate::constants::SIA_BASE_URL;
+use crate::error::SessionError;
 use crate::http::sia_session::SiaSession;
 use crate::models::session::SessionStateModel;
 
@@ -89,7 +90,11 @@ impl PySiaSession {
     /// `SessionStateModel` with initial session state
     ///
     /// # Raises
-    /// RuntimeError: If connection fails or ViewState not found
+    /// NetworkError: If connection fails
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
+    /// ParseError: If response cannot be parsed
+    /// SessionError: If ViewState not found
     ///
     /// # Example
     /// ```python
@@ -104,12 +109,12 @@ impl PySiaSession {
 
         future_into_py(py, async move {
             let session = SiaSession::new(timeout, base_url)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             session
                 .init_session()
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             let state = session.get_state().await;
 
@@ -129,7 +134,12 @@ impl PySiaSession {
     /// `SessionStateModel` with career info and course list
     ///
     /// # Raises
-    /// RuntimeError: If session not initialized or navigation fails
+    /// SessionError: If session not initialized
+    /// ValueError: If search_code is invalid
+    /// NetworkError: If connection fails
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
+    /// ParseError: If response cannot be parsed
     ///
     /// # Example
     /// ```python
@@ -149,14 +159,14 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
             let state = session
                 .set_career(&search_code, electives)
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             Ok(SessionStateModel::from_session_state(&state))
         })
@@ -174,7 +184,12 @@ impl PySiaSession {
     /// `CourseInfoModel` with complete course data
     ///
     /// # Raises
-    /// RuntimeError: If session not on career page or index out of range
+    /// SessionError: If session not initialized
+    /// ValueError: If course_index is out of range
+    /// NetworkError: If connection fails
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
+    /// ParseError: If response cannot be parsed
     ///
     /// # Example
     /// ```python
@@ -188,14 +203,14 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
             session
                 .scrape_course_info(course_index)
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                .map_err(pyo3::PyErr::from)
         })
     }
 
@@ -208,7 +223,12 @@ impl PySiaSession {
     /// `CoursePrereqsModel` with prerequisite conditions
     ///
     /// # Raises
-    /// RuntimeError: If session not on career page or index out of range
+    /// SessionError: If session not initialized
+    /// ValueError: If course_index is out of range
+    /// NetworkError: If connection fails
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
+    /// ParseError: If response cannot be parsed
     ///
     /// # Example
     /// ```python
@@ -226,14 +246,14 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
             session
                 .scrape_course_prereqs(course_index)
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                .map_err(pyo3::PyErr::from)
         })
     }
 
@@ -243,7 +263,7 @@ impl PySiaSession {
     /// `SessionStateModel` with current session state
     ///
     /// # Raises
-    /// RuntimeError: If session not initialized
+    /// SessionError: If session not initialized
     ///
     /// # Example
     /// ```python
@@ -257,7 +277,7 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
@@ -337,7 +357,11 @@ impl PySiaSession {
     /// Self (the session)
     ///
     /// # Raises
-    /// RuntimeError: If auto-initialization fails
+    /// SessionError: If initialization failure
+    /// NetworkError: If connection fails
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
+    /// ParseError: If response cannot be parsed
     ///
     /// # Example
     /// ```python
@@ -358,11 +382,11 @@ impl PySiaSession {
 
             if needs_init {
                 let session = SiaSession::new(session_clone.timeout, base_url)
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                    .map_err(pyo3::PyErr::from)?;
 
                 session.init_session()
                     .await
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                    .map_err(pyo3::PyErr::from)?;
 
                 *session_clone.inner.write().await = Some(session);
             }
@@ -425,7 +449,13 @@ impl PySiaSession {
     /// New PySiaSession with restored state
     ///
     /// # Raises
-    /// RuntimeError: If state restoration fails
+    /// KeyError: If state_dict key is missing from input
+    /// TypeError: If state_dict is not a dictionary
+    /// ValueError: If state_dict contains invalid model data
+    /// SessionError: If restoration fails
+    /// NetworkError: If connection fails during restoration
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
     ///
     /// # Example
     /// ```python
@@ -450,7 +480,7 @@ impl PySiaSession {
         future_into_py::<_, PyObject>(py, async move {
             let base_url = SIA_BASE_URL.to_string();
             let sia_session = SiaSession::from_state(timeout, base_url, session_state)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(pyo3::PyErr::from)?;
 
             let inner = Arc::new(RwLock::new(Some(sia_session)));
 
@@ -472,7 +502,7 @@ impl PySiaSession {
     /// Dictionary with session data suitable for pickling/serialization
     ///
     /// # Raises
-    /// RuntimeError: If session not initialized
+    /// SessionError: If session not initialized
     ///
     /// # Example
     /// ```python
@@ -487,7 +517,7 @@ impl PySiaSession {
             let session_guard = inner.read().await;
             let session = session_guard
                 .as_ref()
-                .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
+                .ok_or_else(|| SessionError::new_err(
                     "Session not initialized. Call init_session() first."
                 ))?;
 
