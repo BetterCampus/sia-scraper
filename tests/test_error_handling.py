@@ -15,8 +15,6 @@ Tests cover:
 - End-to-end exception flow through all layers
 """
 
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 import sia_scraper_rust
@@ -102,8 +100,7 @@ class TestHttpStatusError:
 class TestSiaTimeoutError:
     """Verify SiaTimeoutError is raised for request timeouts."""
 
-    @pytest.mark.asyncio
-    async def test_timeout_error_inherits_from_sia_scraper_exception(self):
+    def test_timeout_error_inherits_from_sia_scraper_exception(self):
         """SiaTimeoutError should inherit from SiaScraperException."""
         assert issubclass(SiaTimeoutError, SiaScraperException)
 
@@ -124,12 +121,12 @@ class TestParseError:
     """Verify ParseError is raised for malformed input."""
 
     def test_parse_error_on_malformed_html(self):
-        """ParseError should be raised for unparseable HTML."""
+        """SiaScraperException should be raised for unparseable HTML."""
         with pytest.raises(sia_scraper_rust.SiaScraperException):
             sia_scraper_rust.extract_view_state("<broken")
 
     def test_parse_error_on_missing_element(self):
-        """ParseError should be raised when required element is missing."""
+        """SiaScraperException should be raised when required element is missing."""
         html = "<div>No ViewState here</div>"
         with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
             sia_scraper_rust.extract_view_state(html)
@@ -247,32 +244,11 @@ class TestConcurrentAccessError:
 class TestSessionExceptionTranslation:
     """Verify SiaSession correctly translates Rust exceptions to Python exceptions."""
 
-    def _make_state_model(
-        self,
-        career_code: str = "",
-        career_name: str = "N/A",
-        is_electives: bool = False,
-        status: str = "CAREER_NOT_SET",
-        view_state: str | None = "vs-1",
-    ) -> sia_scraper_rust.SessionStateModel:
-        """Create a minimal SessionStateModel for testing."""
-        return sia_scraper_rust.SessionStateModel(
-            session_headers={},
-            session_cookies={},
-            params={"Adf-Page-Id": "0", "Adf-Window-Id": "win-1"},
-            career_code=career_code,
-            career_name=career_name,
-            is_electives=is_electives,
-            status=status,
-            course_list=[],
-            javax_faces_view_state=view_state,
-        )
-
     @pytest.mark.asyncio
-    async def test_init_session_translates_session_error_to_session_not_set(self):
+    async def test_init_session_translates_session_error_to_session_not_set(self, mocker):
         """SessionError during init_session should be translated to SessionNotSet."""
-        mock_rust_session = MagicMock()
-        mock_rust_session.init_session = AsyncMock(
+        mock_rust_session = mocker.MagicMock()
+        mock_rust_session.init_session = mocker.AsyncMock(
             side_effect=sia_scraper_rust.SessionError("Session not initialized")
         )
 
@@ -283,10 +259,10 @@ class TestSessionExceptionTranslation:
             await session.init_session()
 
     @pytest.mark.asyncio
-    async def test_init_session_wraps_sia_scraper_exception(self):
+    async def test_init_session_wraps_sia_scraper_exception(self, mocker):
         """SiaScraperException during init_session should be wrapped as SiaSessionException."""
-        mock_rust_session = MagicMock()
-        mock_rust_session.init_session = AsyncMock(
+        mock_rust_session = mocker.MagicMock()
+        mock_rust_session.init_session = mocker.AsyncMock(
             side_effect=sia_scraper_rust.NetworkError("Connection failed")
         )
 
@@ -298,10 +274,10 @@ class TestSessionExceptionTranslation:
         assert "Connection failed" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_set_career_translates_session_error_not_initialized(self):
+    async def test_set_career_translates_session_error_not_initialized(self, mocker):
         """SessionError with 'not initialized' should map to SessionNotSet."""
-        mock_rust_session = MagicMock()
-        mock_rust_session.set_career = AsyncMock(
+        mock_rust_session = mocker.MagicMock()
+        mock_rust_session.set_career = mocker.AsyncMock(
             side_effect=sia_scraper_rust.SessionError("Session not initialized")
         )
 
@@ -312,10 +288,10 @@ class TestSessionExceptionTranslation:
             await session.set_career("0-2-8-3")
 
     @pytest.mark.asyncio
-    async def test_set_career_translates_session_error_to_career_not_set(self):
+    async def test_set_career_translates_session_error_to_career_not_set(self, mocker):
         """SessionError without 'not initialized' should map to CareerNotSet."""
-        mock_rust_session = MagicMock()
-        mock_rust_session.set_career = AsyncMock(
+        mock_rust_session = mocker.MagicMock()
+        mock_rust_session.set_career = mocker.AsyncMock(
             side_effect=sia_scraper_rust.SessionError("Career selection failed")
         )
 
@@ -326,10 +302,10 @@ class TestSessionExceptionTranslation:
             await session.set_career("0-2-8-3")
 
     @pytest.mark.asyncio
-    async def test_set_career_wraps_sia_scraper_exception(self):
+    async def test_set_career_wraps_sia_scraper_exception(self, mocker):
         """SiaScraperException during set_career should be wrapped as SiaSessionException."""
-        mock_rust_session = MagicMock()
-        mock_rust_session.set_career = AsyncMock(
+        mock_rust_session = mocker.MagicMock()
+        mock_rust_session.set_career = mocker.AsyncMock(
             side_effect=sia_scraper_rust.HttpStatusError("500 Internal Server Error")
         )
 

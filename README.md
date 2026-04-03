@@ -189,6 +189,7 @@ Exception
 ```python
 from sia_scraper.core.exceptions import (
     SiaSessionException,       # Python session errors
+    CareerNotSet,              # Career not set
     SiaScraperException,       # Rust base exception
     NetworkError,              # Connection failures
     HttpStatusError,           # HTTP 4xx/5xx
@@ -208,7 +209,7 @@ except HttpStatusError as exc:
     print(f"SIA returned HTTP error: {exc}")
 except SiaTimeoutError:
     print("SIA timeout. Retry later.")
-except SiaSessionException.CareerNotSet:
+except CareerNotSet:
     print("Career not set.")
 except SiaScraperException as exc:
     print(f"Rust error: {exc}")
