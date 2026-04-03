@@ -6,7 +6,12 @@ import sia_scraper_rust
 
 from .constants import status
 from .constants.defaults import DEFAULT_CAREER_NAME
-from .core.exceptions import ConcurrentAccessError
+from .core.exceptions import (
+    CareerNotSet,
+    ConcurrentAccessError,
+    SessionNotSet,
+    SiaSessionException,
+)
 
 
 class SiaSession:
@@ -108,24 +113,64 @@ class SiaSession:
         self._course_list = [{entry.course_code: entry.course_name} for entry in state.course_list]
 
     async def init_session(self) -> None:
-        """Initialize session by delegating to Rust PySiaSession."""
+        """Initialize session by delegating to Rust PySiaSession.
+
+        Raises:
+            SessionNotSet: If Rust session initialization fails.
+            SiaSessionException: For other session-related errors.
+        """
         async with self._operation("init_session"):
-            state = await self._rust_session.init_session()
+            try:
+                state = await self._rust_session.init_session()
+            except sia_scraper_rust.SessionError as exc:
+                raise SessionNotSet from exc
+            except SiaSessionException:
+                raise
+            except Exception as exc:
+                raise SiaSessionException(f"Session initialization failed: {exc}") from exc
             self._sync_state_from_rust(state)
 
     async def set_career(self, search_code: str, is_electives: bool = False) -> None:
-        """Navigate to career and load course list."""
+        """Navigate to career and load course list.
+
+        Raises:
+            CareerNotSet: If career selection fails.
+            SiaSessionException: For other session-related errors.
+        """
         async with self._operation("set_career"):
-            state = await self._rust_session.set_career(search_code, is_electives)
+            try:
+                state = await self._rust_session.set_career(search_code, is_electives)
+            except sia_scraper_rust.SessionError as exc:
+                raise CareerNotSet from exc
+            except SiaSessionException:
+                raise
+            except Exception as exc:
+                raise SiaSessionException(f"Career selection failed: {exc}") from exc
             self._sync_state_from_rust(state)
 
     async def scrape_course_info(self, course_index: int) -> sia_scraper_rust.CourseInfoModel:
-        """Scrape course info via Rust (zero-copy, no XML crossing FFI)."""
+        """Scrape course info via Rust (zero-copy, no XML crossing FFI).
+
+        Raises:
+            sia_scraper_rust.NetworkError: If connection fails.
+            sia_scraper_rust.HttpStatusError: If server returns error status.
+            sia_scraper_rust.SiaTimeoutError: If request times out.
+            sia_scraper_rust.ParseError: If response cannot be parsed.
+            sia_scraper_rust.SessionError: If session not initialized.
+        """
         async with self._operation("scrape_course_info"):
             return await self._rust_session.scrape_course_info(course_index)
 
     async def scrape_course_prereqs(self, course_index: int) -> sia_scraper_rust.CoursePrereqsModel:
-        """Scrape course prerequisites via Rust."""
+        """Scrape course prerequisites via Rust.
+
+        Raises:
+            sia_scraper_rust.NetworkError: If connection fails.
+            sia_scraper_rust.HttpStatusError: If server returns error status.
+            sia_scraper_rust.SiaTimeoutError: If request times out.
+            sia_scraper_rust.ParseError: If response cannot be parsed.
+            sia_scraper_rust.SessionError: If session not initialized.
+        """
         async with self._operation("scrape_course_prereqs"):
             return await self._rust_session.scrape_course_prereqs(course_index)
 
