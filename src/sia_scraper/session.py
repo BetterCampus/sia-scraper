@@ -141,6 +141,8 @@ class SiaSession:
             try:
                 state = await self._rust_session.set_career(search_code, is_electives)
             except sia_scraper_rust.SessionError as exc:
+                if "not initialized" in str(exc).lower():
+                    raise SessionNotSet from exc
                 raise CareerNotSet from exc
             except SiaSessionException:
                 raise
