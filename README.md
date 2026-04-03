@@ -187,6 +187,7 @@ Exception
 ```
 
 ```python
+from sia_scraper import SiaScraper
 from sia_scraper.core.exceptions import (
     SiaSessionException,       # Python session errors
     CareerNotSet,              # Career not set
@@ -197,22 +198,6 @@ from sia_scraper.core.exceptions import (
     ParseError,                # Parse failures
     SessionError,              # Session state errors
 )
-
-try:
-    async with await SiaScraper.create() as scraper:
-        await scraper.set_career("0-2-8-3")
-        course = await scraper.get_course_info(course_code="2016489")
-        print(course.course_name)
-except NetworkError:
-    print("Connection failed. Check network.")
-except HttpStatusError as exc:
-    print(f"SIA returned HTTP error: {exc}")
-except SiaTimeoutError:
-    print("SIA timeout. Retry later.")
-except CareerNotSet:
-    print("Career not set.")
-except SiaScraperException as exc:
-    print(f"Rust error: {exc}")
 ```
 
 ## Documentation
