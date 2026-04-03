@@ -308,12 +308,15 @@ impl PySiaSession {
         let retry_delay_ms = delay.unwrap_or(800);
 
         future_into_py(py, async move {
-            let session_guard = inner.read().await;
-            let session = session_guard
-                .as_ref()
-                .ok_or_else(|| SessionError::new_err(
-                    "Session not initialized. Call init_session() first."
-                ))?;
+            let session = {
+                let session_guard = inner.read().await;
+                session_guard
+                    .as_ref()
+                    .ok_or_else(|| SessionError::new_err(
+                        "Session not initialized. Call init_session() first."
+                    ))?
+                    .clone()
+            };
 
             session
                 .scrape_courses_batch(indices, error_mode, max_retries, retry_delay_ms)

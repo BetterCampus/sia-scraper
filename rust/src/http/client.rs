@@ -5,6 +5,7 @@ use std::time::Duration;
 use crate::constants::{headers, SIA_BASE_URL, SIA_ORIGIN};
 use crate::http::{config::HttpClientConfig, errors::HttpError, types::HttpResponse};
 
+#[derive(Clone)]
 pub struct AsyncHttpClient {
     client: reqwest::Client,
     #[cfg(test)]

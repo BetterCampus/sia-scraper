@@ -33,6 +33,7 @@ macro_rules! define_regex {
 
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
+#[derive(Clone)]
 pub struct SiaSession {
     client: AsyncHttpClient,
     state: Arc<RwLock<SessionState>>,
@@ -683,6 +684,7 @@ impl SiaSession {
     ) -> Result<CourseInfoModel, HttpError> {
         let mut last_error: Option<HttpError> = None;
 
+        // Total attempts = 1 (initial) + max_retries
         for attempt in 0..=max_retries {
             match self.scrape_course_info(index).await {
                 Ok(info) => return Ok(info),
@@ -691,7 +693,7 @@ impl SiaSession {
                         return Err(e);
                     }
                     last_error = Some(e);
-                    let delay = Duration::from_millis(retry_delay_ms * (attempt as u64 + 1));
+                    let delay = Duration::from_millis(retry_delay_ms * (1 << attempt));
                     sleep(delay).await;
                 }
             }

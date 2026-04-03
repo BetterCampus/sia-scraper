@@ -52,6 +52,7 @@ class TestErrorModeValidation:
             await session.scrape_courses([0, 1], mode="invalid")
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_accepts_abort_mode(self):
         """scrape_courses should accept 'abort' mode."""
         session = sia_scraper_rust.PySiaSession()
@@ -60,6 +61,7 @@ class TestErrorModeValidation:
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_accepts_skip_mode(self):
         """scrape_courses should accept 'skip' mode."""
         session = sia_scraper_rust.PySiaSession()
@@ -68,6 +70,7 @@ class TestErrorModeValidation:
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_accepts_retry_mode(self):
         """scrape_courses should accept 'retry' mode."""
         session = sia_scraper_rust.PySiaSession()
@@ -76,6 +79,7 @@ class TestErrorModeValidation:
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_case_insensitive_mode(self):
         """scrape_courses should accept case-insensitive mode strings."""
         session = sia_scraper_rust.PySiaSession()
@@ -89,6 +93,7 @@ class TestBatchScrapingEmptyIndices:
     """Verify batch scraping with empty index list."""
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_empty_list_returns_empty_result(self):
         """scrape_courses with empty list should return empty ScrapeResult."""
         session = sia_scraper_rust.PySiaSession()
@@ -100,6 +105,7 @@ class TestBatchScrapingEmptyIndices:
         assert len(result.failures) == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_empty_list_abort_mode(self):
         """scrape_courses with empty list should work in abort mode."""
         session = sia_scraper_rust.PySiaSession()
@@ -108,6 +114,7 @@ class TestBatchScrapingEmptyIndices:
         assert result.total() == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_empty_list_retry_mode(self):
         """scrape_courses with empty list should work in retry mode."""
         session = sia_scraper_rust.PySiaSession()
@@ -120,6 +127,7 @@ class TestBatchScrapingWithInvalidIndices:
     """Verify batch scraping behavior with invalid course indices."""
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_skip_mode_records_failures(self):
         """scrape_courses in skip mode should record failures, not raise."""
         session = sia_scraper_rust.PySiaSession()
@@ -132,6 +140,7 @@ class TestBatchScrapingWithInvalidIndices:
         assert len(result.failures) > 0
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_abort_mode_raises_on_failure(self):
         """scrape_courses in abort mode should raise on first failure."""
         session = sia_scraper_rust.PySiaSession()
@@ -142,6 +151,7 @@ class TestBatchScrapingWithInvalidIndices:
             await session.scrape_courses([999], mode="abort")
 
     @pytest.mark.asyncio
+    @pytest.mark.network
     async def test_scrape_courses_retry_mode_records_failures(self):
         """scrape_courses in retry mode should record failures after retries."""
         session = sia_scraper_rust.PySiaSession()
