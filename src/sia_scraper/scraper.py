@@ -264,7 +264,22 @@ class SiaScraper:
         retry_delay: float = 1.0,
         progress_callback: Callable[[int, int, int, int], None] | None = None,
     ) -> ScrapeResult | list[sia_scraper_rust.CourseInfoModel]:
-        """Batch scrape multiple courses by index or code."""
+        """Batch scrape multiple courses by index or code.
+
+        Delegates to Rust batch scraping for efficient sequential execution
+        with configurable error handling modes.
+
+        Args:
+            courses_indices: List of course indices to scrape.
+            courses_codes: List of course codes to scrape (resolved to indices).
+            error_mode: Error handling strategy - "abort", "skip", or "retry".
+            max_retries: Maximum retry attempts per course (retry mode only).
+            retry_delay: Base delay between retries in seconds (retry mode only).
+            progress_callback: Optional callback(current, total, successes, failures).
+
+        Returns:
+            List of CourseInfoModel in abort mode, or ScrapeResult in skip/retry mode.
+        """
         courses_indices = courses_indices or []
         courses_codes = courses_codes or []
 

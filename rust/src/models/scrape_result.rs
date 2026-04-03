@@ -60,6 +60,15 @@ pub struct ScrapeResult {
 
 #[pymethods]
 impl ScrapeResult {
+    /// Create a new empty ScrapeResult.
+    #[new]
+    pub fn new() -> Self {
+        Self {
+            successes: Vec::new(),
+            failures: Vec::new(),
+        }
+    }
+
     /// Return the total number of courses processed (successes + failures).
     ///
     /// # Returns
@@ -94,19 +103,12 @@ impl ScrapeResult {
     }
 }
 
-impl ScrapeResult {
-    /// Create a new empty ScrapeResult.
-    pub fn new() -> Self {
+impl Default for ScrapeResult {
+    fn default() -> Self {
         Self {
             successes: Vec::new(),
             failures: Vec::new(),
         }
-    }
-}
-
-impl Default for ScrapeResult {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
