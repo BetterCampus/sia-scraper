@@ -891,7 +891,11 @@ class PySiaSession:
             SessionStateModel with initial session state.
 
         Raises:
-            RuntimeError: If connection fails or ViewState not found.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
+            SessionError: If ViewState not found.
         """
         ...
 
@@ -910,7 +914,11 @@ class PySiaSession:
             SessionStateModel with career info and course list.
 
         Raises:
-            RuntimeError: If session not initialized or navigation fails.
+            SessionError: If session not initialized.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -927,7 +935,11 @@ class PySiaSession:
             CourseInfoModel with complete course data.
 
         Raises:
-            RuntimeError: If session not on career page or index out of range.
+            SessionError: If session not initialized.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -941,7 +953,11 @@ class PySiaSession:
             CoursePrereqsModel with prerequisite conditions.
 
         Raises:
-            RuntimeError: If session not on career page or index out of range.
+            SessionError: If session not initialized.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -952,7 +968,7 @@ class PySiaSession:
             SessionStateModel with current session state.
 
         Raises:
-            RuntimeError: If session not initialized.
+            SessionError: If session not initialized.
         """
         ...
 
@@ -995,6 +1011,13 @@ class PySiaSession:
 
         Returns:
             Self for use in `async with` statement.
+
+        Raises:
+            SessionError: If session not initialized.
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
         """
         ...
 
@@ -1043,7 +1066,10 @@ class PySiaSession:
             New PySiaSession with restored state.
 
         Raises:
-            RuntimeError: If state restoration fails.
+            SessionError: If state_dict is invalid or restoration fails.
+            NetworkError: If connection fails during restoration.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
 
         Example:
             >>> state = {"timeout": 15, "state_dict": {...}}
@@ -1061,7 +1087,7 @@ class PySiaSession:
             Dictionary with session data suitable for pickling/serialization.
 
         Raises:
-            RuntimeError: If session not initialized.
+            SessionError: If session not initialized.
 
         Example:
             >>> data = await session.get_session_data()
