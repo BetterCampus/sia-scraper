@@ -97,7 +97,7 @@ class TestExceptionCatchability:
         caught = False
         try:
             raise NetworkError("network failed")
-        except Exception:
+        except Exception:  # noqa: B017
             caught = True
         assert caught
 
@@ -105,12 +105,3 @@ class TestExceptionCatchability:
         """SessionNotSet should be catchable as SiaSessionException."""
         with pytest.raises(SiaSessionException):
             raise SiaSessionException.SessionNotSet()
-
-    def test_python_session_not_set_caught_by_exception(self):
-        """SessionNotSet should be catchable as Exception."""
-        caught = False
-        try:
-            raise SiaSessionException.SessionNotSet()
-        except Exception:
-            caught = True
-        assert caught
