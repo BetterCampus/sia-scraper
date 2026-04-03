@@ -24,6 +24,32 @@ create_exception!(
     pyo3::exceptions::PyException
 );
 
+create_exception!(
+    sia_scraper_rust,
+    NetworkError,
+    pyo3::exceptions::PyException
+);
+
+create_exception!(
+    sia_scraper_rust,
+    HttpStatusError,
+    pyo3::exceptions::PyException
+);
+
+create_exception!(
+    sia_scraper_rust,
+    TimeoutError,
+    pyo3::exceptions::PyException
+);
+
+create_exception!(sia_scraper_rust, ParseError, pyo3::exceptions::PyException);
+
+create_exception!(
+    sia_scraper_rust,
+    SessionError,
+    pyo3::exceptions::PyException
+);
+
 /// Custom error types for SIA Scraper operations.
 ///
 /// # Variants
@@ -79,5 +105,23 @@ impl From<pyo3::PyErr> for SiaScraperError {
 impl From<SiaScraperError> for pyo3::PyErr {
     fn from(e: SiaScraperError) -> Self {
         SiaScraperException::new_err(e.to_string())
+    }
+}
+
+impl From<crate::http::errors::HttpError> for pyo3::PyErr {
+    fn from(e: crate::http::errors::HttpError) -> Self {
+        use crate::http::errors::HttpError;
+        match e {
+            HttpError::NetworkError(msg) => NetworkError::new_err(msg),
+            HttpError::HttpStatusError { status, message } => {
+                HttpStatusError::new_err(format!("HTTP {status}: {message}"))
+            }
+            HttpError::TimeoutError { timeout, operation } => {
+                TimeoutError::new_err(format!("Timeout after {timeout}s during {operation}"))
+            }
+            HttpError::ParseError(msg) => ParseError::new_err(msg),
+            HttpError::InvalidInput(msg) => SessionError::new_err(msg),
+            HttpError::SessionError(msg) => SessionError::new_err(msg),
+        }
     }
 }

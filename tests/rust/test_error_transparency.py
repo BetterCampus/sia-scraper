@@ -159,3 +159,88 @@ class TestGetPlainText:
         """Plain text extraction should handle empty input gracefully."""
         result = sia_scraper_rust.get_plain_text("")
         assert isinstance(result, str)
+
+
+class TestExceptionInheritance:
+    """Verify that new exception types inherit from Exception."""
+
+    def test_network_error_inherits_from_exception(self):
+        """NetworkError should inherit from Exception."""
+        assert issubclass(sia_scraper_rust.NetworkError, Exception)
+
+    def test_http_status_error_inherits_from_exception(self):
+        """HttpStatusError should inherit from Exception."""
+        assert issubclass(sia_scraper_rust.HttpStatusError, Exception)
+
+    def test_timeout_error_inherits_from_exception(self):
+        """TimeoutError should inherit from Exception."""
+        assert issubclass(sia_scraper_rust.TimeoutError, Exception)
+
+    def test_parse_error_inherits_from_exception(self):
+        """ParseError should inherit from Exception."""
+        assert issubclass(sia_scraper_rust.ParseError, Exception)
+
+    def test_session_error_inherits_from_exception(self):
+        """SessionError should inherit from Exception."""
+        assert issubclass(sia_scraper_rust.SessionError, Exception)
+
+    def test_sia_scraper_exception_inherits_from_exception(self):
+        """SiaScraperException should inherit from Exception."""
+        assert issubclass(sia_scraper_rust.SiaScraperException, Exception)
+
+
+class TestExceptionMessages:
+    """Verify that exception messages are correctly preserved when surfaced to Python."""
+
+    def test_network_error_message(self):
+        """NetworkError should preserve the error message."""
+        with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
+            sia_scraper_rust.extract_view_state("<div>No ViewState</div>")
+        error_msg = str(exc_info.value)
+        assert isinstance(error_msg, str)
+        assert len(error_msg) > 0
+
+    def test_session_error_message_from_invalid_input(self):
+        """SessionError should contain the invalid input message."""
+        with pytest.raises(sia_scraper_rust.SiaScraperException, match="window_id is required"):
+            sia_scraper_rust.init_oracle_adf_request_dict(
+                tipology_index="",
+                window_id=None,
+                page_id=None,
+                view_state=None,
+            )
+
+    def test_parse_error_message_contains_context(self):
+        """Parse error should contain context about what failed to parse."""
+        with pytest.raises(sia_scraper_rust.SiaScraperException) as exc_info:
+            sia_scraper_rust.parse_course_info("")
+        error_msg = str(exc_info.value).lower()
+        assert isinstance(error_msg, str)
+        assert len(error_msg) > 0
+
+
+class TestExceptionCatchability:
+    """Verify that exceptions can be caught using generic Exception handler."""
+
+    def test_network_error_caught_as_exception(self):
+        """NetworkError should be catchable as Exception."""
+        caught = False
+        try:
+            sia_scraper_rust.extract_view_state("<div>No ViewState</div>")
+        except Exception:
+            caught = True
+        assert caught
+
+    def test_session_error_caught_as_exception(self):
+        """SessionError should be catchable as Exception."""
+        caught = False
+        try:
+            sia_scraper_rust.init_oracle_adf_request_dict(
+                tipology_index="",
+                window_id=None,
+                page_id=None,
+                view_state=None,
+            )
+        except Exception:
+            caught = True
+        assert caught

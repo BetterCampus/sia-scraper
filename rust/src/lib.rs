@@ -612,6 +612,11 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
         "SiaScraperException",
         error::SiaScraperException::type_object(py),
     )?;
+    m.add("NetworkError", error::NetworkError::type_object(py))?;
+    m.add("HttpStatusError", error::HttpStatusError::type_object(py))?;
+    m.add("TimeoutError", error::TimeoutError::type_object(py))?;
+    m.add("ParseError", error::ParseError::type_object(py))?;
+    m.add("SessionError", error::SessionError::type_object(py))?;
     
     // Register model classes
     m.add_class::<models::course::ScheduleModel>()?;

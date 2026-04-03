@@ -36,6 +36,76 @@ class SiaScraperException(Exception):
         ...     print(f"Parse error: {e}")
     """
 
+class NetworkError(Exception):
+    """Exception raised for network connectivity failures.
+
+    This exception is raised when network operations fail due to:
+    - DNS resolution failures
+    - Connection refused errors
+    - Network unreachable errors
+
+    Example:
+        >>> try:
+        ...     await session.init_session()
+        ... except sia_scraper_rust.NetworkError as e:
+        ...     print(f"Network error: {e}")
+    """
+
+class HttpStatusError(Exception):
+    """Exception raised for HTTP responses with non-success status codes.
+
+    Contains the HTTP status code and a descriptive message about the error.
+    Typically raised for 4xx and 5xx responses that indicate server or client errors.
+
+    Example:
+        >>> try:
+        ...     await session.set_career("0-2-8-3")
+        ... except sia_scraper_rust.HttpStatusError as e:
+        ...     print(f"HTTP error: {e}")
+    """
+
+class TimeoutError(Exception):
+    """Exception raised when a request times out before completing.
+
+    Contains the timeout value and the operation that timed out.
+    Timeout errors are typically transient and may succeed on retry.
+
+    Example:
+        >>> try:
+        ...     await session.get_course_xml(0)
+        ... except sia_scraper_rust.TimeoutError as e:
+        ...     print(f"Timeout: {e}")
+    """
+
+class ParseError(Exception):
+    """Exception raised when response content cannot be parsed as expected.
+
+    This exception indicates the response body could not be parsed,
+    possibly due to unexpected response format or encoding issues.
+
+    Example:
+        >>> try:
+        ...     sia_scraper_rust.parse_course_info("<invalid>")
+        ... except sia_scraper_rust.ParseError as e:
+        ...     print(f"Parse error: {e}")
+    """
+
+class SessionError(Exception):
+    """Exception raised for session state errors.
+
+    This exception indicates the session is in an invalid state for
+    the requested operation, such as:
+    - Session not initialized
+    - Session expired
+    - Invalid session state for operation
+
+    Example:
+        >>> try:
+        ...     await session.set_career("0-2-8-3")
+        ... except sia_scraper_rust.SessionError as e:
+        ...     print(f"Session error: {e}")
+    """
+
 class ScheduleModel:
     """Represents a single class schedule entry with day, time, and location.
 
