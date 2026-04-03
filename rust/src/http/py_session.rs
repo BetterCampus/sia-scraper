@@ -135,6 +135,7 @@ impl PySiaSession {
     ///
     /// # Raises
     /// SessionError: If session not initialized
+    /// ValueError: If search_code is invalid
     /// NetworkError: If connection fails
     /// HttpStatusError: If server returns error status
     /// SiaTimeoutError: If request times out
@@ -184,6 +185,7 @@ impl PySiaSession {
     ///
     /// # Raises
     /// SessionError: If session not initialized
+    /// ValueError: If course_index is out of range
     /// NetworkError: If connection fails
     /// HttpStatusError: If server returns error status
     /// SiaTimeoutError: If request times out
@@ -222,6 +224,7 @@ impl PySiaSession {
     ///
     /// # Raises
     /// SessionError: If session not initialized
+    /// ValueError: If course_index is out of range
     /// NetworkError: If connection fails
     /// HttpStatusError: If server returns error status
     /// SiaTimeoutError: If request times out
@@ -354,7 +357,7 @@ impl PySiaSession {
     /// Self (the session)
     ///
     /// # Raises
-    /// SessionError: If session not initialized
+    /// SessionError: If initialization failure
     /// NetworkError: If connection fails
     /// HttpStatusError: If server returns error status
     /// SiaTimeoutError: If request times out
@@ -446,7 +449,10 @@ impl PySiaSession {
     /// New PySiaSession with restored state
     ///
     /// # Raises
-    /// SessionError: If state_dict is invalid or restoration fails
+    /// KeyError: If state_dict key is missing from input
+    /// TypeError: If state_dict is not a dictionary
+    /// ValueError: If state_dict contains invalid model data
+    /// SessionError: If restoration fails
     /// NetworkError: If connection fails during restoration
     /// HttpStatusError: If server returns error status
     /// SiaTimeoutError: If request times out
