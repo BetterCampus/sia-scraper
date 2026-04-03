@@ -126,7 +126,7 @@ class SiaSession:
                 raise SessionNotSet from exc
             except SiaSessionException:
                 raise
-            except Exception as exc:
+            except sia_scraper_rust.SiaScraperException as exc:
                 raise SiaSessionException(f"Session initialization failed: {exc}") from exc
             self._sync_state_from_rust(state)
 
@@ -144,7 +144,7 @@ class SiaSession:
                 raise CareerNotSet from exc
             except SiaSessionException:
                 raise
-            except Exception as exc:
+            except sia_scraper_rust.SiaScraperException as exc:
                 raise SiaSessionException(f"Career selection failed: {exc}") from exc
             self._sync_state_from_rust(state)
 
