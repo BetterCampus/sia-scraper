@@ -80,16 +80,16 @@ pub fn calculate_delay(attempt: u32, config: &RetryConfig) -> Duration {
 }
 
 pub fn should_retry(error: &crate::http::errors::HttpError, config: &RetryConfig) -> bool {
-    error.is_retryable()
-        && match error {
-            crate::http::errors::HttpError::TimeoutError { .. } => config.retry_on_timeout,
-            crate::http::errors::HttpError::NetworkError(_) => config.retry_on_connection_error,
-            crate::http::errors::HttpError::HttpStatusError { status, .. } => {
-                config.retry_on_status.contains(status)
-            }
-            crate::http::errors::HttpError::ParseError(_) => true,
-            _ => false,
+    match error {
+        crate::http::errors::HttpError::TimeoutError { .. } => config.retry_on_timeout,
+        crate::http::errors::HttpError::NetworkError(_) => config.retry_on_connection_error,
+        crate::http::errors::HttpError::HttpStatusError { status, .. } => {
+            config.retry_on_status.contains(status)
         }
+        crate::http::errors::HttpError::ParseError(_) => true,
+        crate::http::errors::HttpError::InvalidInput(_) => false,
+        crate::http::errors::HttpError::SessionError(_) => false,
+    }
 }
 
 #[cfg(test)]

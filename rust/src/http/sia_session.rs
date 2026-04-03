@@ -124,8 +124,14 @@ impl SiaSession {
             self.client.get(&init_url).await.map_err(|e| {
                 HttpError::NetworkError(format!("init_session GET failed: {e}"))
             })?;
-        resp.raise_for_status().map_err(|e| {
-            HttpError::NetworkError(format!("init_session returned error status: {e}"))
+        resp.raise_for_status().map_err(|e| match e {
+            HttpError::HttpStatusError { status, message } => {
+                HttpError::HttpStatusError {
+                    status,
+                    message: format!("init_session returned error status: {}", message),
+                }
+            }
+            other => other,
         })?;
 
         let mut state = self.state.write().await;
@@ -282,8 +288,14 @@ impl SiaSession {
             })?;
 
             let response = self.post_request(&encoded).await?;
-            response.raise_for_status().map_err(|e| {
-                HttpError::NetworkError(format!("{action} POST returned error status: {e}"))
+            response.raise_for_status().map_err(|e| match e {
+                HttpError::HttpStatusError { status, message } => {
+                    HttpError::HttpStatusError {
+                        status,
+                        message: format!("{} POST returned error status: {}", action, message),
+                    }
+                }
+                other => other,
             })?;
             last_xml = response.body.clone();
 

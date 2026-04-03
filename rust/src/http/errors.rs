@@ -2,6 +2,10 @@
 //!
 //! This module defines the error hierarchy for HTTP operations in the SIA scraper.
 //! It provides granular error variants to enable better error handling and retry logic.
+//!
+//! # Retry Behavior
+//! Use [`crate::http::retry::should_retry`] to determine if an operation should be retried.
+//! This function considers both the error type and the `RetryConfig` to make retry decisions.
 
 use crate::error::SiaScraperError;
 use thiserror::Error;
@@ -11,10 +15,6 @@ use thiserror::Error;
 /// This enum represents all possible HTTP-related errors that can occur
 /// during SIA scraping operations. Each variant represents a distinct
 /// failure mode that can be handled differently by callers.
-///
-/// # Retry Behavior
-/// Use [`HttpError::is_retryable`] to determine if an operation should be
-/// retried based on the error type and configuration.
 #[derive(Error, Debug, Clone)]
 pub enum HttpError {
     /// Network connectivity error (DNS resolution failure, connection refused, etc.).
@@ -39,9 +39,12 @@ pub enum HttpError {
     /// Request timed out before completing.
     ///
     /// Timeout errors are typically transient and should be retried.
+    /// When `timeout` is 0, it indicates the timeout value could not be determined
+    /// (e.g., when converting from a `reqwest::Error`).
     #[error("Timeout after {timeout}s during {operation}")]
     TimeoutError {
         /// The timeout value that was exceeded (in seconds).
+        /// A value of 0 indicates the timeout is unknown.
         timeout: u64,
         /// The operation that timed out (e.g., "init_session", "post_request").
         operation: String,
@@ -72,31 +75,26 @@ pub enum HttpError {
 }
 
 impl HttpError {
-    /// Determines whether this error is transient and the operation should be retried.
+    /// Creates a TimeoutError with specific timeout and operation context.
     ///
-    /// # Returns
-    /// `true` if the operation that caused this error might succeed on retry,
-    /// `false` if the error indicates a permanent failure that should not be retried.
+    /// Use this helper when you have access to the configured timeout value,
+    /// rather than constructing `TimeoutError` directly. This ensures consistent
+    /// error messages with accurate timeout information.
+    ///
+    /// # Arguments
+    /// * `timeout` - The timeout value in seconds
+    /// * `operation` - A descriptive name for the operation that timed out
     ///
     /// # Examples
     ///
     /// ```
-    /// let timeout_err = HttpError::TimeoutError { timeout: 15, operation: "init_session".to_string() };
-    /// assert!(timeout_err.is_retryable());
-    ///
-    /// let invalid_input_err = HttpError::InvalidInput("missing required field".to_string());
-    /// assert!(!invalid_input_err.is_retryable());
+    /// let err = HttpError::timeout(30, "init_session");
+    /// assert_eq!(err.to_string(), "Timeout after 30s during init_session");
     /// ```
-    pub fn is_retryable(&self) -> bool {
-        match self {
-            HttpError::TimeoutError { .. } => true,
-            HttpError::NetworkError(_) => true,
-            HttpError::HttpStatusError { status, .. } => {
-                matches!(status, 502 | 503 | 504 | 429)
-            }
-            HttpError::ParseError(_) => true,
-            HttpError::InvalidInput(_) => false,
-            HttpError::SessionError(_) => false,
+    pub fn timeout(timeout: u64, operation: impl Into<String>) -> Self {
+        HttpError::TimeoutError {
+            timeout,
+            operation: operation.into(),
         }
     }
 }
@@ -106,11 +104,15 @@ impl From<reqwest::Error> for HttpError {
     ///
     /// This conversion uses structured error detection to map reqwest's
     /// error types to the appropriate `HttpError` variant.
+    ///
+    /// **Note**: When converting a timeout error, `timeout` is set to 0 (unknown)
+    /// because reqwest doesn't expose the configured timeout value.
+    /// Use [`HttpError::timeout()`] helper when the actual timeout is known.
     fn from(err: reqwest::Error) -> Self {
         if err.is_timeout() {
             return HttpError::TimeoutError {
-                timeout: 15,
-                operation: "request".to_string(),
+                timeout: 0, // Unknown timeout from reqwest
+                operation: "http_request".to_string(),
             };
         }
 
@@ -121,7 +123,7 @@ impl From<reqwest::Error> for HttpError {
         if let Some(status) = err.status() {
             return HttpError::HttpStatusError {
                 status: status.as_u16(),
-                message: err.url().map(|u| u.to_string()).unwrap_or_default(),
+                message: err.to_string(),
             };
         }
 
@@ -180,6 +182,15 @@ mod tests {
     }
 
     #[test]
+    fn test_timeout_error_zero_display() {
+        let err = HttpError::TimeoutError {
+            timeout: 0,
+            operation: "http_request".to_string(),
+        };
+        assert_eq!(err.to_string(), "Timeout after 0s during http_request");
+    }
+
+    #[test]
     fn test_parse_error_display() {
         let err = HttpError::ParseError("invalid XML".to_string());
         assert_eq!(err.to_string(), "Parse error: invalid XML");
@@ -198,90 +209,15 @@ mod tests {
     }
 
     #[test]
-    fn test_timeout_error_is_retryable() {
-        let err = HttpError::TimeoutError {
-            timeout: 15,
-            operation: "post_request".to_string(),
-        };
-        assert!(err.is_retryable());
+    fn test_timeout_helper_method() {
+        let err = HttpError::timeout(30, "init_session");
+        assert_eq!(err.to_string(), "Timeout after 30s during init_session");
     }
 
     #[test]
-    fn test_network_error_is_retryable() {
-        let err = HttpError::NetworkError("connection refused".to_string());
-        assert!(err.is_retryable());
-    }
-
-    #[test]
-    fn test_502_is_retryable() {
-        let err = HttpError::HttpStatusError {
-            status: 502,
-            message: "Bad Gateway".to_string(),
-        };
-        assert!(err.is_retryable());
-    }
-
-    #[test]
-    fn test_503_is_retryable() {
-        let err = HttpError::HttpStatusError {
-            status: 503,
-            message: "Service Unavailable".to_string(),
-        };
-        assert!(err.is_retryable());
-    }
-
-    #[test]
-    fn test_504_is_retryable() {
-        let err = HttpError::HttpStatusError {
-            status: 504,
-            message: "Gateway Timeout".to_string(),
-        };
-        assert!(err.is_retryable());
-    }
-
-    #[test]
-    fn test_429_is_retryable() {
-        let err = HttpError::HttpStatusError {
-            status: 429,
-            message: "Too Many Requests".to_string(),
-        };
-        assert!(err.is_retryable());
-    }
-
-    #[test]
-    fn test_404_is_not_retryable() {
-        let err = HttpError::HttpStatusError {
-            status: 404,
-            message: "Not Found".to_string(),
-        };
-        assert!(!err.is_retryable());
-    }
-
-    #[test]
-    fn test_500_is_not_retryable_by_default() {
-        let err = HttpError::HttpStatusError {
-            status: 500,
-            message: "Internal Server Error".to_string(),
-        };
-        assert!(!err.is_retryable());
-    }
-
-    #[test]
-    fn test_parse_error_is_retryable() {
-        let err = HttpError::ParseError("malformed response".to_string());
-        assert!(err.is_retryable());
-    }
-
-    #[test]
-    fn test_invalid_input_is_not_retryable() {
-        let err = HttpError::InvalidInput("invalid search code".to_string());
-        assert!(!err.is_retryable());
-    }
-
-    #[test]
-    fn test_session_error_is_not_retryable() {
-        let err = HttpError::SessionError("not initialized".to_string());
-        assert!(!err.is_retryable());
+    fn test_timeout_helper_method_with_string() {
+        let err = HttpError::timeout(15, "post_request".to_string());
+        assert_eq!(err.to_string(), "Timeout after 15s during post_request");
     }
 
     #[test]
