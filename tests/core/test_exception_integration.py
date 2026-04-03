@@ -94,8 +94,12 @@ class TestExceptionCatchability:
 
     def test_rust_network_error_caught_by_exception(self):
         """NetworkError should be catchable as Exception."""
-        with pytest.raises(Exception):
+        caught = False
+        try:
             raise NetworkError("network failed")
+        except Exception:
+            caught = True
+        assert caught
 
     def test_python_session_not_set_caught_by_sia_session_exception(self):
         """SessionNotSet should be catchable as SiaSessionException."""
@@ -104,5 +108,9 @@ class TestExceptionCatchability:
 
     def test_python_session_not_set_caught_by_exception(self):
         """SessionNotSet should be catchable as Exception."""
-        with pytest.raises(Exception):
+        caught = False
+        try:
             raise SiaSessionException.SessionNotSet()
+        except Exception:
+            caught = True
+        assert caught
