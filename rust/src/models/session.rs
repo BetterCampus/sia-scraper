@@ -180,30 +180,41 @@ fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
 /// });
 /// ```
 fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEntryModel> {
-    // Try new format {"code": ..., "name": ...}
-    if let (Some(code_val), Some(name_val)) = (dict.get_item("code")?, dict.get_item("name")?) {
-        return Ok(CourseListEntryModel {
-            code: code_val.extract()?,
-            name: name_val.extract()?,
-        });
-    }
+    // Try to get code from current or legacy key
+    let code_result: Option<(&PyAny, bool)> = if let Some(val) = dict.get_item("code")? {
+        Some((val, false))
+    } else if let Some(val) = dict.get_item("course_code")? {
+        Some((val, true))
+    } else {
+        None
+    };
 
-    // Try legacy named keys {"course_code": ..., "course_name": ...}
-    if let (Some(code_val), Some(name_val)) =
-        (dict.get_item("course_code")?, dict.get_item("course_name")?)
+    // Try to get name from current or legacy key
+    let name_result: Option<(&PyAny, bool)> = if let Some(val) = dict.get_item("name")? {
+        Some((val, false))
+    } else if let Some(val) = dict.get_item("course_name")? {
+        Some((val, true))
+    } else {
+        None
+    };
+
+    // If both found, emit warning if either is legacy
+    if let (Some((code_val, code_is_legacy)), Some((name_val, name_is_legacy))) =
+        (code_result, name_result)
     {
-        emit_legacy_warning(py, "course_code/course_name")?;
+        if code_is_legacy || name_is_legacy {
+            emit_legacy_warning(py, "course_code/course_name")?;
+        }
         return Ok(CourseListEntryModel {
             code: code_val.extract()?,
             name: name_val.extract()?,
         });
     }
 
-    // Try legacy single-entry format {<course_code>: <course_name>}
+    // Fallback to single-entry legacy format if neither code/name keys found
     if dict.len() == 1 {
         if let Some((key, value)) = dict.iter().next() {
             let key_str: String = key.extract()?;
-
             if !["code", "name", "course_code", "course_name"].contains(&key_str.as_str()) {
                 emit_legacy_warning(py, "single-key dict")?;
                 return Ok(CourseListEntryModel {
@@ -214,11 +225,17 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
         }
     }
 
-    Err(PyKeyError::new_err(
-        "Dict must contain 'code'/'name' keys (current), \
-         'course_code'/'course_name' keys (legacy named), \
-         or be a single-entry dict (legacy single-key)",
-    ))
+    // Specific error messages for missing fields
+    match (code_result, name_result) {
+        (None, None) => Err(PyKeyError::new_err(
+            "Dict must contain 'code'/'name' keys (current), \
+             'course_code'/'course_name' keys (legacy named), \
+             or be a single-entry dict (legacy single-key)",
+        )),
+        (None, Some(_)) => Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'")),
+        (Some(_), None) => Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'")),
+        _ => unreachable!(),
+    }
 }
 
 /// Emit deprecation warning for legacy course dict formats.
@@ -574,13 +591,22 @@ impl SessionStateModel {
     /// # Examples
     /// ```rust
     /// use pyo3::Python;
-    /// use pyo3::types::PyDict;
+    /// use pyo3::types::{PyDict, PyList};
     /// use crate::models::session::SessionStateModel;
     ///
     /// Python::with_gil(|py| {
     ///     let dict = PyDict::new(py);
-    ///     // ... populate required fields ...
+    ///     dict.set_item("session_headers", PyDict::new(py)).unwrap();
+    ///     dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+    ///     dict.set_item("params", PyDict::new(py)).unwrap();
+    ///     dict.set_item("career_code", "").unwrap();
+    ///     dict.set_item("career_name", "").unwrap();
+    ///     dict.set_item("is_electives", false).unwrap();
+    ///     dict.set_item("status", "NO_SESSION").unwrap();
+    ///     dict.set_item("course_list", PyList::empty(py)).unwrap();
+    ///
     ///     let model = SessionStateModel::from_dict(dict).unwrap();
+    ///     assert_eq!(model.status, "NO_SESSION");
     /// });
     /// ```
     pub fn from_dict(dict: &PyDict) -> PyResult<Self> {
@@ -684,6 +710,7 @@ mod tests {
     use super::{parse_course_dict, CourseListEntryModel, SessionStateModel};
     use crate::http::session::SessionState;
     use pyo3::Python;
+    use std::collections::HashMap;
 
     #[test]
     fn test_from_session_state_preserves_core_fields() {
@@ -750,6 +777,127 @@ mod tests {
                 }
             ]
         );
+    }
+
+    #[test]
+    fn test_into_session_state_preserves_course_list_and_denormalizes_status() {
+        use crate::http::session::SessionState;
+
+        let model = SessionStateModel {
+            session_headers: HashMap::new(),
+            session_cookies: HashMap::new(),
+            params: HashMap::new(),
+            javax_faces_view_state: Some("vs-123".to_string()),
+            career_code: "0-2-8-3".to_string(),
+            career_name: "Ingenieria".to_string(),
+            is_electives: true,
+            status: "ON_CAREER_PAGE".to_string(),
+            course_list: vec![
+                CourseListEntryModel {
+                    code: "1000001".to_string(),
+                    name: "Calculo".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "2016489".to_string(),
+                    name: "Estructuras".to_string(),
+                },
+            ],
+        };
+
+        let state = model.into_session_state();
+
+        assert_eq!(state.status, "ON_CAREER_PAGE");
+        assert_eq!(state.course_list.len(), 2);
+        assert_eq!(state.course_list[0].code, "1000001");
+        assert_eq!(state.course_list[0].name, "Calculo");
+        assert_eq!(state.course_list[1].code, "2016489");
+        assert_eq!(state.course_list[1].name, "Estructuras");
+    }
+
+    #[test]
+    fn test_into_session_state_handles_empty_course_list() {
+        let model = SessionStateModel {
+            course_list: vec![],
+            status: "NO_SESSION".to_string(),
+            session_headers: HashMap::new(),
+            session_cookies: HashMap::new(),
+            params: HashMap::new(),
+            javax_faces_view_state: None,
+            career_code: String::new(),
+            career_name: String::new(),
+            is_electives: false,
+        };
+
+        let state = model.into_session_state();
+
+        assert_eq!(state.course_list.len(), 0);
+        assert_eq!(state.status, "CREATED");
+    }
+
+    #[test]
+    fn test_into_session_state_denormalizes_all_status_values() {
+        let test_cases = vec![
+            ("NO_SESSION", "CREATED"),
+            ("CAREER_NOT_SET", "SESSION_SET"),
+            ("ON_CAREER_PAGE", "ON_CAREER_PAGE"),
+            ("ON_COURSE_PAGE", "ON_COURSE_PAGE"),
+            ("CUSTOM_STATUS", "CUSTOM_STATUS"),
+        ];
+
+        for (model_status, expected_state_status) in test_cases {
+            let model = SessionStateModel {
+                status: model_status.to_string(),
+                session_headers: HashMap::new(),
+                session_cookies: HashMap::new(),
+                params: HashMap::new(),
+                javax_faces_view_state: None,
+                career_code: String::new(),
+                career_name: String::new(),
+                is_electives: false,
+                course_list: vec![],
+            };
+            let state = model.into_session_state();
+            assert_eq!(
+                state.status, expected_state_status,
+                "Failed for model status '{}'",
+                model_status
+            );
+        }
+    }
+
+    #[test]
+    fn test_into_session_state_preserves_all_fields() {
+        let mut headers = HashMap::new();
+        headers.insert("X-Custom".to_string(), "value".to_string());
+
+        let mut cookies = HashMap::new();
+        cookies.insert("session_id".to_string(), "abc123".to_string());
+
+        let mut params = HashMap::new();
+        params.insert("Adf-Page-Id".to_string(), "2".to_string());
+
+        let model = SessionStateModel {
+            session_headers: headers.clone(),
+            session_cookies: cookies.clone(),
+            params: params.clone(),
+            javax_faces_view_state: Some("vs-xyz".to_string()),
+            career_code: "0-2-8-3".to_string(),
+            career_name: "Ingenieria de Sistemas".to_string(),
+            is_electives: true,
+            status: "CAREER_NOT_SET".to_string(),
+            course_list: vec![],
+        };
+
+        let state = model.into_session_state();
+
+        assert_eq!(state.session_headers, headers);
+        assert_eq!(state.session_cookies, cookies);
+        assert_eq!(state.params, params);
+        assert_eq!(state.javax_faces_ViewState, Some("vs-xyz".to_string()));
+        assert_eq!(state.career_code, "0-2-8-3");
+        assert_eq!(state.career_name, "Ingenieria de Sistemas");
+        assert!(state.is_electives);
+        assert_eq!(state.status, "SESSION_SET");
     }
 
     #[test]
@@ -846,7 +994,7 @@ mod tests {
             let result = parse_course_dict(dict);
             assert!(result.is_err());
             let err_msg = result.unwrap_err().to_string();
-            assert!(err_msg.contains("'code'/'name'") || err_msg.contains("course_code"));
+            assert!(err_msg.contains("'name' or 'course_name'"));
         });
     }
 
@@ -917,7 +1065,7 @@ mod tests {
             let result = parse_course_dict(dict);
             assert!(result.is_err());
             let err_msg = result.unwrap_err().to_string();
-            assert!(err_msg.contains("'code'/'name'"));
+            assert!(err_msg.contains("'name' or 'course_name'"));
         });
     }
 
@@ -932,7 +1080,7 @@ mod tests {
             let result = parse_course_dict(dict);
             assert!(result.is_err());
             let err_msg = result.unwrap_err().to_string();
-            assert!(err_msg.contains("'code'/'name'"));
+            assert!(err_msg.contains("'code' or 'course_code'"));
         });
     }
 
