@@ -688,6 +688,108 @@ impl SiaSession {
         Ok(result)
     }
 
+    /// Scrape multiple courses concurrently with configurable parallelism.
+    ///
+    /// Uses `futures::stream::buffer_unordered` to execute up to `max_concurrent`
+    /// scraping operations simultaneously. Each course is scraped independently,
+    /// with errors handled according to the specified `ErrorMode`.
+    ///
+    /// The shared session state (ViewState, cookies) is protected by an `RwLock`,
+    /// ensuring safe concurrent access without corruption.
+    ///
+    /// # Arguments
+    /// * `indices` - Course indices to scrape
+    /// * `max_concurrent` - Maximum number of concurrent scraping operations
+    /// * `mode` - Error handling strategy
+    /// * `max_retries` - Maximum retry attempts per course (used only in Retry mode)
+    /// * `retry_delay_ms` - Base delay between retries in milliseconds
+    ///
+    /// # Returns
+    /// `ScrapeResult` containing successes and failures
+    ///
+    /// # Errors
+    /// Returns the original `HttpError` on first failure when mode is Abort.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    /// use sia_scraper::models::scrape_result::ErrorMode;
+    ///
+    /// let session = SiaSession::new(30, "https://sia.unal.edu.co".to_string())?;
+    /// let result = session
+    ///     .scrape_courses_concurrent(vec![0, 1, 2], 5, ErrorMode::Skip, 0, 100)
+    ///     .await?;
+    /// println!("Successes: {}", result.successes.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn scrape_courses_concurrent(
+        &self,
+        indices: Vec<i32>,
+        max_concurrent: usize,
+        mode: ErrorMode,
+        max_retries: u32,
+        retry_delay_ms: u64,
+    ) -> Result<ScrapeResult, HttpError> {
+        use futures::stream::{self, StreamExt};
+
+        let effective_retries = if mode == ErrorMode::Retry {
+            max_retries
+        } else {
+            0
+        };
+
+        let results: Vec<Result<CourseInfoModel, (i32, HttpError)>> = stream::iter(indices)
+            .map(|index| {
+                let session = self.clone();
+                async move {
+                    for attempt in 0..=effective_retries {
+                        match session.scrape_course_info(index).await {
+                            Ok(info) => return Ok(info),
+                            Err(e) => {
+                                if !should_retry(&e, &session.retry_config)
+                                    || attempt == effective_retries
+                                {
+                                    return Err((index, e));
+                                }
+                                let base = retry_delay_ms.max(1);
+                                let shift = attempt.min(31);
+                                let backoff = base.saturating_mul(1u64 << shift);
+                                let capped = backoff.min(session.retry_config.max_delay_ms);
+                                sleep(Duration::from_millis(capped)).await;
+                            }
+                        }
+                    }
+                    unreachable!("retry loop must return before this point")
+                }
+            })
+            .buffer_unordered(max_concurrent)
+            .collect()
+            .await;
+
+        let mut result = ScrapeResult::new();
+
+        for res in results {
+            match res {
+                Ok(info) => {
+                    result.successes.push(info);
+                }
+                Err((index, e)) => match mode {
+                    ErrorMode::Abort => {
+                        log::error!("Aborted at course index {}: {}", index, e);
+                        return Err(e);
+                    }
+                    ErrorMode::Skip | ErrorMode::Retry => {
+                        result.failures.push((index, e.to_string()));
+                    }
+                },
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Attempt to scrape a single course with retry logic.
     ///
     /// # Arguments
@@ -1097,5 +1199,81 @@ mod tests {
             assert!(result.successes.is_empty());
             assert!(result.failures.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_empty_indices() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        for mode in [ErrorMode::Abort, ErrorMode::Skip, ErrorMode::Retry] {
+            let result = session
+                .scrape_courses_concurrent(vec![], 5, mode, 0, 100)
+                .await;
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.total(), 0);
+            assert_eq!(result.success_rate(), 1.0);
+            assert!(result.successes.is_empty());
+            assert!(result.failures.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_skip_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1, 2], 3, ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_abort_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1, 2], 3, ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_retry_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1], 2, ErrorMode::Retry, 1, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_processes_all_indices() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let indices = vec![0, 1, 2, 3, 4];
+        let result = session
+            .scrape_courses_concurrent(indices.clone(), 3, ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.total(), indices.len());
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), indices.len());
+        let failure_indices: Vec<i32> = result.failures.iter().map(|(idx, _)| *idx).collect();
+        for idx in &indices {
+            assert!(failure_indices.contains(idx));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_abort_stops_on_first_failure() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1, 2], 3, ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_err());
     }
 }
