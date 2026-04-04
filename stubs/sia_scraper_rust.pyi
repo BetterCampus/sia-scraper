@@ -334,6 +334,10 @@ class ScrapeResult:
     successes: list[CourseInfoModel]
     failures: list[tuple[int, str]]
 
+    def __init__(self) -> None:
+        """Initialize an empty ScrapeResult instance."""
+        ...
+
     def total(self) -> int:
         """Return total number of courses processed (successes + failures)."""
         ...
