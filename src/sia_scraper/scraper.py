@@ -237,7 +237,13 @@ class SiaScraper:
         if not courses_indices:
             courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
-        paired = list(zip(courses_indices, courses_codes, strict=False))
+        if courses_indices and courses_codes and len(courses_indices) != len(courses_codes):
+            raise ValueError(
+                f"Length mismatch: courses_indices has {len(courses_indices)} items, "
+                f"but courses_codes has {len(courses_codes)} items"
+            )
+
+        paired = list(zip(courses_indices, courses_codes, strict=True))
         paired.sort(key=lambda x: x[0])
         indices = [idx for idx, _ in paired]
 
@@ -263,6 +269,11 @@ class SiaScraper:
             retries=max_retries if mode == "retry" else 0,
             delay=delay_ms,
         )
+
+        code_map = {idx: code for idx, code in paired if code}
+        for idx, course in enumerate(rust_result.successes):
+            if idx < len(indices) and indices[idx] in code_map:
+                course.code = code_map[indices[idx]]
 
         if progress_callback:
             progress_callback(
