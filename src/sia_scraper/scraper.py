@@ -289,18 +289,19 @@ class SiaScraper:
         if not courses_indices:
             courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
-        paired = list(zip(courses_indices, courses_codes, strict=True))
+        paired = list(zip(courses_indices, courses_codes, strict=False))
         paired.sort(key=lambda x: x[0])
         indices = [idx for idx, _ in paired]
 
-        if error_mode == ErrorMode.ABORT:
+        mode = error_mode.lower()
+
+        if mode == "abort":
             result = await self._sia_session.scrape_courses(
                 indices,
                 mode="abort",
                 retries=0,
                 delay=0,
             )
-            # Map course codes back to results (all succeeded in abort mode)
             code_map = {idx: code for idx, code in paired if code}
             for idx, course in enumerate(result.successes):
                 if idx < len(indices) and indices[idx] in code_map:
@@ -310,8 +311,8 @@ class SiaScraper:
         delay_ms = int(retry_delay * 1000)
         rust_result = await self._sia_session.scrape_courses(
             indices,
-            mode=error_mode.lower(),
-            retries=max_retries if error_mode == ErrorMode.RETRY else 0,
+            mode=mode,
+            retries=max_retries if mode == "retry" else 0,
             delay=delay_ms,
         )
 

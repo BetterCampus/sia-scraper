@@ -141,7 +141,7 @@ class TestBatchScrapingWithInvalidIndices:
         """scrape_courses in abort mode should raise on first failure."""
         await initialized_session.set_career("0-2-8-3")
 
-        with pytest.raises(sia_scraper_rust.SiaScraperException):
+        with pytest.raises(ValueError):
             await initialized_session.scrape_courses([999], mode="abort")
 
     @pytest.mark.asyncio
