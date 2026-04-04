@@ -147,7 +147,13 @@ class TestBatchScrapingWithInvalidIndices:
     @pytest.mark.asyncio
     @pytest.mark.network
     async def test_scrape_courses_retry_mode_records_failures(self, initialized_session):
-        """scrape_courses in retry mode should record failures after retries."""
+        """scrape_courses in retry mode should record failures for invalid indices.
+
+        Note: Course index 999 produces HttpError::InvalidInput which is
+        non-retryable per retry.rs should_retry(). The test verifies that
+        retry mode still records the failure correctly even when retries
+        are not applicable.
+        """
         await initialized_session.set_career("0-2-8-3")
 
         result = await initialized_session.scrape_courses([999], mode="retry", retries=1, delay=50)
