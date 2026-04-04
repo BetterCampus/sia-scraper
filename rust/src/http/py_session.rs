@@ -301,9 +301,7 @@ impl PySiaSession {
         delay: Option<u64>,
     ) -> PyResult<&'py PyAny> {
         let inner = Arc::clone(&self.inner);
-        let error_mode = ErrorMode::from_str(&mode).map_err(|e| {
-            pyo3::exceptions::PyValueError::new_err(e)
-        })?;
+        let error_mode = ErrorMode::from_str(&mode)?;
         let max_retries = retries.unwrap_or(3);
         let retry_delay_ms = delay.unwrap_or(800);
 

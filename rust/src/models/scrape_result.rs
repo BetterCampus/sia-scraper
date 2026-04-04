@@ -5,6 +5,7 @@
 use pyo3::prelude::*;
 use std::str::FromStr;
 
+use crate::error::SiaScraperError;
 use crate::models::course::CourseInfoModel;
 
 /// Error handling mode for batch scraping operations.
@@ -22,17 +23,17 @@ pub enum ErrorMode {
 }
 
 impl FromStr for ErrorMode {
-    type Err = String;
+    type Err = SiaScraperError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "abort" => Ok(ErrorMode::Abort),
             "skip" => Ok(ErrorMode::Skip),
             "retry" => Ok(ErrorMode::Retry),
-            other => Err(format!(
+            other => Err(SiaScraperError::InvalidInput(format!(
                 "Invalid error mode: '{}'. Must be 'abort', 'skip', or 'retry'",
                 other
-            )),
+            ))),
         }
     }
 }

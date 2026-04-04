@@ -46,9 +46,9 @@ class TestErrorModeValidation:
 
     @pytest.mark.asyncio
     async def test_scrape_courses_rejects_invalid_mode(self):
-        """scrape_courses should raise ValueError for invalid mode."""
+        """scrape_courses should raise SiaScraperException for invalid mode."""
         session = sia_scraper_rust.PySiaSession()
-        with pytest.raises(ValueError, match="Invalid error mode"):
+        with pytest.raises(sia_scraper_rust.SiaScraperException, match="Invalid error mode"):
             await session.scrape_courses([0, 1], mode="invalid")
 
     @pytest.mark.asyncio
