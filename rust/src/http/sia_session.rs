@@ -34,6 +34,11 @@ macro_rules! define_regex {
 
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
+/// Result type for concurrent course scraping: `(position, index, data)`.
+///
+/// The first element is the position in the original input batch,
+/// the second is the course index, and the third is either the
+/// parsed `CourseInfoModel` on success or an `HttpError` on failure.
 pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel), (usize, i32, HttpError)>;
 
 #[derive(Clone)]
@@ -864,7 +869,7 @@ impl SiaSession {
 
         let mut result = ScrapeResult::new();
 
-        let mut ordered_results: Vec<_> = results.into_iter().collect();
+        let mut ordered_results = results;
         ordered_results.sort_by_key(|r| match r { Ok((pos, _, _)) => *pos, Err((pos, _, _)) => *pos });
 
         for res in ordered_results {
@@ -1469,6 +1474,22 @@ mod tests {
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.total(), indices.len());
+
+        let failure_count = result.failures.len();
+        let success_count = result.successes.len();
+        assert_eq!(
+            failure_count + success_count,
+            indices.len(),
+            "Sum of failures and successes should equal total indices"
+        );
+
+        let failure_indices: Vec<i32> = result.failures.iter().map(|(idx, _)| *idx).collect();
+        let mut sorted_failures = failure_indices.clone();
+        sorted_failures.sort();
+        assert_eq!(
+            failure_indices, sorted_failures,
+            "Failure indices should be in sorted order (preserving input ordering)"
+        );
     }
 
     #[tokio::test]
