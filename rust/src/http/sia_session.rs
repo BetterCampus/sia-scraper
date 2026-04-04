@@ -32,6 +32,17 @@ macro_rules! define_regex {
     };
 }
 
+/// Compute the exponential backoff delay in milliseconds.
+///
+/// Uses the formula: `max(1, retry_delay_ms) * 2^attempt`, capped at
+/// `max_delay_ms` from the retry configuration.
+fn compute_backoff_ms(retry_config: &RetryConfig, retry_delay_ms: u64, attempt: u32) -> u64 {
+    let base = retry_delay_ms.max(1);
+    let shift = attempt.min(31);
+    let backoff = base.saturating_mul(1u64 << shift);
+    backoff.min(retry_config.max_delay_ms)
+}
+
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
 /// Result type for concurrent course scraping: `(position, index, data)`.
@@ -74,7 +85,7 @@ impl SiaSession {
     /// Returns `HttpError::InvalidInput` if the HTTP client configuration
     /// fails validation.
     ///
-    /// # Example
+    /// # Examples
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// use sia_scraper::http::sia_session::SiaSession;
@@ -111,7 +122,7 @@ impl SiaSession {
     /// # Returns
     /// New SiaSession with cloned state
     ///
-    /// # Example
+    /// # Examples
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// use sia_scraper::http::sia_session::SiaSession;
@@ -681,7 +692,7 @@ impl SiaSession {
     /// # Errors
     /// Returns the original `HttpError` on first failure when mode is Abort.
     ///
-    /// # Example
+    /// # Examples
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// use sia_scraper::http::sia_session::SiaSession;
@@ -777,7 +788,7 @@ impl SiaSession {
     ///
     /// Returns the original `HttpError` on first failure when mode is Abort.
     ///
-    /// # Example
+    /// # Examples
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// use sia_scraper::http::sia_session::SiaSession;
@@ -855,11 +866,8 @@ impl SiaSession {
                                     }
                                     return Err((pos, index, e));
                                 }
-                                let base = retry_delay_ms.max(1);
-                                let shift = attempt.min(31);
-                                let backoff = base.saturating_mul(1u64 << shift);
-                                let capped = backoff.min(session.retry_config.max_delay_ms);
-                                sleep(Duration::from_millis(capped)).await;
+                                let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
+                                sleep(Duration::from_millis(delay)).await;
                             }
                         }
                     }
@@ -920,11 +928,8 @@ impl SiaSession {
                     if !should_retry(&e, &self.retry_config) || attempt == max_retries {
                         return Err(e);
                     }
-                    let base = retry_delay_ms.max(1);
-                    let shift = attempt.min(31);
-                    let backoff = base.saturating_mul(1u64 << shift);
-                    let capped = backoff.min(self.retry_config.max_delay_ms);
-                    sleep(Duration::from_millis(capped)).await;
+                    let delay = compute_backoff_ms(&self.retry_config, retry_delay_ms, attempt);
+                    sleep(Duration::from_millis(delay)).await;
                 }
             }
         }
@@ -1510,11 +1515,8 @@ mod tests {
         use std::collections::HashMap;
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
-        use std::thread;
-        use std::time::Duration;
-
-        let mut server = mockito::Server::new_async().await;
-        let mock_url = server.url();
+        use tokio::io::AsyncWriteExt;
+        use tokio::time::sleep;
 
         let active_requests = Arc::new(AtomicUsize::new(0));
         let max_concurrent_seen = Arc::new(AtomicUsize::new(0));
@@ -1535,35 +1537,48 @@ mod tests {
         ]]></change>
     </changes>
 </partial-response>"#
-        .to_string()
-        .into_bytes();
+        .to_string();
 
-        let _mock = server
-            .mock("POST", mockito::Matcher::Any)
-            .with_status(200)
-            .with_body_from_request(move |_req| {
-                let prev = active_clone.fetch_add(1, Ordering::SeqCst);
-                let current = prev + 1;
-                let mut max_val = max_clone.load(Ordering::SeqCst);
-                while current > max_val {
-                    if max_clone
-                        .compare_exchange_weak(max_val, current, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok()
-                    {
-                        break;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mock_url = format!("http://{}", listener.local_addr().unwrap());
+
+        tokio::spawn(async move {
+            loop {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let active = active_clone.clone();
+                let max_seen = max_clone.clone();
+                let count = count_clone.clone();
+                let body = response_body.clone();
+
+                tokio::spawn(async move {
+                    let _prev = active.fetch_add(1, Ordering::SeqCst);
+                    let current = active.load(Ordering::SeqCst);
+                    let mut max_val = max_seen.load(Ordering::SeqCst);
+                    while current > max_val {
+                        if max_seen
+                            .compare_exchange_weak(max_val, current, Ordering::SeqCst, Ordering::SeqCst)
+                            .is_ok()
+                        {
+                            break;
+                        }
+                        max_val = max_seen.load(Ordering::SeqCst);
                     }
-                    max_val = max_clone.load(Ordering::SeqCst);
-                }
 
-                let _ = count_clone.fetch_add(1, Ordering::SeqCst);
+                    let _ = count.fetch_add(1, Ordering::SeqCst);
 
-                thread::sleep(Duration::from_millis(50));
+                    sleep(Duration::from_millis(100)).await;
 
-                active_clone.fetch_sub(1, Ordering::SeqCst);
+                    active.fetch_sub(1, Ordering::SeqCst);
 
-                response_body.clone()
-            })
-            .create();
+                    let http_response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(http_response.as_bytes()).await;
+                });
+            }
+        });
 
         let state = SessionState {
             status: "ON_CAREER_PAGE".to_string(),
@@ -1602,8 +1617,8 @@ mod tests {
 
         let peak = max_concurrent_seen.load(Ordering::SeqCst);
         assert!(
-            peak >= 1,
-            "Expected at least 1 concurrent request, got {peak}"
+            peak > 1,
+            "Expected overlap: peak concurrent requests > 1, got {peak}"
         );
         assert!(
             peak <= max_concurrent,
