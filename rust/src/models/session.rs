@@ -120,8 +120,8 @@ impl CourseListEntryModel {
     /// New `CourseListEntryModel` instance
     ///
     /// # Errors
-    /// Returns `PyKeyError` if dict doesn't match any supported format
-    ///
+    /// - `PyKeyError` if dict doesn't match any supported format (via `normalize_course_dict()`)
+    /// - `PyTypeError` if key/value types are wrong (e.g., non-string values in `normalize_course_dict()`)
     /// # Examples
     /// ```python
     /// import sia_scraper_rust
