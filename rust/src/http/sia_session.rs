@@ -641,7 +641,14 @@ impl SiaSession {
                 index
             );
 
-            let course = self.scrape_course_with_retry(index, max_retries, retry_delay_ms).await;
+            let effective_retries = if mode == ErrorMode::Skip {
+                0
+            } else {
+                max_retries
+            };
+            let course = self
+                .scrape_course_with_retry(index, effective_retries, retry_delay_ms)
+                .await;
 
             match course {
                 Ok(info) => {
