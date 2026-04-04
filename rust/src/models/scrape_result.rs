@@ -235,29 +235,66 @@ mod tests {
 
     #[test]
     fn test_scrape_result_total_with_successes() {
+        let course = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: None,
+        };
         let result = ScrapeResult {
-            successes: vec![],
+            successes: vec![course],
             failures: vec![(0, "err".to_string())],
         };
-        assert_eq!(result.total(), 1);
+        assert_eq!(result.total(), 2);
     }
 
     #[test]
     fn test_scrape_result_success_rate_mixed() {
-        let result = ScrapeResult {
-            successes: vec![],
-            failures: vec![(0, "err".to_string()), (1, "err2".to_string())],
+        let course1 = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: None,
         };
-        assert_eq!(result.success_rate(), 0.0);
+        let course2 = CourseInfoModel {
+            course_name: "Álgebra".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 15,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: None,
+        };
+        let result = ScrapeResult {
+            successes: vec![course1, course2],
+            failures: vec![(2, "err".to_string()), (3, "err2".to_string())],
+        };
+        assert_eq!(result.total(), 4);
+        assert_eq!(result.success_rate(), 0.5);
     }
 
     #[test]
     fn test_scrape_result_success_rate_all_success() {
+        let course = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: None,
+        };
         let result = ScrapeResult {
-            successes: vec![],
+            successes: vec![course],
             failures: vec![],
         };
-        assert_eq!(result.total(), 0);
+        assert_eq!(result.total(), 1);
         assert_eq!(result.success_rate(), 1.0);
     }
 
