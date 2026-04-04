@@ -288,16 +288,36 @@ class SiaScraper:
 
         paired = list(zip(courses_indices, courses_codes, strict=True))
         paired.sort(key=lambda x: x[0])
+        indices = [idx for idx, _ in paired]
 
         if error_mode == ErrorMode.ABORT:
-            return await self._scrape_abort_mode(paired)
+            result = await self._sia_session.scrape_courses(
+                indices,
+                mode="abort",
+                retries=0,
+                delay=0,
+            )
+            return result.successes
 
-        return await self._scrape_resilient_mode(
-            paired,
-            error_mode,
-            max_retries,
-            retry_delay,
-            progress_callback,
+        delay_ms = int(retry_delay * 1000)
+        rust_result = await self._sia_session.scrape_courses(
+            indices,
+            mode=error_mode.lower(),
+            retries=max_retries if error_mode == ErrorMode.RETRY else 0,
+            delay=delay_ms,
+        )
+
+        if progress_callback:
+            progress_callback(
+                rust_result.total(),
+                rust_result.total(),
+                len(rust_result.successes),
+                len(rust_result.failures),
+            )
+
+        return ScrapeResult.create(
+            successes=rust_result.successes,
+            failures=rust_result.failures,
         )
 
 

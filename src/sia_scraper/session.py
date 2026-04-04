@@ -183,6 +183,34 @@ class SiaSession:
             self._sync_state_from_rust(state)
             return state
 
+    async def scrape_courses(
+        self,
+        indices: list[int],
+        mode: str = "abort",
+        retries: int = 0,
+        delay: int = 0,
+    ) -> sia_scraper_rust.ScrapeResult:
+        """Scrape multiple courses sequentially using Rust batch scraping.
+
+        Args:
+            indices: List of course indices to scrape.
+            mode: Error handling mode - "abort", "skip", or "retry".
+            retries: Maximum retry attempts per course (retry mode only).
+            delay: Base delay between retries in milliseconds.
+
+        Returns:
+            ScrapeResult with successes and failures.
+
+        Raises:
+            SiaSessionException: If session not initialized or in Abort mode.
+            sia_scraper_rust.NetworkError: If connection fails.
+            sia_scraper_rust.HttpStatusError: If server returns error status.
+            sia_scraper_rust.SiaTimeoutError: If request times out.
+            sia_scraper_rust.ParseError: If response cannot be parsed.
+        """
+        async with self._operation("scrape_courses"):
+            return await self._rust_session.scrape_courses(indices, mode, retries, delay)
+
     async def close(self) -> None:
         """Reset session state and clear Rust session."""
         async with self._operation("close"):
