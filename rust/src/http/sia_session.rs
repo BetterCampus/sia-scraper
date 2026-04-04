@@ -34,6 +34,8 @@ macro_rules! define_regex {
 
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
+pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel), (usize, i32, HttpError)>;
+
 #[derive(Clone)]
 pub struct SiaSession {
     client: AsyncHttpClient,
@@ -85,6 +87,18 @@ impl SiaSession {
     ///
     /// # Returns
     /// New SiaSession with cloned state
+    ///
+    /// # Example
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    ///
+    /// let session = SiaSession::new(30, "https://sia.unal.edu.co".to_string())?;
+    /// let cloned = session.clone_with_owned_state().await;
+    /// // Original and cloned now have independent state
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn clone_with_owned_state(&self) -> Self {
         let state_clone = self.get_state().await;
         Self {
@@ -775,7 +789,7 @@ impl SiaSession {
         let base_url = self.base_url.clone();
         let base_retry_config = self.retry_config.clone();
 
-        let results: Vec<Result<(usize, i32, CourseInfoModel), (usize, i32, HttpError)>> = stream::iter(indices.into_iter().enumerate())
+        let results: Vec<ConcurrentScrapeOutcome> = stream::iter(indices.into_iter().enumerate())
             .map(|(pos, index)| {
                 let session = SiaSession {
                     client: base_client.clone(),
@@ -909,6 +923,32 @@ mod tests {
         let session = SiaSession::with_retry_config(15, "https://httpbin.org".to_string(), config);
         assert!(session.is_ok());
         assert_eq!(session.unwrap().retry_config().max_attempts, 5);
+    }
+
+    #[tokio::test]
+    async fn test_clone_with_owned_state_creates_independent_state() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).expect("session should create");
+        
+        let original_state = session.get_state().await;
+        assert_eq!(original_state.status, "CREATED");
+
+        {
+            let mut state = session.state.write().await;
+            state.status = "MODIFIED".to_string();
+        }
+
+        let cloned = session.clone_with_owned_state().await;
+        
+        {
+            let mut cloned_state = cloned.state.write().await;
+            cloned_state.status = "CLONED_MODIFIED".to_string();
+        }
+
+        let original_after = session.get_state().await;
+        assert_eq!(original_after.status, "MODIFIED");
+
+        let cloned_final = cloned.get_state().await;
+        assert_eq!(cloned_final.status, "CLONED_MODIFIED");
     }
 
     #[test]
