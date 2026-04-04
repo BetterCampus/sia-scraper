@@ -1391,4 +1391,33 @@ mod tests {
             .await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_multiple_indices_ordering() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let indices = vec![3, 1, 4, 0, 2];
+        let result = session
+            .scrape_courses_concurrent(indices.clone(), 3, ErrorMode::Skip, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.total(), indices.len(), "All indices should be recorded");
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_handles_concurrent_execution() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        
+        let indices: Vec<i32> = (0..10).collect();
+        let max_concurrent = 3;
+        
+        let result = session
+            .scrape_courses_concurrent(indices, max_concurrent, ErrorMode::Skip, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.total(), 10, "All 10 indices should be processed");
+    }
 }
