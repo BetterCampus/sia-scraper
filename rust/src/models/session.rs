@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyType};
 use serde::{Deserialize, Serialize};
 
 use crate::http::session::SessionState;
@@ -69,20 +69,10 @@ impl CourseListEntryModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        if let Some(item) = dict.get_item("code")? {
-            self.code = item.extract()?;
-        } else if let Some(legacy) = dict.get_item("course_code")? {
-            self.code = legacy.extract()?;
-        } else {
-            return Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'"));
-        }
-        if let Some(item) = dict.get_item("name")? {
-            self.name = item.extract()?;
-        } else if let Some(legacy) = dict.get_item("course_name")? {
-            self.name = legacy.extract()?;
-        } else {
-            return Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'"));
-        }
+        let py = state.py();
+        let normalized = normalize_course_dict(dict, py)?;
+        self.code = normalized.code;
+        self.name = normalized.name;
         Ok(())
     }
 
@@ -116,24 +106,135 @@ impl CourseListEntryModel {
         dict.set_item("name", &self.name)?;
         Ok(dict.into())
     }
+
+    /// Create from dictionary supporting multiple formats.
+    ///
+    /// # Supported Formats
+    /// - Current: `{"code": "1000001", "name": "Calculo"}`
+    /// - Legacy named: `{"course_code": "1000001", "course_name": "Calculo"}`
+    /// - Legacy single-key: `{"1000001": "Calculo"}`
+    ///
+    /// # Arguments
+    /// * `_cls` - Class reference (unused, required by classmethod)
+    /// * `dict` - Dictionary with course data
+    ///
+    /// # Returns
+    /// New `CourseListEntryModel` instance
+    ///
+    /// # Errors
+    /// Returns `PyKeyError` if dict doesn't match any supported format
+    ///
+    /// # Examples
+    /// ```python
+    /// import sia_scraper_rust
+    ///
+    /// # Current format
+    /// entry = sia_scraper_rust.CourseListEntryModel.from_dict({
+    ///     "code": "1000001",
+    ///     "name": "Calculo"
+    /// })
+    ///
+    /// # Legacy format (deprecated, emits warning)
+    /// entry = sia_scraper_rust.CourseListEntryModel.from_dict({
+    ///     "1000001": "Calculo"
+    /// })
+    /// ```
+    #[classmethod]
+    fn from_dict(_cls: &PyType, dict: &PyDict) -> PyResult<Self> {
+        let py = dict.py();
+        normalize_course_dict(dict, py)
+    }
 }
 
 fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
-    let code: String = if let Some(val) = dict.get_item("code")? {
-        val.extract()?
-    } else if let Some(legacy) = dict.get_item("course_code")? {
-        legacy.extract()?
-    } else {
-        return Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'"));
-    };
-    let name: String = if let Some(val) = dict.get_item("name")? {
-        val.extract()?
-    } else if let Some(legacy) = dict.get_item("course_name")? {
-        legacy.extract()?
-    } else {
-        return Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'"));
-    };
-    Ok(CourseListEntryModel { code, name })
+    Python::with_gil(|py| normalize_course_dict(dict, py))
+}
+
+/// Parse course entry from dict supporting multiple formats.
+///
+/// # Supported Formats
+/// 1. Current: `{"code": "1000001", "name": "Calculo"}`
+/// 2. Legacy named keys: `{"course_code": "1000001", "course_name": "Calculo"}`
+/// 3. Legacy single-key: `{"1000001": "Calculo"}`
+///
+/// # Arguments
+/// * `dict` - Python dict containing course data
+/// * `py` - Python GIL token for warning emission
+///
+/// # Returns
+/// Parsed `CourseListEntryModel`
+///
+/// # Errors
+/// Returns `PyKeyError` if dict doesn't match any supported format
+///
+/// # Examples
+/// ```rust
+/// use pyo3::Python;
+/// use pyo3::types::PyDict;
+///
+/// Python::with_gil(|py| {
+///     let dict = PyDict::new(py);
+///     dict.set_item("code", "1000001").unwrap();
+///     dict.set_item("name", "Calculo").unwrap();
+///     let entry = normalize_course_dict(dict, py).unwrap();
+/// });
+/// ```
+fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEntryModel> {
+    // Try new format {"code": ..., "name": ...}
+    if let (Some(code_val), Some(name_val)) = (dict.get_item("code")?, dict.get_item("name")?) {
+        return Ok(CourseListEntryModel {
+            code: code_val.extract()?,
+            name: name_val.extract()?,
+        });
+    }
+
+    // Try legacy named keys {"course_code": ..., "course_name": ...}
+    if let (Some(code_val), Some(name_val)) =
+        (dict.get_item("course_code")?, dict.get_item("course_name")?)
+    {
+        emit_legacy_warning(py, "course_code/course_name")?;
+        return Ok(CourseListEntryModel {
+            code: code_val.extract()?,
+            name: name_val.extract()?,
+        });
+    }
+
+    // Try legacy single-entry format {<course_code>: <course_name>}
+    if dict.len() == 1 {
+        if let Some((key, value)) = dict.iter().next() {
+            emit_legacy_warning(py, "single-key dict")?;
+            return Ok(CourseListEntryModel {
+                code: key.extract()?,
+                name: value.extract()?,
+            });
+        }
+    }
+
+    Err(PyKeyError::new_err(
+        "Dict must contain 'code'/'name' keys (current), \
+         'course_code'/'course_name' keys (legacy named), \
+         or be a single-entry dict (legacy single-key)",
+    ))
+}
+
+/// Emit deprecation warning for legacy course dict formats.
+fn emit_legacy_warning(py: Python<'_>, format_type: &str) -> PyResult<()> {
+    let warnings = py.import("warnings")?;
+    let message = format!(
+        "CourseListEntry deserialization from {} format is deprecated. \
+         Use {{'code': ..., 'name': ...}} instead. \
+         Legacy format support will be removed in version 4.0.0",
+        format_type
+    );
+    warnings.call_method1(
+        "warn",
+        (
+            message,
+            py.get_type::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+    Ok(())
 }
 
 /// Typed session payload used by Python wrappers.
@@ -666,7 +767,7 @@ mod tests {
                 "Calculo"
             );
 
-            let restored = parse_course_dict(&dict).unwrap();
+            let restored = parse_course_dict(dict).unwrap();
             assert_eq!(restored, entry);
         });
     }
@@ -729,10 +830,81 @@ mod tests {
 
             let result = parse_course_dict(dict);
             assert!(result.is_err());
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("Missing key: 'name' or 'course_name'"));
+            let err_msg = result.unwrap_err().to_string();
+            assert!(err_msg.contains("'code'/'name'") || err_msg.contains("course_code"));
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_legacy_single_key() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("1000001", "Calculo").unwrap();
+
+            let warnings = py.import("warnings").unwrap();
+            warnings
+                .call_method1("filterwarnings", ("ignore",))
+                .unwrap();
+
+            let entry = parse_course_dict(dict).unwrap();
+            assert_eq!(entry.code, "1000001");
+            assert_eq!(entry.name, "Calculo");
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_legacy_single_key_alphanumeric() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("1000003-B", "Álgebra Lineal").unwrap();
+
+            let warnings = py.import("warnings").unwrap();
+            warnings
+                .call_method1("filterwarnings", ("ignore",))
+                .unwrap();
+
+            let entry = parse_course_dict(dict).unwrap();
+            assert_eq!(entry.code, "1000003-B");
+            assert_eq!(entry.name, "Álgebra Lineal");
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_invalid_format() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("invalid_key", "value1").unwrap();
+            dict.set_item("another_key", "value2").unwrap();
+
+            let result = parse_course_dict(dict);
+            assert!(result.is_err());
+            let err_msg = result.unwrap_err().to_string();
+            assert!(err_msg.contains("'code'/'name'"));
+            assert!(err_msg.contains("'course_code'/'course_name'"));
+            assert!(err_msg.contains("single-entry dict"));
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_classmethod() {
+        use pyo3::types::{PyDict, PyType};
+
+        Python::with_gil(|py| {
+            let cls = CourseListEntryModel::type_object(py);
+
+            let dict = PyDict::new(py);
+            dict.set_item("code", "1000001").unwrap();
+            dict.set_item("name", "Calculo").unwrap();
+
+            let entry = CourseListEntryModel::from_dict(cls, dict).unwrap();
+            assert_eq!(entry.code, "1000001");
+            assert_eq!(entry.name, "Calculo");
         });
     }
 
