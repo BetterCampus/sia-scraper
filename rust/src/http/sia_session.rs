@@ -746,11 +746,15 @@ impl SiaSession {
     /// scraping operations simultaneously. Each course is scraped independently,
     /// with errors handled according to the specified `ErrorMode`.
     ///
-    /// **State Isolation:** Each worker task receives an isolated `SessionState` copy.
-    /// The implementation creates a fresh `Arc<RwLock<owned_state.clone()>>` per task,
-    /// ensuring each worker has its own `SessionState` rather than sharing a single
-    /// state behind one `RwLock`. This prevents interleaving mutations to ViewState,
-    /// cookies, and other session parameters across concurrent requests.
+    /// **State Isolation:** Each worker task receives an isolated `SessionState` copy
+    /// via `with_owned_state()`, which clones fields like ViewState, career info,
+    /// and course list. This prevents interleaving mutations to these fields across
+    /// concurrent requests.
+    ///
+    /// **Note on Shared Resources:** The HTTP client is cloned (internally refcounted),
+    /// meaning the underlying cookie jar remains shared across all worker tasks. Only
+    /// `SessionState` fields are truly isolated; cookies and connection pooling are
+    /// shared via the cloned `reqwest::Client`.
     ///
     /// # Arguments
     /// * `indices` - Course indices to scrape
@@ -1394,30 +1398,154 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_multiple_indices_ordering() {
-        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
-        let indices = vec![3, 1, 4, 0, 2];
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let success_body = r#"<?xml version="1.0"?>
+<partial-response>
+    <changes>
+        <change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos">4</span>
+            </div>
+        ]]></change>
+    </changes>
+</partial-response>"#
+        .to_string();
+
+        let noop_body = r#"<?xml version="1.0"?><partial-response><noop/></partial-response>"#
+            .to_string();
+
+        let _mock = server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                if count % 3 == 0 {
+                    success_body.clone().into_bytes()
+                } else {
+                    noop_body.clone().into_bytes()
+                }
+            })
+            .create();
+
+        let mut state = SessionState::default();
+        state.status = "ON_CAREER_PAGE".to_string();
+        state.career_code = "0-2-8-3".to_string();
+        state.javax_faces_ViewState = Some("mock_viewstate".to_string());
+        state.params.insert("Adf-Window-Id".to_string(), "w1".to_string());
+        state.params.insert("Adf-Page-Id".to_string(), "p1".to_string());
+
+        for i in 0..5 {
+            let mut course = HashMap::new();
+            course.insert(format!("code{i}"), format!("Course {i}"));
+            state.course_list.push(course);
+        }
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let indices = vec![0, 1, 2, 3, 4];
         let result = session
             .scrape_courses_concurrent(indices.clone(), 3, ErrorMode::Skip, 0, 100)
             .await;
 
         assert!(result.is_ok());
         let result = result.unwrap();
-        assert_eq!(result.total(), indices.len(), "All indices should be recorded");
+        assert_eq!(result.total(), indices.len());
     }
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_handles_concurrent_execution() {
-        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
-        
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let active_requests = Arc::new(AtomicUsize::new(0));
+        let max_concurrent_seen = Arc::new(AtomicUsize::new(0));
+        let request_count = Arc::new(AtomicUsize::new(0));
+
+        let active_clone = active_requests.clone();
+        let max_clone = max_concurrent_seen.clone();
+        let count_clone = request_count.clone();
+
+        let response_body = r#"<?xml version="1.0"?>
+<partial-response>
+    <changes>
+        <change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Concurrent Test Course</h2>
+                <span class="detass-creditos">3</span>
+            </div>
+        ]]></change>
+    </changes>
+</partial-response>"#
+        .to_string()
+        .into_bytes();
+
+        let _mock = server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let prev = active_clone.fetch_add(1, Ordering::SeqCst);
+                let current = prev + 1;
+                let mut max_val = max_clone.load(Ordering::SeqCst);
+                while current > max_val {
+                    if max_clone
+                        .compare_exchange_weak(max_val, current, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+                    {
+                        break;
+                    }
+                    max_val = max_clone.load(Ordering::SeqCst);
+                }
+
+                let _ = count_clone.fetch_add(1, Ordering::SeqCst);
+
+                response_body.clone()
+            })
+            .create();
+
+        let mut state = SessionState::default();
+        state.status = "ON_CAREER_PAGE".to_string();
+        state.career_code = "0-2-8-3".to_string();
+        state.javax_faces_ViewState = Some("mock_viewstate".to_string());
+        state.params.insert("Adf-Window-Id".to_string(), "w1".to_string());
+        state.params.insert("Adf-Page-Id".to_string(), "p1".to_string());
+
+        for i in 0..10 {
+            let mut course = HashMap::new();
+            course.insert(format!("code{i}"), format!("Course {i}"));
+            state.course_list.push(course);
+        }
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
         let indices: Vec<i32> = (0..10).collect();
         let max_concurrent = 3;
-        
+
         let result = session
             .scrape_courses_concurrent(indices, max_concurrent, ErrorMode::Skip, 0, 100)
             .await;
 
         assert!(result.is_ok());
         let result = result.unwrap();
-        assert_eq!(result.total(), 10, "All 10 indices should be processed");
+        assert_eq!(result.total(), 10);
+
+        let peak = max_concurrent_seen.load(Ordering::SeqCst);
+        assert!(
+            peak <= max_concurrent,
+            "Peak concurrent requests ({peak}) exceeded max_concurrent ({max_concurrent})"
+        );
     }
 }
