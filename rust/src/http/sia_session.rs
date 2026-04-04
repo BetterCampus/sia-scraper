@@ -711,8 +711,9 @@ impl SiaSession {
                     if !should_retry(&e, &self.retry_config) || attempt == max_retries {
                         return Err(e);
                     }
+                    let base = retry_delay_ms.max(1);
                     let shift = attempt.min(31);
-                    let backoff = retry_delay_ms.saturating_mul(1u64 << shift);
+                    let backoff = base.saturating_mul(1u64 << shift);
                     let capped = backoff.min(self.retry_config.max_delay_ms);
                     sleep(Duration::from_millis(capped)).await;
                 }
