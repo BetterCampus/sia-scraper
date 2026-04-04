@@ -297,6 +297,11 @@ class SiaScraper:
                 retries=0,
                 delay=0,
             )
+            # Map course codes back to results (all succeeded in abort mode)
+            code_map = {idx: code for idx, code in paired if code}
+            for idx, course in enumerate(result.successes):
+                if idx < len(indices) and indices[idx] in code_map:
+                    course.code = code_map[indices[idx]]
             return result.successes
 
         delay_ms = int(retry_delay * 1000)
