@@ -1031,4 +1031,16 @@ mod tests {
             .await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_retry_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1], ErrorMode::Retry, 1, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 2);
+    }
 }
