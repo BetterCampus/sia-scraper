@@ -145,7 +145,7 @@ impl CourseListEntryModel {
 }
 
 fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
-    Python::with_gil(|py| normalize_course_dict(dict, py))
+    normalize_course_dict(dict, dict.py())
 }
 
 /// Parse course entry from dict supporting multiple formats.
