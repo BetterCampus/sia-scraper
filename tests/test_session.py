@@ -259,8 +259,6 @@ class TestSessionStateSerialization:
 
     def test_course_entry_to_dict_returns_code_and_name(self):
         """CourseListEntryModel.to_dict() produces {"code", "name"} keys."""
-        import sia_scraper_rust
-
         entry = sia_scraper_rust.CourseListEntryModel(code="1000001", name="Calculo")
         entry_dict = entry.to_dict()
 
