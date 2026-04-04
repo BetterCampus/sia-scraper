@@ -72,6 +72,13 @@ pub enum HttpError {
     /// setting a career).
     #[error("Session error: {0}")]
     SessionError(String),
+
+    /// Operation was aborted due to concurrent error.
+    ///
+    /// This error indicates the operation was cancelled because another
+    /// concurrent task encountered an error in Abort mode.
+    #[error("Aborted: {0}")]
+    Aborted(String),
 }
 
 impl HttpError {
@@ -206,6 +213,12 @@ mod tests {
     fn test_session_error_display() {
         let err = HttpError::SessionError("session not initialized".to_string());
         assert_eq!(err.to_string(), "Session error: session not initialized");
+    }
+
+    #[test]
+    fn test_aborted_error_display() {
+        let err = HttpError::Aborted("concurrent error".to_string());
+        assert_eq!(err.to_string(), "Aborted: concurrent error");
     }
 
     #[test]

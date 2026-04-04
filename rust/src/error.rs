@@ -103,6 +103,7 @@ impl From<crate::http::errors::HttpError> for pyo3::PyErr {
             HttpError::ParseError(_) => ParseError::new_err(message),
             HttpError::InvalidInput(_) => pyo3::exceptions::PyValueError::new_err(message),
             HttpError::SessionError(_) => SessionError::new_err(message),
+            HttpError::Aborted(_) => SessionError::new_err(message),
         }
     }
 }

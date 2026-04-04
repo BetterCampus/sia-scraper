@@ -50,19 +50,37 @@ impl SiaSession {
         Self::with_retry_config(timeout_secs, base_url, RetryConfig::sia_optimized())
     }
 
-    /// Create a new SiaSession with an owned (cloned) SessionState.
+    /// Create a new SiaSession from saved SessionState.
     ///
-    /// This method creates a new SiaSession instance that owns its own
-    /// SessionState copy, preventing concurrent access issues when multiple
-    /// workers need isolated state.
+    /// This constructor is used to restore a session from previously
+    /// persisted state (e.g., after pickle/unpickle or loading from file).
+    /// The session takes ownership of the provided SessionState (moves it
+    /// into an internal RwLock) without cloning.
     ///
     /// # Arguments
     /// * `timeout_secs` - Request timeout in seconds
     /// * `base_url` - Base URL for SIA
-    /// * `state` - SessionState to clone into the new instance
+    /// * `state` - SessionState to take ownership of
     ///
     /// # Returns
     /// New SiaSession instance with owned state
+    ///
+    /// # Errors
+    /// Returns `HttpError::InvalidInput` if the HTTP client configuration
+    /// fails validation.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    /// use sia_scraper::http::session::SessionState;
+    ///
+    /// let state = SessionState::default();
+    /// let session = SiaSession::from_state(30, "https://sia.unal.edu.co".to_string(), state)?;
+    /// assert_eq!(session.get_state().await.status, "CREATED");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_state(
         timeout_secs: u64,
         base_url: String,
@@ -804,7 +822,7 @@ impl SiaSession {
                             return Err((
                                 pos,
                                 index,
-                                HttpError::InvalidInput("Aborted by concurrent error".to_string()),
+                                HttpError::Aborted("Cancelled due to concurrent error".to_string()),
                             ));
                         }
                         match session.scrape_course_info(index).await {
@@ -814,7 +832,7 @@ impl SiaSession {
                                     return Err((
                                         pos,
                                         index,
-                                        HttpError::InvalidInput("Aborted by concurrent error".to_string()),
+                                        HttpError::Aborted("Cancelled due to concurrent error".to_string()),
                                     ));
                                 }
                                 if !should_retry(&e, &session.retry_config)
@@ -852,6 +870,9 @@ impl SiaSession {
                 }
                 Err((_, index, e)) => match mode {
                     ErrorMode::Abort => {
+                        if matches!(e, HttpError::Aborted(_)) {
+                            continue;
+                        }
                         log::error!("Aborted at course index {}: {}", index, e);
                         return Err(e);
                     }
@@ -1352,21 +1373,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_scrape_courses_concurrent_processes_all_indices() {
+    async fn test_scrape_courses_concurrent_zero_concurrency() {
         let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
-        let indices = vec![0, 1, 2, 3, 4];
         let result = session
-            .scrape_courses_concurrent(indices.clone(), 3, ErrorMode::Skip, 0, 100)
+            .scrape_courses_concurrent(vec![0, 1, 2], 0, ErrorMode::Skip, 0, 100)
             .await;
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(result.total(), indices.len());
-        assert_eq!(result.successes.len(), 0);
-        assert_eq!(result.failures.len(), indices.len());
-        let failure_indices: Vec<i32> = result.failures.iter().map(|(idx, _)| *idx).collect();
-        for idx in &indices {
-            assert!(failure_indices.contains(idx));
-        }
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, HttpError::InvalidInput(_)));
     }
 
     #[tokio::test]

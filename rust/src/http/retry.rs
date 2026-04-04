@@ -89,6 +89,7 @@ pub fn should_retry(error: &crate::http::errors::HttpError, config: &RetryConfig
         crate::http::errors::HttpError::ParseError(_) => true,
         crate::http::errors::HttpError::InvalidInput(_) => false,
         crate::http::errors::HttpError::SessionError(_) => false,
+        crate::http::errors::HttpError::Aborted(_) => false,
     }
 }
 
