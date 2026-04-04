@@ -772,6 +772,9 @@ impl SiaSession {
     /// `ScrapeResult` containing successes and failures
     ///
     /// # Errors
+    /// Returns `HttpError::InvalidInput("max_concurrent must be greater than 0")`
+    /// when `max_concurrent` is zero.
+    ///
     /// Returns the original `HttpError` on first failure when mode is Abort.
     ///
     /// # Example
@@ -968,7 +971,13 @@ mod tests {
         }
 
         let cloned = session.clone_with_owned_state().await;
-        
+
+        let cloned_snapshot = cloned.get_state().await;
+        assert_eq!(
+            cloned_snapshot.status, "MODIFIED",
+            "Cloned state should capture the current session snapshot before mutation"
+        );
+
         {
             let mut cloned_state = cloned.state.write().await;
             cloned_state.status = "CLONED_MODIFIED".to_string();
@@ -1430,7 +1439,7 @@ mod tests {
             .to_string();
 
         let _mock = server
-            .mock("POST", "/")
+            .mock("POST", mockito::Matcher::Any)
             .with_status(200)
             .with_body_from_request(move |_req| {
                 let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
@@ -1466,7 +1475,7 @@ mod tests {
 
         let session = SiaSession::from_state(15, mock_url, state).unwrap();
 
-        let indices = vec![0, 1, 2, 3, 4];
+        let indices = vec![2, 0, 4, 1, 3];
         let result = session
             .scrape_courses_concurrent(indices.clone(), 3, ErrorMode::Skip, 0, 100)
             .await;
@@ -1483,12 +1492,16 @@ mod tests {
             "Sum of failures and successes should equal total indices"
         );
 
-        let failure_indices: Vec<i32> = result.failures.iter().map(|(idx, _)| *idx).collect();
-        let mut sorted_failures = failure_indices.clone();
-        sorted_failures.sort();
+        let actual_failure_order: Vec<i32> =
+            result.failures.iter().map(|(idx, _)| *idx).collect();
+        let expected_failure_order: Vec<i32> = indices
+            .iter()
+            .filter(|idx| actual_failure_order.contains(idx))
+            .cloned()
+            .collect();
         assert_eq!(
-            failure_indices, sorted_failures,
-            "Failure indices should be in sorted order (preserving input ordering)"
+            actual_failure_order, expected_failure_order,
+            "Failure indices should preserve input ordering"
         );
     }
 
@@ -1526,7 +1539,7 @@ mod tests {
         .into_bytes();
 
         let _mock = server
-            .mock("POST", "/")
+            .mock("POST", mockito::Matcher::Any)
             .with_status(200)
             .with_body_from_request(move |_req| {
                 let prev = active_clone.fetch_add(1, Ordering::SeqCst);
@@ -1588,6 +1601,10 @@ mod tests {
         assert_eq!(result.total(), 10);
 
         let peak = max_concurrent_seen.load(Ordering::SeqCst);
+        assert!(
+            peak >= 1,
+            "Expected at least 1 concurrent request, got {peak}"
+        );
         assert!(
             peak <= max_concurrent,
             "Peak concurrent requests ({peak}) exceeded max_concurrent ({max_concurrent})"
