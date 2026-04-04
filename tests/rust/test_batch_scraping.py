@@ -127,9 +127,10 @@ class TestBatchScrapingWithInvalidIndices:
         """scrape_courses in skip mode should record failures, not raise."""
         await initialized_session.set_career("0-2-8-3")
 
-        result = await initialized_session.scrape_courses([0, 999, 1], mode="skip")
+        requested = [0, 999, 1]
+        result = await initialized_session.scrape_courses(requested, mode="skip")
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
-        assert result.total() == 3
+        assert result.total() == len(requested)
         # Index 999 is always out of range, so it should always be in failures
         failure_indices = [idx for idx, _ in result.failures]
         assert 999 in failure_indices
