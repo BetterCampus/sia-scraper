@@ -141,6 +141,13 @@ mod tests {
     }
 
     #[test]
+    fn test_should_retry_aborted_returns_false() {
+        let config = RetryConfig::default();
+        let error = crate::http::errors::HttpError::Aborted("cancelled".to_string());
+        assert!(!should_retry(&error, &config));
+    }
+
+    #[test]
     fn test_calculate_delay() {
         let config = RetryConfig::default()
             .with_initial_delay(1000)

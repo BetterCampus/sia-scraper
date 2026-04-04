@@ -119,9 +119,13 @@ impl SiaSession {
     /// ```
     pub async fn clone_with_owned_state(&self) -> Self {
         let state_clone = self.get_state().await;
+        Self::with_owned_state(self, state_clone)
+    }
+
+    fn with_owned_state(&self, state: SessionState) -> Self {
         Self {
             client: self.client.clone(),
-            state: Arc::new(RwLock::new(state_clone)),
+            state: Arc::new(RwLock::new(state)),
             base_url: self.base_url.clone(),
             retry_config: self.retry_config.clone(),
         }
@@ -742,8 +746,11 @@ impl SiaSession {
     /// scraping operations simultaneously. Each course is scraped independently,
     /// with errors handled according to the specified `ErrorMode`.
     ///
-    /// The shared session state (ViewState, cookies) is protected by an `RwLock`,
-    /// ensuring safe concurrent access without corruption.
+    /// **State Isolation:** Each worker task receives an isolated `SessionState` copy.
+    /// The implementation creates a fresh `Arc<RwLock<owned_state.clone()>>` per task,
+    /// ensuring each worker has its own `SessionState` rather than sharing a single
+    /// state behind one `RwLock`. This prevents interleaving mutations to ViewState,
+    /// cookies, and other session parameters across concurrent requests.
     ///
     /// # Arguments
     /// * `indices` - Course indices to scrape
@@ -803,18 +810,11 @@ impl SiaSession {
         let abort_flag = Arc::new(AtomicBool::new(false));
 
         let owned_state = self.get_state().await;
-        let base_client = self.client.clone();
-        let base_url = self.base_url.clone();
-        let base_retry_config = self.retry_config.clone();
+        let session_ref = self;
 
         let results: Vec<ConcurrentScrapeOutcome> = stream::iter(indices.into_iter().enumerate())
             .map(|(pos, index)| {
-                let session = SiaSession {
-                    client: base_client.clone(),
-                    state: Arc::new(RwLock::new(owned_state.clone())),
-                    base_url: base_url.clone(),
-                    retry_config: base_retry_config.clone(),
-                };
+                let session = SiaSession::with_owned_state(session_ref, owned_state.clone());
                 let abort = Arc::clone(&abort_flag);
                 async move {
                     for attempt in 0..=effective_retries {
