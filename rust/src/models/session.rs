@@ -61,10 +61,7 @@ impl CourseListEntryModel {
     }
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
-        let dict = PyDict::new(py);
-        dict.set_item("code", self.code.clone())?;
-        dict.set_item("name", self.name.clone())?;
-        Ok(dict.into())
+        Ok(self.to_dict(py)?.into_py(py))
     }
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
@@ -374,88 +371,22 @@ impl SessionStateModel {
     }
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
-        let dict = PyDict::new(py);
-
-        let headers = PyDict::new(py);
-        for (k, v) in &self.session_headers {
-            headers.set_item(k, v)?;
-        }
-        dict.set_item("session_headers", headers)?;
-
-        let cookies = PyDict::new(py);
-        for (k, v) in &self.session_cookies {
-            cookies.set_item(k, v)?;
-        }
-        dict.set_item("session_cookies", cookies)?;
-
-        let params = PyDict::new(py);
-        for (k, v) in &self.params {
-            params.set_item(k, v)?;
-        }
-        dict.set_item("params", params)?;
-
-        dict.set_item(
-            "javax_faces_view_state",
-            self.javax_faces_view_state.clone(),
-        )?;
-        dict.set_item("career_code", self.career_code.clone())?;
-        dict.set_item("career_name", self.career_name.clone())?;
-        dict.set_item("is_electives", self.is_electives)?;
-        dict.set_item("status", self.status.clone())?;
-
-        let courses = PyList::empty(py);
-        for course in &self.course_list {
-            courses.append(course.__getstate__(py)?)?;
-        }
-        dict.set_item("course_list", courses)?;
-
-        Ok(dict.into())
+        Ok(self.to_dict(py)?.into_py(py))
     }
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
+        let restored = Self::from_dict(dict)?;
 
-        let headers_dict = required_item(dict, "session_headers")?.downcast::<PyDict>()?;
-        let mut session_headers = HashMap::new();
-        for (k, v) in headers_dict.iter() {
-            let key: String = k.extract()?;
-            let value: String = v.extract()?;
-            session_headers.insert(key, value);
-        }
-        self.session_headers = session_headers;
-
-        let cookies_dict = required_item(dict, "session_cookies")?.downcast::<PyDict>()?;
-        let mut session_cookies = HashMap::new();
-        for (k, v) in cookies_dict.iter() {
-            let key: String = k.extract()?;
-            let value: String = v.extract()?;
-            session_cookies.insert(key, value);
-        }
-        self.session_cookies = session_cookies;
-
-        let params_dict = required_item(dict, "params")?.downcast::<PyDict>()?;
-        let mut params = HashMap::new();
-        for (k, v) in params_dict.iter() {
-            let key: String = k.extract()?;
-            let value: String = v.extract()?;
-            params.insert(key, value);
-        }
-        self.params = params;
-
-        self.javax_faces_view_state = required_item(dict, "javax_faces_view_state")?.extract()?;
-        self.career_code = required_item(dict, "career_code")?.extract()?;
-        self.career_name = required_item(dict, "career_name")?.extract()?;
-        self.is_electives = required_item(dict, "is_electives")?.extract()?;
-        self.status = required_item(dict, "status")?.extract()?;
-
-        let list = required_item(dict, "course_list")?.downcast::<PyList>()?;
-        let mut course_list = Vec::with_capacity(list.len());
-        for item in list.iter() {
-            let mut course = CourseListEntryModel::new(String::new(), String::new());
-            course.__setstate__(item)?;
-            course_list.push(course);
-        }
-        self.course_list = course_list;
+        self.session_headers = restored.session_headers;
+        self.session_cookies = restored.session_cookies;
+        self.params = restored.params;
+        self.javax_faces_view_state = restored.javax_faces_view_state;
+        self.career_code = restored.career_code;
+        self.career_name = restored.career_name;
+        self.is_electives = restored.is_electives;
+        self.status = restored.status;
+        self.course_list = restored.course_list;
 
         Ok(())
     }
@@ -1006,11 +937,16 @@ mod tests {
             dict.set_item("1000001", "Calculo").unwrap();
 
             let warnings = py.import("warnings").unwrap();
-            warnings
-                .call_method1("filterwarnings", ("ignore",))
-                .unwrap();
+            let catch_warnings = warnings.call_method0("catch_warnings").unwrap();
+            catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("ignore",)).unwrap();
 
             let entry = parse_course_dict(dict).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
             assert_eq!(entry.code, "1000001");
             assert_eq!(entry.name, "Calculo");
         });
@@ -1025,11 +961,16 @@ mod tests {
             dict.set_item("1000003-B", "Álgebra Lineal").unwrap();
 
             let warnings = py.import("warnings").unwrap();
-            warnings
-                .call_method1("filterwarnings", ("ignore",))
-                .unwrap();
+            let catch_warnings = warnings.call_method0("catch_warnings").unwrap();
+            catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("ignore",)).unwrap();
 
             let entry = parse_course_dict(dict).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
             assert_eq!(entry.code, "1000003-B");
             assert_eq!(entry.name, "Álgebra Lineal");
         });
@@ -1197,6 +1138,73 @@ mod tests {
             assert_eq!(model.course_list.len(), 1);
             assert_eq!(model.course_list[0].code, "1000001");
             assert_eq!(model.course_list[0].name, "Calculo");
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_legacy_course_single_key() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            dict.set_item("javax_faces_view_state", py.None()).unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+
+            let courses = PyList::empty(py);
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("1000001", "Calculo").unwrap();
+            courses.append(course_dict).unwrap();
+            dict.set_item("course_list", courses).unwrap();
+
+            let warnings = py.import("warnings").unwrap();
+            let catch_warnings = warnings.call_method0("catch_warnings").unwrap();
+            catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("ignore",)).unwrap();
+
+            let model = SessionStateModel::from_dict(dict).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
+            assert_eq!(model.course_list.len(), 1);
+            assert_eq!(model.course_list[0].code, "1000001");
+            assert_eq!(model.course_list[0].name, "Calculo");
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_missing_course_keys() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            dict.set_item("javax_faces_view_state", py.None()).unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+
+            let courses = PyList::empty(py);
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("invalid_key", "value1").unwrap();
+            course_dict.set_item("another_key", "value2").unwrap();
+            courses.append(course_dict).unwrap();
+            dict.set_item("course_list", courses).unwrap();
+
+            let result = SessionStateModel::from_dict(dict);
+            assert!(result.is_err());
         });
     }
 }
