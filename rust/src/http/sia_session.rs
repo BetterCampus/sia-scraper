@@ -622,7 +622,7 @@ impl SiaSession {
     /// `ScrapeResult` containing successes and failures
     ///
     /// # Errors
-    /// Returns `HttpError::AbortError` on first failure when mode is Abort.
+    /// Returns the original `HttpError` on first failure when mode is Abort.
     pub async fn scrape_courses_batch(
         &self,
         indices: Vec<i32>,
@@ -656,10 +656,8 @@ impl SiaSession {
                 }
                 Err(e) => match mode {
                     ErrorMode::Abort => {
-                        return Err(HttpError::SessionError(format!(
-                            "Aborted at course index {}: {}",
-                            index, e
-                        )));
+                        log::error!("Aborted at course index {}: {}", index, e);
+                        return Err(e);
                     }
                     ErrorMode::Skip => {
                         result.failures.push((index, e.to_string()));
