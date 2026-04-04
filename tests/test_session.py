@@ -270,3 +270,79 @@ class TestSessionStateSerialization:
         # Legacy keys should NOT be present
         assert "course_code" not in entry_dict
         assert "course_name" not in entry_dict
+
+    def test_course_entry_from_dict_current_format(self):
+        """CourseListEntryModel.from_dict() handles current format."""
+        entry = sia_scraper_rust.CourseListEntryModel.from_dict(
+            {"code": "1000001", "name": "Calculo"}
+        )
+        assert entry.code == "1000001"
+        assert entry.name == "Calculo"
+
+    def test_course_entry_from_dict_legacy_named_keys(self):
+        """CourseListEntryModel.from_dict() handles legacy course_code/course_name."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            entry = sia_scraper_rust.CourseListEntryModel.from_dict(
+                {"course_code": "2016489", "course_name": "Estructuras de Datos"}
+            )
+
+            assert entry.code == "2016489"
+            assert entry.name == "Estructuras de Datos"
+
+            # Verify deprecation warning was emitted
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "course_code/course_name" in str(w[0].message)
+            assert "4.0.0" in str(w[0].message)
+
+    def test_course_entry_from_dict_legacy_single_key(self):
+        """CourseListEntryModel.from_dict() handles legacy single-key dict."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            entry = sia_scraper_rust.CourseListEntryModel.from_dict({"1000003-B": "Álgebra Lineal"})
+
+            assert entry.code == "1000003-B"
+            assert entry.name == "Álgebra Lineal"
+
+            # Verify deprecation warning was emitted
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "single-key dict" in str(w[0].message)
+            assert "4.0.0" in str(w[0].message)
+
+    def test_course_entry_from_dict_invalid_format(self):
+        """CourseListEntryModel.from_dict() raises on invalid format."""
+        with pytest.raises(KeyError) as exc_info:
+            sia_scraper_rust.CourseListEntryModel.from_dict({"invalid": "dict", "with": "two keys"})
+
+        error_msg = str(exc_info.value)
+        assert "'code'/'name'" in error_msg
+        assert "'course_code'/'course_name'" in error_msg
+        assert "single-entry dict" in error_msg
+
+    def test_session_state_pickle_legacy_course_list_single_key(self):
+        """CourseListEntryModel.from_dict() handles legacy format in session context."""
+        import warnings
+
+        # Verify that from_dict works correctly for legacy single-key format
+        # This is the format that would be in a pickled SessionStateModel from before Issue #54
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            # Simulate legacy course_list items that would be in a pickle
+            course1 = sia_scraper_rust.CourseListEntryModel.from_dict({"1000001": "Calculo"})
+            course2 = sia_scraper_rust.CourseListEntryModel.from_dict({"2016489": "Estructuras"})
+
+            assert course1.code == "1000001"
+            assert course1.name == "Calculo"
+            assert course2.code == "2016489"
+            assert course2.name == "Estructuras"
+
+            # Verify deprecation warnings were emitted
+            assert len(w) == 2
+            assert all(issubclass(warning.category, DeprecationWarning) for warning in w)
