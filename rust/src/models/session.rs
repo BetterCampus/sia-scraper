@@ -69,13 +69,13 @@ impl CourseListEntryModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        if let Ok(code) = required_item(dict, "code")?.extract::<String>() {
-            self.code = code;
+        if let Some(item) = dict.get_item("code")? {
+            self.code = item.extract()?;
         } else if let Some(legacy) = dict.get_item("course_code")? {
             self.code = legacy.extract()?;
         }
-        if let Ok(name) = required_item(dict, "name")?.extract::<String>() {
-            self.name = name;
+        if let Some(item) = dict.get_item("name")? {
+            self.name = item.extract()?;
         } else if let Some(legacy) = dict.get_item("course_name")? {
             self.name = legacy.extract()?;
         }
@@ -355,18 +355,14 @@ impl SessionStateModel {
         let mut course_list = Vec::with_capacity(list.len());
         for item in list.iter() {
             let course_dict = item.downcast::<PyDict>()?;
-            let code: String =
-                if let Ok(c) = required_item(course_dict, "code")?.extract::<String>() {
-                    c
-                } else {
-                    required_item(course_dict, "course_code")?.extract()?
-                };
-            let name: String =
-                if let Ok(n) = required_item(course_dict, "name")?.extract::<String>() {
-                    n
-                } else {
-                    required_item(course_dict, "course_name")?.extract()?
-                };
+            let code: String = match required_item(course_dict, "code") {
+                Ok(val) => val.extract()?,
+                Err(_) => required_item(course_dict, "course_code")?.extract()?,
+            };
+            let name: String = match required_item(course_dict, "name") {
+                Ok(val) => val.extract()?,
+                Err(_) => required_item(course_dict, "course_name")?.extract()?,
+            };
             course_list.push(CourseListEntryModel { code, name });
         }
 
