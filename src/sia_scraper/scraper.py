@@ -190,6 +190,13 @@ class SiaScraper:
 
         Raises:
             ValueError: If both provided but lengths differ.
+
+        Example:
+            >>> paired, indices = self._prepare_scrape_indices([0, 2], ["CODE1", "CODE2"])
+            >>> paired
+            [(0, 'CODE1'), (2, 'CODE2')]
+            >>> indices
+            [0, 2]
         """
         courses_indices = courses_indices or []
         courses_codes = courses_codes or []
@@ -225,6 +232,23 @@ class SiaScraper:
             paired: Sorted list of (index, code) tuples.
             indices: Sorted list of course indices.
             failed_indices: Set of failed indices (for skip/retry mode).
+
+        Returns:
+            None. The function mutates the CourseInfoModel objects in-place.
+
+        Raises:
+            No exceptions are raised by this method.
+
+        Example:
+            >>> # Abort mode - use indices order
+            >>> self._apply_course_codes(successes, paired, indices)
+            >>> successes[0].code
+            'CODE1'
+
+            >>> # Skip/retry mode - filter by failed_indices
+            >>> self._apply_course_codes(successes, paired, indices, failed_indices={1})
+            >>> successes[0].code  # index 0 succeeded
+            'CODE1'
         """
         code_map = {idx: code for idx, code in paired if code}
         if code_map:
@@ -364,6 +388,25 @@ class SiaScraper:
         Raises:
             ValueError: If both courses_indices and courses_codes are provided
                 but their lengths differ.
+
+        Example:
+            >>> # Abort mode - returns list of CourseInfoModel
+            >>> courses = await scraper.scrape_courses_parallel(
+            ...     courses_indices=[0, 1, 2],
+            ...     max_concurrent=5,
+            ...     error_mode="abort"
+            ... )
+            >>> len(courses)
+            3
+
+            >>> # Skip mode - returns ScrapeResult
+            >>> result = await scraper.scrape_courses_parallel(
+            ...     courses_indices=[0, 1, 2],
+            ...     max_concurrent=5,
+            ...     error_mode="skip"
+            ... )
+            >>> result.success_rate()
+            1.0
         """
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
         mode = error_mode.lower()

@@ -48,22 +48,19 @@ impl SiaSession {
         Self::with_retry_config(timeout_secs, base_url, RetryConfig::sia_optimized())
     }
 
-    /// Create a new SiaSession from saved SessionState.
+    /// Create a new SiaSession with an owned (cloned) SessionState.
     ///
-    /// This constructor is used to restore a session from previously
-    /// persisted state (e.g., after pickle/unpickle or loading from file).
-    ///
-    /// The session will use the provided state directly without re-fetching
-    /// the initial page. The HTTP client is initialized fresh to allow
-    /// cookie restoration.
+    /// This method creates a new SiaSession instance that owns its own
+    /// SessionState copy, preventing concurrent access issues when multiple
+    /// workers need isolated state.
     ///
     /// # Arguments
     /// * `timeout_secs` - Request timeout in seconds
     /// * `base_url` - Base URL for SIA
-    /// * `state` - Previously saved SessionState to restore
+    /// * `state` - SessionState to clone into the new instance
     ///
     /// # Returns
-    /// New SiaSession instance with restored state
+    /// New SiaSession instance with owned state
     pub fn from_state(
         timeout_secs: u64,
         base_url: String,
@@ -78,6 +75,24 @@ impl SiaSession {
             base_url,
             retry_config: RetryConfig::sia_optimized(),
         })
+    }
+
+    /// Create a clone with an owned copy of the current SessionState.
+    ///
+    /// This is useful for concurrent operations where each worker needs
+    /// isolated state to prevent interleaving mutations. The HTTP client
+    /// is shared (it's Clone + refcounted internally).
+    ///
+    /// # Returns
+    /// New SiaSession with cloned state
+    pub async fn clone_with_owned_state(&self) -> Self {
+        let state_clone = self.get_state().await;
+        Self {
+            client: self.client.clone(),
+            state: Arc::new(RwLock::new(state_clone)),
+            base_url: self.base_url.clone(),
+            retry_config: self.retry_config.clone(),
+        }
     }
 
     pub fn with_retry_config(
@@ -739,6 +754,12 @@ impl SiaSession {
         max_retries: u32,
         retry_delay_ms: u64,
     ) -> Result<ScrapeResult, HttpError> {
+        if max_concurrent == 0 {
+            return Err(HttpError::InvalidInput(
+                "max_concurrent must be greater than 0".to_string(),
+            ));
+        }
+
         use futures::stream::{self, StreamExt};
 
         let effective_retries = if mode == ErrorMode::Retry {
@@ -749,23 +770,35 @@ impl SiaSession {
 
         let abort_flag = Arc::new(AtomicBool::new(false));
 
-        let results: Vec<Result<CourseInfoModel, (i32, HttpError)>> = stream::iter(indices)
-            .map(|index| {
-                let session = self.clone();
+        let owned_state = self.get_state().await;
+        let base_client = self.client.clone();
+        let base_url = self.base_url.clone();
+        let base_retry_config = self.retry_config.clone();
+
+        let results: Vec<Result<(usize, i32, CourseInfoModel), (usize, i32, HttpError)>> = stream::iter(indices.into_iter().enumerate())
+            .map(|(pos, index)| {
+                let session = SiaSession {
+                    client: base_client.clone(),
+                    state: Arc::new(RwLock::new(owned_state.clone())),
+                    base_url: base_url.clone(),
+                    retry_config: base_retry_config.clone(),
+                };
                 let abort = Arc::clone(&abort_flag);
                 async move {
                     for attempt in 0..=effective_retries {
                         if abort.load(Ordering::SeqCst) {
                             return Err((
+                                pos,
                                 index,
                                 HttpError::InvalidInput("Aborted by concurrent error".to_string()),
                             ));
                         }
                         match session.scrape_course_info(index).await {
-                            Ok(info) => return Ok(info),
+                            Ok(info) => return Ok((pos, index, info)),
                             Err(e) => {
                                 if abort.load(Ordering::SeqCst) {
                                     return Err((
+                                        pos,
                                         index,
                                         HttpError::InvalidInput("Aborted by concurrent error".to_string()),
                                     ));
@@ -776,7 +809,7 @@ impl SiaSession {
                                     if mode == ErrorMode::Abort {
                                         abort.store(true, Ordering::SeqCst);
                                     }
-                                    return Err((index, e));
+                                    return Err((pos, index, e));
                                 }
                                 let base = retry_delay_ms.max(1);
                                 let shift = attempt.min(31);
@@ -795,12 +828,15 @@ impl SiaSession {
 
         let mut result = ScrapeResult::new();
 
-        for res in results {
+        let mut ordered_results: Vec<_> = results.into_iter().collect();
+        ordered_results.sort_by_key(|r| match r { Ok((pos, _, _)) => *pos, Err((pos, _, _)) => *pos });
+
+        for res in ordered_results {
             match res {
-                Ok(info) => {
+                Ok((_, _index, info)) => {
                     result.successes.push(info);
                 }
-                Err((index, e)) => match mode {
+                Err((_, index, e)) => match mode {
                     ErrorMode::Abort => {
                         log::error!("Aborted at course index {}: {}", index, e);
                         return Err(e);
