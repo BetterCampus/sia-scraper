@@ -623,6 +623,22 @@ impl SiaSession {
     ///
     /// # Errors
     /// Returns the original `HttpError` on first failure when mode is Abort.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    /// use sia_scraper::models::scrape_result::ErrorMode;
+    ///
+    /// let session = SiaSession::new(30, "https://sia.unal.edu.co".to_string())?;
+    /// let result = session
+    ///     .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Skip, 0, 100)
+    ///     .await?;
+    /// println!("Successes: {}", result.successes.len());
+    /// println!("Failures: {}", result.failures.len());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn scrape_courses_batch(
         &self,
         indices: Vec<i32>,
