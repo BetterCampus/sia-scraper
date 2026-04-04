@@ -633,6 +633,7 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<models::prerequisite::PrerequisiteModel>()?;
     m.add_class::<models::prerequisite::PrereqConditionModel>()?;
     m.add_class::<models::prerequisite::CoursePrereqsModel>()?;
+    m.add_class::<models::scrape_result::ScrapeResult>()?;
     
     // Register PySiaSession stateful wrapper
     m.add_class::<http::PySiaSession>()?;

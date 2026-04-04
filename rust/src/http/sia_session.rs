@@ -1,6 +1,7 @@
 //! Async SIA Session manager with retry logic.
 
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
@@ -15,6 +16,7 @@ use crate::http::session::SessionState;
 use crate::http::types::HttpResponse;
 use crate::models::course::CourseInfoModel;
 use crate::models::prerequisite::CoursePrereqsModel;
+use crate::models::scrape_result::{ErrorMode, ScrapeResult};
 use crate::parsers::adf_request::OracleAdfRequestBuilderState;
 use crate::parsers::course_parser::{parse_course_model, parse_prereqs_model};
 use crate::parsers::table_parser::get_course_list;
@@ -31,6 +33,7 @@ macro_rules! define_regex {
 
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
+#[derive(Clone)]
 pub struct SiaSession {
     client: AsyncHttpClient,
     state: Arc<RwLock<SessionState>>,
@@ -598,6 +601,125 @@ impl SiaSession {
     pub fn retry_config(&self) -> &RetryConfig {
         &self.retry_config
     }
+
+    /// Scrape multiple courses sequentially with configurable error handling.
+    ///
+    /// Iterates over the provided course indices and attempts to scrape each one.
+    /// Errors are handled according to the specified `ErrorMode`:
+    ///
+    /// - `Abort`: Returns immediately on the first error.
+    /// - `Skip`: Records the failure and continues to the next course.
+    /// - `Retry`: Retries up to `max_retries` times with exponential backoff
+    ///   before recording as a failure.
+    ///
+    /// # Arguments
+    /// * `indices` - Course indices to scrape
+    /// * `mode` - Error handling strategy
+    /// * `max_retries` - Maximum retry attempts per course (used only in Retry mode)
+    /// * `retry_delay_ms` - Base delay between retries in milliseconds
+    ///
+    /// # Returns
+    /// `ScrapeResult` containing successes and failures
+    ///
+    /// # Errors
+    /// Returns the original `HttpError` on first failure when mode is Abort.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    /// use sia_scraper::models::scrape_result::ErrorMode;
+    ///
+    /// let session = SiaSession::new(30, "https://sia.unal.edu.co".to_string())?;
+    /// let result = session
+    ///     .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Skip, 0, 100)
+    ///     .await?;
+    /// println!("Successes: {}", result.successes.len());
+    /// println!("Failures: {}", result.failures.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn scrape_courses_batch(
+        &self,
+        indices: Vec<i32>,
+        mode: ErrorMode,
+        max_retries: u32,
+        retry_delay_ms: u64,
+    ) -> Result<ScrapeResult, HttpError> {
+        let mut result = ScrapeResult::new();
+        let total = indices.len();
+
+        for (position, &index) in indices.iter().enumerate() {
+            log::info!(
+                "Scraping course {}/{} (index {})",
+                position + 1,
+                total,
+                index
+            );
+
+            let effective_retries = if mode == ErrorMode::Retry {
+                max_retries
+            } else {
+                0
+            };
+            let course = self
+                .scrape_course_with_retry(index, effective_retries, retry_delay_ms)
+                .await;
+
+            match course {
+                Ok(info) => {
+                    result.successes.push(info);
+                }
+                Err(e) => match mode {
+                    ErrorMode::Abort => {
+                        log::error!("Aborted at course index {}: {}", index, e);
+                        return Err(e);
+                    }
+                    ErrorMode::Skip => {
+                        result.failures.push((index, e.to_string()));
+                    }
+                    ErrorMode::Retry => {
+                        result.failures.push((index, e.to_string()));
+                    }
+                },
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Attempt to scrape a single course with retry logic.
+    ///
+    /// # Arguments
+    /// * `index` - Course index to scrape
+    /// * `max_retries` - Maximum number of retry attempts
+    /// * `retry_delay_ms` - Base delay between retries in milliseconds
+    ///
+    /// # Returns
+    /// `CourseInfoModel` on success, or the last `HttpError` on failure.
+    async fn scrape_course_with_retry(
+        &self,
+        index: i32,
+        max_retries: u32,
+        retry_delay_ms: u64,
+    ) -> Result<CourseInfoModel, HttpError> {
+        for attempt in 0..=max_retries {
+            match self.scrape_course_info(index).await {
+                Ok(info) => return Ok(info),
+                Err(e) => {
+                    if !should_retry(&e, &self.retry_config) || attempt == max_retries {
+                        return Err(e);
+                    }
+                    let base = retry_delay_ms.max(1);
+                    let shift = attempt.min(31);
+                    let backoff = base.saturating_mul(1u64 << shift);
+                    let capped = backoff.min(self.retry_config.max_delay_ms);
+                    sleep(Duration::from_millis(capped)).await;
+                }
+            }
+        }
+        unreachable!("retry loop must return before this point");
+    }
 }
 
 #[cfg(test)]
@@ -885,5 +1007,95 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("course list is empty"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_mode_empty_indices() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![], ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.total(), 0);
+        assert_eq!(result.success_rate(), 1.0);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_skip_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1], ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1], ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_retry_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1], ErrorMode::Retry, 1, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_skip_mode_processes_all_indices() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let indices = vec![0, 1, 2, 3, 4];
+        let result = session
+            .scrape_courses_batch(indices.clone(), ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        // All indices should be recorded as failures (no valid session)
+        assert_eq!(result.total(), indices.len());
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), indices.len());
+        // Verify all indices are recorded
+        let failure_indices: Vec<i32> = result.failures.iter().map(|(idx, _)| *idx).collect();
+        for idx in &indices {
+            assert!(failure_indices.contains(idx));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_stops_on_first_failure() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_empty_indices_all_modes() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        for mode in [ErrorMode::Abort, ErrorMode::Skip, ErrorMode::Retry] {
+            let result = session
+                .scrape_courses_batch(vec![], mode, 0, 100)
+                .await;
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.total(), 0);
+            assert_eq!(result.success_rate(), 1.0);
+            assert!(result.successes.is_empty());
+            assert!(result.failures.is_empty());
+        }
     }
 }

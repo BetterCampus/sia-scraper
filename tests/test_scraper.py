@@ -199,18 +199,37 @@ class TestSiaScraperBatchScraping:
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
 
-        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
-            return sia_scraper_rust.CourseInfoModel(
-                course_name=f"Course {index}",
-                credits=3,
-                typology="DISCIPLINAR",
-                available_spots=20,
-                scrape_timestamp="2024-01-01 12:00",
-                groups=[],
-                code=None,
-            )
+        course1 = sia_scraper_rust.CourseInfoModel(
+            course_name="Course 1",
+            credits=3,
+            typology="DISCIPLINAR",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
+        course2 = sia_scraper_rust.CourseInfoModel(
+            course_name="Course 2",
+            credits=3,
+            typology="DISCIPLINAR",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
+        course3 = sia_scraper_rust.CourseInfoModel(
+            course_name="Course 3",
+            credits=3,
+            typology="DISCIPLINAR",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
 
-        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
+        mock_result = MagicMock()
+        mock_result.successes = [course1, course2, course3]
+        mock_session.scrape_courses = AsyncMock(return_value=mock_result)
 
         out = await scraper.scrape_courses(
             courses_indices=[3, 1, 2],
@@ -220,29 +239,31 @@ class TestSiaScraperBatchScraping:
 
         assert isinstance(out, list)
         assert len(out) == 3
-        assert out[0].code == "ALGEBRA"
-        assert out[1].code == "FISICA"
-        assert out[2].code == "QUIMICA"
+        mock_session.scrape_courses.assert_awaited_once()
+        call_args = mock_session.scrape_courses.call_args
+        assert call_args is not None
+        assert call_args[0][0] == [1, 2, 3]  # Sorted indices
 
     @pytest.mark.asyncio
     async def test_scrape_courses_skip_mode_returns_result(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
 
-        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
-            if index == 0:
-                return sia_scraper_rust.CourseInfoModel(
-                    course_name="Course A",
-                    credits=3,
-                    typology="DISCIPLINAR",
-                    available_spots=20,
-                    scrape_timestamp="2024-01-01 12:00",
-                    groups=[],
-                    code=None,
-                )
-            raise RuntimeError("boom")
+        course = sia_scraper_rust.CourseInfoModel(
+            course_name="Course A",
+            credits=3,
+            typology="DISCIPLINAR",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
 
-        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
+        mock_result = MagicMock()
+        mock_result.successes = [course]
+        mock_result.failures = [(1, "boom")]
+        mock_result.total.return_value = 2
+        mock_session.scrape_courses = AsyncMock(return_value=mock_result)
 
         out = await scraper.scrape_courses(
             courses_indices=[0, 1],
@@ -360,18 +381,30 @@ class TestSiaScraperScrapeCoursesEdgeCases:
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
 
-        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
-            return sia_scraper_rust.CourseInfoModel(
-                course_name=f"Course {index}",
-                credits=3,
-                typology="DISCIPLINAR",
-                available_spots=20,
-                scrape_timestamp="2024-01-01 12:00",
-                groups=[],
-                code=None,
-            )
+        course1 = sia_scraper_rust.CourseInfoModel(
+            course_name="Course 0",
+            credits=3,
+            typology="DISCIPLINAR",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
+        course2 = sia_scraper_rust.CourseInfoModel(
+            course_name="Course 1",
+            credits=3,
+            typology="DISCIPLINAR",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
 
-        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
+        mock_result = MagicMock()
+        mock_result.successes = [course1, course2]
+        mock_result.failures = []
+        mock_result.total.return_value = 2
+        mock_session.scrape_courses = AsyncMock(return_value=mock_result)
 
         progress_calls = []
 
@@ -385,9 +418,8 @@ class TestSiaScraperScrapeCoursesEdgeCases:
             progress_callback=progress_callback,
         )
 
-        assert len(progress_calls) == 2
-        assert progress_calls[0] == (1, 2, 1, 0)
-        assert progress_calls[1] == (2, 2, 2, 0)
+        assert len(progress_calls) == 1
+        assert progress_calls[0] == (2, 2, 2, 0)
 
     @pytest.mark.asyncio
     async def test_scrape_courses_with_codes_only(self, mock_async_session_class):
@@ -396,18 +428,19 @@ class TestSiaScraperScrapeCoursesEdgeCases:
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
         mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
 
-        async def mock_scrape(index: int) -> sia_scraper_rust.CourseInfoModel:
-            return sia_scraper_rust.CourseInfoModel(
-                course_name=f"Course {index}",
-                credits=3,
-                typology="DISCIPLINAR OBLIGATORIA",
-                available_spots=20,
-                scrape_timestamp="2024-01-01 12:00",
-                groups=[],
-                code=None,
-            )
+        course = sia_scraper_rust.CourseInfoModel(
+            course_name="Course 0",
+            credits=3,
+            typology="DISCIPLINAR OBLIGATORIA",
+            available_spots=20,
+            scrape_timestamp="2024-01-01 12:00",
+            groups=[],
+            code=None,
+        )
 
-        mock_session.scrape_course_info = AsyncMock(side_effect=mock_scrape)
+        mock_result = MagicMock()
+        mock_result.successes = [course]
+        mock_session.scrape_courses = AsyncMock(return_value=mock_result)
 
         out = await scraper.scrape_courses(
             courses_codes=["1000001"],

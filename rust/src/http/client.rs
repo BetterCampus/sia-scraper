@@ -5,6 +5,11 @@ use std::time::Duration;
 use crate::constants::{headers, SIA_BASE_URL, SIA_ORIGIN};
 use crate::http::{config::HttpClientConfig, errors::HttpError, types::HttpResponse};
 
+/// Async HTTP client wrapper with connection pooling.
+///
+/// Implements `Clone` to allow sharing the underlying `reqwest::Client`
+/// (which is internally reference-counted) across multiple sessions.
+#[derive(Clone)]
 pub struct AsyncHttpClient {
     client: reqwest::Client,
     #[cfg(test)]

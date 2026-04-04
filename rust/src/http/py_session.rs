@@ -5,6 +5,7 @@
 
 #![allow(non_local_definitions)]
 
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -16,6 +17,7 @@ use pyo3_asyncio::tokio::future_into_py;
 use crate::constants::SIA_BASE_URL;
 use crate::error::SessionError;
 use crate::http::sia_session::SiaSession;
+use crate::models::scrape_result::ErrorMode;
 use crate::models::session::SessionStateModel;
 
 type SiaSessionInner = Option<SiaSession>;
@@ -252,6 +254,70 @@ impl PySiaSession {
 
             session
                 .scrape_course_prereqs(course_index)
+                .await
+                .map_err(pyo3::PyErr::from)
+        })
+    }
+
+    /// Scrape multiple courses sequentially with configurable error handling.
+    ///
+    /// Iterates over the provided course indices and attempts to scrape each one.
+    /// Errors are handled according to the specified `mode`:
+    ///
+    /// - `"abort"`: Stop immediately on the first error.
+    /// - `"skip"`: Record the failure and continue to the next course.
+    /// - `"retry"`: Retry failed courses up to `retries` times with
+    ///   exponential backoff before recording as a failure.
+    ///
+    /// # Arguments
+    /// * `indices` - List of course indices to scrape
+    /// * `mode` - Error handling mode: "abort", "skip", or "retry"
+    /// * `retries` - Maximum retry attempts per course (default: 3, used only in retry mode)
+    /// * `delay` - Base delay between retries in milliseconds (default: 800)
+    ///
+    /// # Returns
+    /// `ScrapeResult` with successes and failures lists
+    ///
+    /// # Raises
+    /// SessionError: If session not initialized or in Abort mode on first failure
+    /// NetworkError: If connection fails
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
+    /// ParseError: If response cannot be parsed
+    ///
+    /// # Example
+    /// ```python
+    /// result = await session.scrape_courses([0, 1, 2], mode="skip")
+    /// print(f"Success rate: {result.success_rate():.1%}")
+    /// for course in result.successes:
+    ///     print(course.course_name)
+    /// ```
+    fn scrape_courses<'py>(
+        &self,
+        py: Python<'py>,
+        indices: Vec<i32>,
+        mode: String,
+        retries: Option<u32>,
+        delay: Option<u64>,
+    ) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+        let error_mode = ErrorMode::from_str(&mode)?;
+        let max_retries = retries.unwrap_or(3);
+        let retry_delay_ms = delay.unwrap_or(800);
+
+        future_into_py(py, async move {
+            let session = {
+                let session_guard = inner.read().await;
+                session_guard
+                    .as_ref()
+                    .ok_or_else(|| SessionError::new_err(
+                        "Session not initialized. Call init_session() first."
+                    ))?
+                    .clone()
+            };
+
+            session
+                .scrape_courses_batch(indices, error_mode, max_retries, retry_delay_ms)
                 .await
                 .map_err(pyo3::PyErr::from)
         })
