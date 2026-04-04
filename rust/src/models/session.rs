@@ -565,7 +565,7 @@ fn denormalize_status(status: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{CourseListEntryModel, SessionStateModel};
+    use super::{parse_course_dict, CourseListEntryModel, SessionStateModel};
     use crate::http::session::SessionState;
     use pyo3::Python;
 
