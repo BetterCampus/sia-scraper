@@ -174,6 +174,94 @@ class SiaScraper:
         """Resolve index from explicit code when provided."""
         return self.get_course_index(course_code) if course_code else course_index
 
+    def _prepare_scrape_indices(
+        self,
+        courses_indices: list[int] | None,
+        courses_codes: list[str] | None,
+    ) -> tuple[list[tuple[int, str]], list[int]]:
+        """Prepare and validate scrape indices from indices and/or codes.
+
+        Args:
+            courses_indices: List of course indices to scrape.
+            courses_codes: List of course codes to scrape (resolved to indices).
+
+        Returns:
+            Tuple of (paired list, sorted indices list).
+
+        Raises:
+            ValueError: If both provided but lengths differ.
+
+        Example:
+            >>> paired, indices = self._prepare_scrape_indices([0, 2], ["CODE1", "CODE2"])
+            >>> paired
+            [(0, 'CODE1'), (2, 'CODE2')]
+            >>> indices
+            [0, 2]
+        """
+        courses_indices = courses_indices or []
+        courses_codes = courses_codes or []
+
+        if not courses_indices:
+            courses_indices = [self.get_course_index(code) for code in courses_codes]
+
+        if not courses_codes and courses_indices:
+            courses_codes = [""] * len(courses_indices)
+
+        if courses_indices and courses_codes and len(courses_indices) != len(courses_codes):
+            raise ValueError(
+                f"Length mismatch: courses_indices has {len(courses_indices)} items, "
+                f"but courses_codes has {len(courses_codes)} items"
+            )
+
+        paired = list(zip(courses_indices, courses_codes, strict=True))
+        paired.sort(key=lambda x: x[0])
+        indices = [idx for idx, _ in paired]
+        return paired, indices
+
+    def _apply_course_codes(
+        self,
+        successes: list[sia_scraper_rust.CourseInfoModel],
+        paired: list[tuple[int, str]],
+        indices: list[int],
+        failed_indices: set[int] | None = None,
+    ) -> None:
+        """Apply course codes to success models.
+
+        Args:
+            successes: List of scraped course models to update in-place.
+            paired: Sorted list of (index, code) tuples.
+            indices: Sorted list of course indices.
+            failed_indices: Set of failed indices (for skip/retry mode).
+
+        Returns:
+            None. The function mutates the CourseInfoModel objects in-place.
+
+        Raises:
+            No exceptions are raised by this method.
+
+        Example:
+            >>> # Abort mode - use indices order
+            >>> self._apply_course_codes(successes, paired, indices)
+            >>> successes[0].code
+            'CODE1'
+
+            >>> # Skip/retry mode - filter by failed_indices
+            >>> self._apply_course_codes(successes, paired, indices, failed_indices={1})
+            >>> successes[0].code  # index 0 succeeded
+            'CODE1'
+        """
+        code_map = {idx: code for idx, code in paired if code}
+        if code_map:
+            if failed_indices is None:
+                for idx, course in enumerate(successes):
+                    if idx < len(indices) and indices[idx] in code_map:
+                        course.code = code_map[indices[idx]]
+            else:
+                successful_indices = [idx for idx in indices if idx not in failed_indices]
+                for i, course in enumerate(successes):
+                    if i < len(successful_indices) and successful_indices[i] in code_map:
+                        course.code = code_map[successful_indices[i]]
+
     async def get_course_info(
         self, course_index: int = 0, course_code: str = ""
     ) -> sia_scraper_rust.CourseInfoModel:
@@ -235,25 +323,7 @@ class SiaScraper:
             ValueError: If both courses_indices and courses_codes are provided
                 but their lengths differ.
         """
-        courses_indices = courses_indices or []
-        courses_codes = courses_codes or []
-
-        if not courses_indices:
-            courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
-
-        if not courses_codes and courses_indices:
-            courses_codes = [""] * len(courses_indices)
-
-        if courses_indices and courses_codes and len(courses_indices) != len(courses_codes):
-            raise ValueError(
-                f"Length mismatch: courses_indices has {len(courses_indices)} items, "
-                f"but courses_codes has {len(courses_codes)} items"
-            )
-
-        paired = list(zip(courses_indices, courses_codes, strict=True))
-        paired.sort(key=lambda x: x[0])
-        indices = [idx for idx, _ in paired]
-
+        paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
         mode = error_mode.lower()
 
         if mode == "abort":
@@ -263,10 +333,7 @@ class SiaScraper:
                 retries=0,
                 delay=0,
             )
-            code_map = {idx: code for idx, code in paired if code}
-            for idx, course in enumerate(result.successes):
-                if idx < len(indices) and indices[idx] in code_map:
-                    course.code = code_map[indices[idx]]
+            self._apply_course_codes(result.successes, paired, indices)
             return result.successes
 
         delay_ms = int(retry_delay * 1000)
@@ -278,12 +345,7 @@ class SiaScraper:
         )
 
         failed_indices = {idx for idx, _ in rust_result.failures}
-        successful_indices = [idx for idx in indices if idx not in failed_indices]
-
-        code_map = {idx: code for idx, code in paired if code}
-        for i, course in enumerate(rust_result.successes):
-            if i < len(successful_indices) and successful_indices[i] in code_map:
-                course.code = code_map[successful_indices[i]]
+        self._apply_course_codes(rust_result.successes, paired, indices, failed_indices)
 
         if progress_callback:
             progress_callback(
@@ -292,6 +354,85 @@ class SiaScraper:
                 len(rust_result.successes),
                 len(rust_result.failures),
             )
+
+        return ScrapeResult.create(
+            successes=rust_result.successes,
+            failures=rust_result.failures,
+        )
+
+    async def scrape_courses_parallel(
+        self,
+        courses_indices: list[int] | None = None,
+        courses_codes: list[str] | None = None,
+        max_concurrent: int = 5,
+        error_mode: str = ErrorMode.ABORT,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+    ) -> ScrapeResult | list[sia_scraper_rust.CourseInfoModel]:
+        """Batch scrape multiple courses concurrently with configurable parallelism.
+
+        Delegates to Rust concurrent scraping for efficient parallel execution
+        with configurable error handling modes.
+
+        Args:
+            courses_indices: List of course indices to scrape.
+            courses_codes: List of course codes to scrape (resolved to indices).
+            max_concurrent: Maximum number of concurrent scraping operations.
+            error_mode: Error handling strategy - "abort", "skip", or "retry".
+            max_retries: Maximum retry attempts per course (retry mode only).
+            retry_delay: Base delay between retries in seconds (retry mode only).
+
+        Returns:
+            List of CourseInfoModel in abort mode, or ScrapeResult in skip/retry mode.
+
+        Raises:
+            ValueError: If both courses_indices and courses_codes are provided
+                but their lengths differ.
+
+        Example:
+            >>> # Abort mode - returns list of CourseInfoModel
+            >>> courses = await scraper.scrape_courses_parallel(
+            ...     courses_indices=[0, 1, 2],
+            ...     max_concurrent=5,
+            ...     error_mode="abort"
+            ... )
+            >>> len(courses)
+            3
+
+            >>> # Skip mode - returns ScrapeResult
+            >>> result = await scraper.scrape_courses_parallel(
+            ...     courses_indices=[0, 1, 2],
+            ...     max_concurrent=5,
+            ...     error_mode="skip"
+            ... )
+            >>> result.success_rate()
+            1.0
+        """
+        paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
+        mode = error_mode.lower()
+
+        if mode == "abort":
+            result = await self._sia_session.scrape_courses_parallel(
+                indices,
+                mode="abort",
+                max_concurrent=max_concurrent,
+                retries=0,
+                delay=0,
+            )
+            self._apply_course_codes(result.successes, paired, indices)
+            return result.successes
+
+        delay_ms = int(retry_delay * 1000)
+        rust_result = await self._sia_session.scrape_courses_parallel(
+            indices,
+            mode=mode,
+            max_concurrent=max_concurrent,
+            retries=max_retries if mode == "retry" else 0,
+            delay=delay_ms,
+        )
+
+        failed_indices = {idx for idx, _ in rust_result.failures}
+        self._apply_course_codes(rust_result.successes, paired, indices, failed_indices)
 
         return ScrapeResult.create(
             successes=rust_result.successes,

@@ -1,5 +1,6 @@
 //! Async SIA Session manager with retry logic.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -31,7 +32,25 @@ macro_rules! define_regex {
     };
 }
 
+/// Compute the exponential backoff delay in milliseconds.
+///
+/// Uses the formula: `max(1, retry_delay_ms) * 2^attempt`, capped at
+/// `max_delay_ms` from the retry configuration.
+fn compute_backoff_ms(retry_config: &RetryConfig, retry_delay_ms: u64, attempt: u32) -> u64 {
+    let base = retry_delay_ms.max(1);
+    let shift = attempt.min(31);
+    let backoff = base.saturating_mul(1u64 << shift);
+    backoff.min(retry_config.max_delay_ms)
+}
+
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
+
+/// Result type for concurrent course scraping: `(position, index, data)`.
+///
+/// The first element is the position in the original input batch,
+/// the second is the course index, and the third is either the
+/// parsed `CourseInfoModel` on success or an `HttpError` on failure.
+pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel), (usize, i32, HttpError)>;
 
 #[derive(Clone)]
 pub struct SiaSession {
@@ -51,18 +70,33 @@ impl SiaSession {
     ///
     /// This constructor is used to restore a session from previously
     /// persisted state (e.g., after pickle/unpickle or loading from file).
-    ///
-    /// The session will use the provided state directly without re-fetching
-    /// the initial page. The HTTP client is initialized fresh to allow
-    /// cookie restoration.
+    /// The session takes ownership of the provided SessionState (moves it
+    /// into an internal RwLock) without cloning.
     ///
     /// # Arguments
     /// * `timeout_secs` - Request timeout in seconds
     /// * `base_url` - Base URL for SIA
-    /// * `state` - Previously saved SessionState to restore
+    /// * `state` - SessionState to take ownership of
     ///
     /// # Returns
-    /// New SiaSession instance with restored state
+    /// New SiaSession instance with owned state
+    ///
+    /// # Errors
+    /// Returns `HttpError::InvalidInput` if the HTTP client configuration
+    /// fails validation.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    /// use sia_scraper::http::session::SessionState;
+    ///
+    /// let state = SessionState::default();
+    /// let session = SiaSession::from_state(30, "https://sia.unal.edu.co".to_string(), state)?;
+    /// assert_eq!(session.get_state().await.status, "CREATED");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_state(
         timeout_secs: u64,
         base_url: String,
@@ -77,6 +111,43 @@ impl SiaSession {
             base_url,
             retry_config: RetryConfig::sia_optimized(),
         })
+    }
+
+    /// Create a clone with an owned copy of the current SessionState.
+    ///
+    /// This is useful for concurrent operations where each worker needs
+    /// isolated state to prevent interleaving mutations. The HTTP client
+    /// is shared (it's Clone + refcounted internally).
+    ///
+    /// # Arguments
+    /// None.
+    ///
+    /// # Returns
+    /// New SiaSession with cloned state
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    ///
+    /// let session = SiaSession::new(30, "https://sia.unal.edu.co".to_string())?;
+    /// let cloned = session.clone_with_owned_state().await;
+    /// // Original and cloned now have independent state
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn clone_with_owned_state(&self) -> Self {
+        let state_clone = self.get_state().await;
+        Self::with_owned_state(self, state_clone)
+    }
+
+    fn with_owned_state(&self, state: SessionState) -> Self {
+        Self {
+            client: self.client.clone(),
+            state: Arc::new(RwLock::new(state)),
+            base_url: self.base_url.clone(),
+            retry_config: self.retry_config.clone(),
+        }
     }
 
     pub fn with_retry_config(
@@ -624,7 +695,7 @@ impl SiaSession {
     /// # Errors
     /// Returns the original `HttpError` on first failure when mode is Abort.
     ///
-    /// # Example
+    /// # Examples
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// use sia_scraper::http::sia_session::SiaSession;
@@ -688,6 +759,156 @@ impl SiaSession {
         Ok(result)
     }
 
+    /// Scrape multiple courses concurrently with configurable parallelism.
+    ///
+    /// Uses `futures::stream::buffer_unordered` to execute up to `max_concurrent`
+    /// scraping operations simultaneously. Each course is scraped independently,
+    /// with errors handled according to the specified `ErrorMode`.
+    ///
+    /// **State Isolation:** Each worker task receives an isolated `SessionState` copy
+    /// via `with_owned_state()`, which clones fields like ViewState, career info,
+    /// and course list. This prevents interleaving mutations to these fields across
+    /// concurrent requests.
+    ///
+    /// **Note on Shared Resources:** The HTTP client is cloned (internally refcounted),
+    /// meaning the underlying cookie jar remains shared across all worker tasks. Only
+    /// `SessionState` fields are truly isolated; cookies and connection pooling are
+    /// shared via the cloned `reqwest::Client`.
+    ///
+    /// # Arguments
+    /// * `indices` - Course indices to scrape
+    /// * `max_concurrent` - Maximum number of concurrent scraping operations
+    /// * `mode` - Error handling strategy
+    /// * `max_retries` - Maximum retry attempts per course (used only in Retry mode)
+    /// * `retry_delay_ms` - Base delay between retries in milliseconds
+    ///
+    /// # Returns
+    /// `ScrapeResult` containing successes and failures
+    ///
+    /// # Errors
+    /// Returns `HttpError::InvalidInput("max_concurrent must be greater than 0")`
+    /// when `max_concurrent` is zero.
+    ///
+    /// Returns the original `HttpError` on first failure when mode is Abort.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use sia_scraper::http::sia_session::SiaSession;
+    /// use sia_scraper::models::scrape_result::ErrorMode;
+    ///
+    /// let session = SiaSession::new(30, "https://sia.unal.edu.co".to_string())?;
+    /// let result = session
+    ///     .scrape_courses_concurrent(vec![0, 1, 2], 5, ErrorMode::Skip, 0, 100)
+    ///     .await?;
+    /// println!("Successes: {}", result.successes.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// **Note on Abort Mode Semantics:** Unlike `scrape_courses_batch` which returns
+    /// immediately on the first error, this concurrent implementation uses
+    /// `buffer_unordered` which runs tasks to completion. In abort mode, the first
+    /// failing task will signal other in-flight tasks to abort early, but they may
+    /// still complete their current retry attempt before stopping.
+    pub async fn scrape_courses_concurrent(
+        &self,
+        indices: Vec<i32>,
+        max_concurrent: usize,
+        mode: ErrorMode,
+        max_retries: u32,
+        retry_delay_ms: u64,
+    ) -> Result<ScrapeResult, HttpError> {
+        if max_concurrent == 0 {
+            return Err(HttpError::InvalidInput(
+                "max_concurrent must be greater than 0".to_string(),
+            ));
+        }
+
+        use futures::stream::{self, StreamExt};
+
+        let effective_retries = if mode == ErrorMode::Retry {
+            max_retries
+        } else {
+            0
+        };
+
+        let abort_flag = Arc::new(AtomicBool::new(false));
+
+        let owned_state = self.get_state().await;
+        let session_ref = self;
+
+        let results: Vec<ConcurrentScrapeOutcome> = stream::iter(indices.into_iter().enumerate())
+            .map(|(pos, index)| {
+                let session = SiaSession::with_owned_state(session_ref, owned_state.clone());
+                let abort = Arc::clone(&abort_flag);
+                async move {
+                    for attempt in 0..=effective_retries {
+                        if abort.load(Ordering::SeqCst) {
+                            return Err((
+                                pos,
+                                index,
+                                HttpError::Aborted("Cancelled due to concurrent error".to_string()),
+                            ));
+                        }
+                        match session.scrape_course_info(index).await {
+                            Ok(info) => return Ok((pos, index, info)),
+                            Err(e) => {
+                                if abort.load(Ordering::SeqCst) {
+                                    return Err((
+                                        pos,
+                                        index,
+                                        HttpError::Aborted("Cancelled due to concurrent error".to_string()),
+                                    ));
+                                }
+                                if !should_retry(&e, &session.retry_config)
+                                    || attempt == effective_retries
+                                {
+                                    if mode == ErrorMode::Abort {
+                                        abort.store(true, Ordering::SeqCst);
+                                    }
+                                    return Err((pos, index, e));
+                                }
+                                let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
+                                sleep(Duration::from_millis(delay)).await;
+                            }
+                        }
+                    }
+                    unreachable!("retry loop must return before this point")
+                }
+            })
+            .buffer_unordered(max_concurrent)
+            .collect()
+            .await;
+
+        let mut result = ScrapeResult::new();
+
+        let mut ordered_results = results;
+        ordered_results.sort_by_key(|r| match r { Ok((pos, _, _)) => *pos, Err((pos, _, _)) => *pos });
+
+        for res in ordered_results {
+            match res {
+                Ok((_, _index, info)) => {
+                    result.successes.push(info);
+                }
+                Err((_, index, e)) => match mode {
+                    ErrorMode::Abort => {
+                        if matches!(e, HttpError::Aborted(_)) {
+                            continue;
+                        }
+                        log::error!("Aborted at course index {}: {}", index, e);
+                        return Err(e);
+                    }
+                    ErrorMode::Skip | ErrorMode::Retry => {
+                        result.failures.push((index, e.to_string()));
+                    }
+                },
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Attempt to scrape a single course with retry logic.
     ///
     /// # Arguments
@@ -710,11 +931,8 @@ impl SiaSession {
                     if !should_retry(&e, &self.retry_config) || attempt == max_retries {
                         return Err(e);
                     }
-                    let base = retry_delay_ms.max(1);
-                    let shift = attempt.min(31);
-                    let backoff = base.saturating_mul(1u64 << shift);
-                    let capped = backoff.min(self.retry_config.max_delay_ms);
-                    sleep(Duration::from_millis(capped)).await;
+                    let delay = compute_backoff_ms(&self.retry_config, retry_delay_ms, attempt);
+                    sleep(Duration::from_millis(delay)).await;
                 }
             }
         }
@@ -746,6 +964,53 @@ mod tests {
         let session = SiaSession::with_retry_config(15, "https://httpbin.org".to_string(), config);
         assert!(session.is_ok());
         assert_eq!(session.unwrap().retry_config().max_attempts, 5);
+    }
+
+    #[tokio::test]
+    async fn test_clone_with_owned_state_creates_independent_state() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).expect("session should create");
+
+        let original_state = session.get_state().await;
+        assert_eq!(original_state.status, "CREATED");
+
+        {
+            let mut state = session.state.write().await;
+            state.status = "MODIFIED".to_string();
+        }
+
+        let cloned = session.clone_with_owned_state().await;
+
+        let cloned_snapshot = cloned.get_state().await;
+        assert_eq!(
+            cloned_snapshot.status, "MODIFIED",
+            "Cloned state should capture the current session snapshot before mutation"
+        );
+
+        {
+            let mut cloned_state = cloned.state.write().await;
+            cloned_state.status = "CLONED_MODIFIED".to_string();
+            cloned_state.params.insert("extra".to_string(), "value".to_string());
+            let mut course = std::collections::HashMap::new();
+            course.insert("test".to_string(), "Test Course".to_string());
+            cloned_state.course_list.push(course);
+        }
+
+        let original_after = session.get_state().await;
+        assert_eq!(original_after.status, "MODIFIED");
+        assert!(
+            !original_after.params.contains_key("extra"),
+            "Original state should not have 'extra' param added to clone"
+        );
+        assert_eq!(
+            original_after.course_list.len(),
+            0,
+            "Original state should not have course added to clone"
+        );
+
+        let cloned_final = cloned.get_state().await;
+        assert_eq!(cloned_final.status, "CLONED_MODIFIED");
+        assert_eq!(cloned_final.params.get("extra"), Some(&"value".to_string()));
+        assert_eq!(cloned_final.course_list.len(), 1);
     }
 
     #[test]
@@ -1097,5 +1362,365 @@ mod tests {
             assert!(result.successes.is_empty());
             assert!(result.failures.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_empty_indices() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        for mode in [ErrorMode::Abort, ErrorMode::Skip, ErrorMode::Retry] {
+            let result = session
+                .scrape_courses_concurrent(vec![], 5, mode, 0, 100)
+                .await;
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.total(), 0);
+            assert_eq!(result.success_rate(), 1.0);
+            assert!(result.successes.is_empty());
+            assert!(result.failures.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_skip_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1, 2], 3, ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_abort_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1, 2], 3, ErrorMode::Abort, 0, 100)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_retry_mode_invalid_status() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1], 2, ErrorMode::Retry, 1, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_zero_concurrency() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1, 2], 0, ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, HttpError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_abort_stops_on_first_failure() {
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tokio::io::AsyncWriteExt;
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mock_url = format!("http://{}", listener.local_addr().unwrap());
+
+        let success_body = r#"<?xml version="1.0"?>
+<partial-response>
+    <changes>
+        <change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos">4</span>
+            </div>
+        ]]></change>
+    </changes>
+</partial-response>"#
+        .to_string();
+
+        let error_body = r#"<?xml version="1.0"?><partial-response><error/></partial-response>"#
+            .to_string();
+
+        tokio::spawn(async move {
+            loop {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let count = request_count.fetch_add(1, Ordering::SeqCst);
+                let body = if count.is_multiple_of(2) {
+                    success_body.clone()
+                } else {
+                    error_body.clone()
+                };
+
+                tokio::spawn(async move {
+                    let http_response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(http_response.as_bytes()).await;
+                });
+            }
+        });
+
+        let params = {
+            let mut m = HashMap::new();
+            m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+            m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+            m
+        };
+        let course_list = {
+            let mut v = Vec::new();
+            for i in 0..4 {
+                let mut course = HashMap::new();
+                course.insert(format!("code{i}"), format!("Course {i}"));
+                v.push(course);
+            }
+            v
+        };
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params,
+            course_list,
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let result = session
+            .scrape_courses_concurrent(vec![0, 1, 2, 3], 2, ErrorMode::Abort, 0, 100)
+            .await;
+
+        assert!(result.is_err(), "Abort mode should return Err on first failure");
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, HttpError::ParseError(_)),
+            "Expected ParseError from invalid XML, got {:?}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_multiple_indices_ordering() {
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let success_body = r#"<?xml version="1.0"?>
+<partial-response>
+    <changes>
+        <change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos">4</span>
+            </div>
+        ]]></change>
+    </changes>
+</partial-response>"#
+        .to_string();
+
+        let noop_body = r#"<?xml version="1.0"?><partial-response><noop/></partial-response>"#
+            .to_string();
+
+        let _mock = server
+            .mock("POST", mockito::Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                if count.is_multiple_of(3) {
+                    success_body.clone().into_bytes()
+                } else {
+                    noop_body.clone().into_bytes()
+                }
+            })
+            .create();
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: {
+                let mut v = Vec::new();
+                for i in 0..5 {
+                    let mut course = HashMap::new();
+                    course.insert(format!("code{i}"), format!("Course {i}"));
+                    v.push(course);
+                }
+                v
+            },
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let indices = vec![2, 0, 4, 1, 3];
+        let result = session
+            .scrape_courses_concurrent(indices.clone(), 3, ErrorMode::Skip, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.total(), indices.len());
+
+        let failure_count = result.failures.len();
+        let success_count = result.successes.len();
+        assert_eq!(
+            failure_count + success_count,
+            indices.len(),
+            "Sum of failures and successes should equal total indices"
+        );
+
+        let actual_failure_order: Vec<i32> =
+            result.failures.iter().map(|(idx, _)| *idx).collect();
+        let expected_failure_order: Vec<i32> = indices
+            .iter()
+            .filter(|idx| actual_failure_order.contains(idx))
+            .cloned()
+            .collect();
+        assert_eq!(
+            actual_failure_order, expected_failure_order,
+            "Failure indices should preserve input ordering"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_concurrent_handles_concurrent_execution() {
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tokio::io::AsyncWriteExt;
+        use tokio::time::sleep;
+
+        let active_requests = Arc::new(AtomicUsize::new(0));
+        let max_concurrent_seen = Arc::new(AtomicUsize::new(0));
+        let request_count = Arc::new(AtomicUsize::new(0));
+
+        let active_clone = active_requests.clone();
+        let max_clone = max_concurrent_seen.clone();
+        let count_clone = request_count.clone();
+
+        let response_body = r#"<?xml version="1.0"?>
+<partial-response>
+    <changes>
+        <change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Concurrent Test Course</h2>
+                <span class="detass-creditos">3</span>
+            </div>
+        ]]></change>
+    </changes>
+</partial-response>"#
+        .to_string();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mock_url = format!("http://{}", listener.local_addr().unwrap());
+
+        tokio::spawn(async move {
+            loop {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let active = active_clone.clone();
+                let max_seen = max_clone.clone();
+                let count = count_clone.clone();
+                let body = response_body.clone();
+
+                tokio::spawn(async move {
+                    let _prev = active.fetch_add(1, Ordering::SeqCst);
+                    let current = active.load(Ordering::SeqCst);
+                    let mut max_val = max_seen.load(Ordering::SeqCst);
+                    while current > max_val {
+                        if max_seen
+                            .compare_exchange_weak(max_val, current, Ordering::SeqCst, Ordering::SeqCst)
+                            .is_ok()
+                        {
+                            break;
+                        }
+                        max_val = max_seen.load(Ordering::SeqCst);
+                    }
+
+                    let _ = count.fetch_add(1, Ordering::SeqCst);
+
+                    sleep(Duration::from_millis(100)).await;
+
+                    active.fetch_sub(1, Ordering::SeqCst);
+
+                    let http_response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(http_response.as_bytes()).await;
+                });
+            }
+        });
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: {
+                let mut v = Vec::new();
+                for i in 0..10 {
+                    let mut course = HashMap::new();
+                    course.insert(format!("code{i}"), format!("Course {i}"));
+                    v.push(course);
+                }
+                v
+            },
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let indices: Vec<i32> = (0..10).collect();
+        let max_concurrent = 3;
+
+        let result = session
+            .scrape_courses_concurrent(indices, max_concurrent, ErrorMode::Skip, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.total(), 10);
+
+        let peak = max_concurrent_seen.load(Ordering::SeqCst);
+        assert!(
+            peak > 1,
+            "Expected overlap: peak concurrent requests > 1, got {peak}"
+        );
+        assert!(
+            peak <= max_concurrent,
+            "Peak concurrent requests ({peak}) exceeded max_concurrent ({max_concurrent})"
+        );
     }
 }

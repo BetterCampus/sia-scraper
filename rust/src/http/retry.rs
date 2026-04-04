@@ -89,6 +89,7 @@ pub fn should_retry(error: &crate::http::errors::HttpError, config: &RetryConfig
         crate::http::errors::HttpError::ParseError(_) => true,
         crate::http::errors::HttpError::InvalidInput(_) => false,
         crate::http::errors::HttpError::SessionError(_) => false,
+        crate::http::errors::HttpError::Aborted(_) => false,
     }
 }
 
@@ -136,6 +137,13 @@ mod tests {
             status: 400,
             message: "test".to_string(),
         };
+        assert!(!should_retry(&error, &config));
+    }
+
+    #[test]
+    fn test_should_retry_aborted_returns_false() {
+        let config = RetryConfig::default();
+        let error = crate::http::errors::HttpError::Aborted("cancelled".to_string());
         assert!(!should_retry(&error, &config));
     }
 
