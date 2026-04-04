@@ -73,11 +73,15 @@ impl CourseListEntryModel {
             self.code = item.extract()?;
         } else if let Some(legacy) = dict.get_item("course_code")? {
             self.code = legacy.extract()?;
+        } else {
+            return Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'"));
         }
         if let Some(item) = dict.get_item("name")? {
             self.name = item.extract()?;
         } else if let Some(legacy) = dict.get_item("course_name")? {
             self.name = legacy.extract()?;
+        } else {
+            return Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'"));
         }
         Ok(())
     }
