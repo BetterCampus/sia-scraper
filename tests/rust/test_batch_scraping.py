@@ -137,7 +137,9 @@ class TestBatchScrapingWithInvalidIndices:
         result = await session.scrape_courses([0, 999, 1], mode="skip")
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
         assert result.total() == 3
-        assert len(result.failures) > 0
+        # Index 999 is always out of range, so it should always be in failures
+        failure_indices = [idx for idx, _ in result.failures]
+        assert 999 in failure_indices
 
     @pytest.mark.asyncio
     @pytest.mark.network
