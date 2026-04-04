@@ -110,7 +110,9 @@ class SiaSession:
         self._career_name = state.career_name or DEFAULT_CAREER_NAME
         self._is_electives = state.is_electives
         self._career_indices = state.career_code.split("-") if state.career_code else []
-        self._course_list = [{entry.course_code: entry.course_name} for entry in state.course_list]
+        self._course_list = [
+            {"code": entry.code, "name": entry.name} for entry in state.course_list
+        ]
 
     async def init_session(self) -> None:
         """Initialize session by delegating to Rust PySiaSession.

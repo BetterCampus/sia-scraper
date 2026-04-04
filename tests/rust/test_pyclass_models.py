@@ -73,4 +73,4 @@ def test_session_models_roundtrip_pickle() -> None:
     assert restored.status == "ON_CAREER_PAGE"
     assert restored.javax_faces_view_state == "view-state-1"
     assert len(restored.course_list) == 1
-    assert restored.course_list[0].course_name == "Calculo"
+    assert restored.course_list[0].name == "Calculo"

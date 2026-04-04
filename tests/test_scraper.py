@@ -27,9 +27,7 @@ def _make_state_model(
 ) -> sia_scraper_rust.SessionStateModel:
     """Create a typed SessionStateModel for testing."""
     entries = [
-        sia_scraper_rust.CourseListEntryModel(
-            course_code=item["course_code"], course_name=item["course_name"]
-        )
+        sia_scraper_rust.CourseListEntryModel(code=item["course_code"], name=item["course_name"])
         for item in course_list
     ]
     return sia_scraper_rust.SessionStateModel(

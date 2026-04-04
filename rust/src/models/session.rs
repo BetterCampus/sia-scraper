@@ -33,30 +33,27 @@ type SessionStateModelPickleState = (
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CourseListEntryModel {
     #[pyo3(get)]
-    pub course_code: String,
+    pub code: String,
     #[pyo3(get)]
-    pub course_name: String,
+    pub name: String,
 }
 
 #[pymethods]
 impl CourseListEntryModel {
     #[new]
-    fn new(course_code: String, course_name: String) -> Self {
-        Self {
-            course_code,
-            course_name,
-        }
+    fn new(code: String, name: String) -> Self {
+        Self { code, name }
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "CourseListEntryModel(course_code='{}', course_name='{}')",
-            self.course_code, self.course_name
+            "CourseListEntryModel(code='{}', name='{}')",
+            self.code, self.name
         )
     }
 
     fn __str__(&self) -> String {
-        format!("{}: {}", self.course_code, self.course_name)
+        format!("{}: {}", self.code, self.name)
     }
 
     fn __getnewargs__(&self) -> (String, String) {
@@ -65,15 +62,15 @@ impl CourseListEntryModel {
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        dict.set_item("course_code", self.course_code.clone())?;
-        dict.set_item("course_name", self.course_name.clone())?;
+        dict.set_item("code", self.code.clone())?;
+        dict.set_item("name", self.name.clone())?;
         Ok(dict.into())
     }
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.course_code = required_item(dict, "course_code")?.extract()?;
-        self.course_name = required_item(dict, "course_name")?.extract()?;
+        self.code = required_item(dict, "code")?.extract()?;
+        self.name = required_item(dict, "name")?.extract()?;
         Ok(())
     }
 }
@@ -275,7 +272,7 @@ impl SessionStateModel {
             career_name: state.career_name.clone(),
             is_electives: state.is_electives,
             status: normalize_status(&state.status),
-            course_list: flatten_course_list(&state.course_list),
+            course_list: state.course_list.clone(),
         }
     }
 
@@ -313,8 +310,8 @@ impl SessionStateModel {
         let courses = PyList::empty(py);
         for course in &self.course_list {
             let course_dict = PyDict::new(py);
-            course_dict.set_item("course_code", &course.course_code)?;
-            course_dict.set_item("course_name", &course.course_name)?;
+            course_dict.set_item("code", &course.code)?;
+            course_dict.set_item("name", &course.name)?;
             courses.append(course_dict)?;
         }
         dict.set_item("course_list", courses)?;
@@ -350,12 +347,9 @@ impl SessionStateModel {
         let mut course_list = Vec::with_capacity(list.len());
         for item in list.iter() {
             let course_dict = item.downcast::<PyDict>()?;
-            let course_code: String = required_item(course_dict, "course_code")?.extract()?;
-            let course_name: String = required_item(course_dict, "course_name")?.extract()?;
-            course_list.push(CourseListEntryModel {
-                course_code,
-                course_name,
-            });
+            let code: String = required_item(course_dict, "code")?.extract()?;
+            let name: String = required_item(course_dict, "name")?.extract()?;
+            course_list.push(CourseListEntryModel { code, name });
         }
 
         Ok(Self {
@@ -374,16 +368,6 @@ impl SessionStateModel {
     /// Convert back to internal SessionState for Rust session restoration.
     #[must_use]
     pub fn into_session_state(self) -> SessionState {
-        let course_list: Vec<HashMap<String, String>> = self
-            .course_list
-            .into_iter()
-            .map(|entry| {
-                let mut map = HashMap::new();
-                map.insert(entry.course_code, entry.course_name);
-                map
-            })
-            .collect();
-
         SessionState {
             session_headers: self.session_headers,
             session_cookies: self.session_cookies,
@@ -393,7 +377,7 @@ impl SessionStateModel {
             career_name: self.career_name,
             is_electives: self.is_electives,
             status: denormalize_status(&self.status),
-            course_list,
+            course_list: self.course_list,
         }
     }
 }
@@ -416,27 +400,6 @@ fn denormalize_status(status: &str) -> String {
         "ON_COURSE_PAGE" => "ON_COURSE_PAGE".to_string(),
         other => other.to_string(),
     }
-}
-
-fn flatten_course_list(course_rows: &[HashMap<String, String>]) -> Vec<CourseListEntryModel> {
-    let mut entries = Vec::new();
-
-    for row in course_rows {
-        let mut row_entries: Vec<(&String, &String)> = row.iter().collect();
-        row_entries.sort_by(|a, b| a.0.cmp(b.0));
-
-        for (code, name) in row_entries {
-            if code.is_empty() {
-                continue;
-            }
-            entries.push(CourseListEntryModel {
-                course_code: code.clone(),
-                course_name: name.clone(),
-            });
-        }
-    }
-
-    entries
 }
 
 #[cfg(test)]
@@ -484,8 +447,14 @@ mod tests {
     fn test_from_session_state_flattens_course_maps_to_typed_entries() {
         let state = SessionState {
             course_list: vec![
-                HashMap::from([("1000001".to_string(), "Calculo".to_string())]),
-                HashMap::from([("2016489".to_string(), "Estructuras de Datos".to_string())]),
+                CourseListEntryModel {
+                    code: "1000001".to_string(),
+                    name: "Calculo".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "2016489".to_string(),
+                    name: "Estructuras de Datos".to_string(),
+                },
             ],
             ..Default::default()
         };
@@ -496,12 +465,12 @@ mod tests {
             model.course_list,
             vec![
                 CourseListEntryModel {
-                    course_code: "1000001".to_string(),
-                    course_name: "Calculo".to_string(),
+                    code: "1000001".to_string(),
+                    name: "Calculo".to_string(),
                 },
                 CourseListEntryModel {
-                    course_code: "2016489".to_string(),
-                    course_name: "Estructuras de Datos".to_string(),
+                    code: "2016489".to_string(),
+                    name: "Estructuras de Datos".to_string(),
                 }
             ]
         );

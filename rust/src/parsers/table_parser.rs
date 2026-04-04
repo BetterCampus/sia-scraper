@@ -3,11 +3,10 @@
 //! This module provides functions to extract course information from Oracle ADF
 //! table HTML, specifically parsing the course list displayed on career pages.
 
-use std::collections::HashMap;
-
 use scraper::{ElementRef, Html};
 
 use crate::error::SiaScraperError;
+use crate::models::session::CourseListEntryModel;
 use crate::parsers::utils::extract_text_from_elem;
 use crate::patterns::get_regex;
 use crate::patterns::get_selector;
@@ -58,7 +57,7 @@ fn strip_tags(content: &str) -> Result<String, SiaScraperError> {
 
 fn extract_course_list_from_raw_html(
     html_content: &str,
-) -> Result<Vec<HashMap<String, String>>, SiaScraperError> {
+) -> Result<Vec<CourseListEntryModel>, SiaScraperError> {
     let row_regex = get_regex(
         &ROW_REGEX,
         "table_parser::extract_course_list_from_raw_html",
@@ -87,9 +86,10 @@ fn extract_course_list_from_raw_html(
 
         if let (Some(course_code), Some(course_name)) = (first_span, second_span) {
             if !course_code.is_empty() {
-                let mut entry = HashMap::new();
-                entry.insert(course_code, course_name);
-                course_list.push(entry);
+                course_list.push(CourseListEntryModel {
+                    code: course_code,
+                    name: course_name,
+                });
             }
         }
     }
@@ -106,7 +106,7 @@ fn extract_course_list_from_raw_html(
 /// * `html_content` - Raw HTML string from SIA career page
 ///
 /// # Returns
-/// Vec of HashMap entries where key=course_code, value=course_name
+/// Vec of `CourseListEntryModel` with `code` and `name` fields
 ///
 /// # Errors
 /// Returns `SiaScraperError::MissingElement` if table structure invalid
@@ -121,11 +121,10 @@ fn extract_course_list_from_raw_html(
 /// "#;
 /// let result = get_course_list(html).unwrap();
 /// assert_eq!(result.len(), 1);
-/// assert_eq!(result[0].get("2015555"), Some(&"Algebra Lineal".to_string()));
+/// assert_eq!(result[0].code, "2015555");
+/// assert_eq!(result[0].name, "Algebra Lineal");
 /// ```
-pub fn get_course_list(
-    html_content: &str,
-) -> Result<Vec<HashMap<String, String>>, SiaScraperError> {
+pub fn get_course_list(html_content: &str) -> Result<Vec<CourseListEntryModel>, SiaScraperError> {
     let html = Html::parse_document(html_content);
 
     let row_selector = get_selector(&ROW_SELECTOR, "table_parser::get_course_list")?;
@@ -145,9 +144,10 @@ pub fn get_course_list(
                 continue;
             }
 
-            let mut entry = HashMap::new();
-            entry.insert(course_code, course_name);
-            course_list.push(entry);
+            course_list.push(CourseListEntryModel {
+                code: course_code,
+                name: course_name,
+            });
         }
     }
 
@@ -179,14 +179,10 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 2);
-        assert_eq!(
-            result[0].get("2015555"),
-            Some(&"Álgebra Lineal".to_string())
-        );
-        assert_eq!(
-            result[1].get("2027641"),
-            Some(&"Análisis de Datos".to_string())
-        );
+        assert_eq!(result[0].code, "2015555");
+        assert_eq!(result[0].name, "Álgebra Lineal");
+        assert_eq!(result[1].code, "2027641");
+        assert_eq!(result[1].name, "Análisis de Datos");
     }
 
     #[test]
@@ -212,10 +208,8 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0].get("1000001"),
-            Some(&"Cálculo Diferencial".to_string())
-        );
+        assert_eq!(result[0].code, "1000001");
+        assert_eq!(result[0].name, "Cálculo Diferencial");
     }
 
     #[test]
@@ -274,7 +268,8 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].get("1000002"), Some(&"Valid Course".to_string()));
+        assert_eq!(result[0].code, "1000002");
+        assert_eq!(result[0].name, "Valid Course");
     }
 
     #[test]
@@ -290,10 +285,8 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0].get("2015555"),
-            Some(&"Álgebra Lineal".to_string())
-        );
+        assert_eq!(result[0].code, "2015555");
+        assert_eq!(result[0].name, "Álgebra Lineal");
     }
 
     #[test]
@@ -328,10 +321,8 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0].get("2027309"),
-            Some(&"Análisis forense digital &amp; más".to_string())
-        );
+        assert_eq!(result[0].code, "2027309");
+        assert_eq!(result[0].name, "Análisis forense digital &amp; más");
     }
 
     #[test]
@@ -351,7 +342,8 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].get("2027641"), Some(&"Should Appear".to_string()));
+        assert_eq!(result[0].code, "2027641");
+        assert_eq!(result[0].name, "Should Appear");
     }
 
     #[test]
@@ -370,8 +362,10 @@ mod tests {
 
         let result = get_course_list(&html).unwrap();
         assert_eq!(result.len(), 100);
-        assert_eq!(result[0].get("2000000"), Some(&"Curso 0".to_string()));
-        assert_eq!(result[99].get("2000099"), Some(&"Curso 99".to_string()));
+        assert_eq!(result[0].code, "2000000");
+        assert_eq!(result[0].name, "Curso 0");
+        assert_eq!(result[99].code, "2000099");
+        assert_eq!(result[99].name, "Curso 99");
     }
 
     #[test]
@@ -387,6 +381,7 @@ mod tests {
 
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].get("1000001"), Some(&"CALCULO".to_string()));
+        assert_eq!(result[0].code, "1000001");
+        assert_eq!(result[0].name, "CALCULO");
     }
 }

@@ -68,7 +68,7 @@ class TestGetCourseList:
             </tr>
         </table>
         """
-        assert get_course_list(html) == [{"1000001": "CALCULO"}]
+        assert get_course_list(html) == [{"code": "1000001", "name": "CALCULO"}]
 
 
 @pytest.mark.unit

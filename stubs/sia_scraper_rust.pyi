@@ -360,24 +360,24 @@ class CourseListEntryModel:
     a career selection session.
 
     Attributes:
-        course_code: Course code identifier (e.g., "1000001").
-        course_name: Full course name (e.g., "Cálculo I").
+        code: Course code identifier (e.g., "1000001").
+        name: Full course name (e.g., "Cálculo I").
 
     Example:
         >>> entry = sia_scraper_rust.CourseListEntryModel("1000001", "Cálculo I")
-        >>> entry.course_code
+        >>> entry.code
         '1000001'
     """
 
-    course_code: str
-    course_name: str
+    code: str
+    name: str
 
-    def __init__(self, course_code: str, course_name: str) -> None:
+    def __init__(self, code: str, name: str) -> None:
         """Initialize a CourseListEntryModel instance.
 
         Args:
-            course_code: Course code identifier.
-            course_name: Full course name.
+            code: Course code identifier.
+            name: Full course name.
 
         Example:
             >>> entry = CourseListEntryModel("1000001", "Cálculo I")
@@ -712,19 +712,21 @@ def get_course_list(html: str | bytes) -> list[dict[str, str]]:
     """Extract course list from Oracle ADF table HTML.
 
     Parses the course selection table from a career page and returns
-    a list of single-key dictionaries mapping course code to course name.
+    a list of dictionaries with "code" and "name" keys.
 
     Args:
         html: Raw HTML string or bytes from SIA course list page.
 
     Returns:
-        List of single-key dictionaries mapping course code to course name,
-        e.g. [{'1000001': 'Cálculo I'}, {'1000002': 'Álgebra'}].
+        List of dictionaries with "code" and "name" keys,
+        e.g. [{"code": "1000001", "name": "Cálculo I"}].
 
     Example:
         >>> html = '<table><tr><td>1000001</td><td>Cálculo I</td></tr></table>'
         >>> courses = sia_scraper_rust.get_course_list(html)
-        >>> courses[0]['1000001']
+        >>> courses[0]["code"]
+        '1000001'
+        >>> courses[0]["name"]
         'Cálculo I'
     """
 

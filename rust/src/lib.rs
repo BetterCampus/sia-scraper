@@ -181,7 +181,7 @@ fn session_state_json(state: &http::session::SessionState) -> Result<String, err
 /// ```python
 /// import sia_scraper_rust
 /// result = sia_scraper_rust.get_course_list(html_string)
-/// print(len(result))  # Number of courses
+/// print(result)  # [{"code": "2015555", "name": "Algebra Lineal"}, ...]
 /// ```
 #[pyfunction]
 fn get_course_list(html: &PyAny) -> Result<Py<PyAny>, error::SiaScraperError> {
@@ -198,11 +198,10 @@ fn get_course_list(html: &PyAny) -> Result<Py<PyAny>, error::SiaScraperError> {
         let courses = parsers::table_parser::get_course_list(&html_str)?;
         let mut list: Vec<pyo3::PyObject> = Vec::with_capacity(courses.len());
 
-        for course_map in courses {
+        for course in courses {
             let dict = pyo3::types::PyDict::new(py);
-            for (k, v) in course_map {
-                dict.set_item(k, v)?;
-            }
+            dict.set_item("code", course.code)?;
+            dict.set_item("name", course.name)?;
             list.push(dict.into_py(py));
         }
 

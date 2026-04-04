@@ -944,6 +944,7 @@ impl SiaSession {
 mod tests {
     use super::*;
     use crate::constants::SIA_BASE_URL;
+    use crate::models::session::CourseListEntryModel;
 
     #[tokio::test]
     async fn test_session_creation() {
@@ -990,9 +991,10 @@ mod tests {
             let mut cloned_state = cloned.state.write().await;
             cloned_state.status = "CLONED_MODIFIED".to_string();
             cloned_state.params.insert("extra".to_string(), "value".to_string());
-            let mut course = std::collections::HashMap::new();
-            course.insert("test".to_string(), "Test Course".to_string());
-            cloned_state.course_list.push(course);
+            cloned_state.course_list.push(CourseListEntryModel {
+                code: "test".to_string(),
+                name: "Test Course".to_string(),
+            });
         }
 
         let original_after = session.get_state().await;
@@ -1173,9 +1175,18 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
-                std::collections::HashMap::from([("code".to_string(), "COUR-102".to_string())]),
-                std::collections::HashMap::from([("code".to_string(), "COUR-103".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
+                CourseListEntryModel {
+                    code: "COUR-102".to_string(),
+                    name: String::new(),
+                },
+                CourseListEntryModel {
+                    code: "COUR-103".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_info(10).await;
@@ -1201,7 +1212,10 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_prereqs(5).await;
@@ -1218,7 +1232,10 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_info(-1).await;
@@ -1250,7 +1267,10 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_prereqs(-1).await;
@@ -1482,9 +1502,10 @@ mod tests {
         let course_list = {
             let mut v = Vec::new();
             for i in 0..4 {
-                let mut course = HashMap::new();
-                course.insert(format!("code{i}"), format!("Course {i}"));
-                v.push(course);
+                v.push(CourseListEntryModel {
+                    code: format!("code{i}"),
+                    name: format!("Course {i}"),
+                });
             }
             v
         };
@@ -1567,9 +1588,10 @@ mod tests {
             course_list: {
                 let mut v = Vec::new();
                 for i in 0..5 {
-                    let mut course = HashMap::new();
-                    course.insert(format!("code{i}"), format!("Course {i}"));
-                    v.push(course);
+                    v.push(CourseListEntryModel {
+                        code: format!("code{i}"),
+                        name: format!("Course {i}"),
+                    });
                 }
                 v
             },
@@ -1691,9 +1713,10 @@ mod tests {
             course_list: {
                 let mut v = Vec::new();
                 for i in 0..10 {
-                    let mut course = HashMap::new();
-                    course.insert(format!("code{i}"), format!("Course {i}"));
-                    v.push(course);
+                    v.push(CourseListEntryModel {
+                        code: format!("code{i}"),
+                        name: format!("Course {i}"),
+                    });
                 }
                 v
             },

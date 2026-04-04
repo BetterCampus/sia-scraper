@@ -22,9 +22,7 @@ def mock_rust_session():
         view_state: str | None,
     ) -> sia_scraper_rust.SessionStateModel:
         entries = [
-            sia_scraper_rust.CourseListEntryModel(
-                course_code=item["course_code"], course_name=item["course_name"]
-            )
+            sia_scraper_rust.CourseListEntryModel(code=item["code"], name=item["name"])
             for item in course_list
         ]
         return sia_scraper_rust.SessionStateModel(
@@ -58,9 +56,9 @@ def mock_rust_session():
             is_electives=electives or False,
             status="ON_CAREER_PAGE",
             course_list=[
-                {"course_code": "1000001", "course_name": "Calculo"},
-                {"course_code": "2016489", "course_name": "Estructuras de Datos"},
-                {"course_code": "3000003", "course_name": "Fisica"},
+                {"code": "1000001", "name": "Calculo"},
+                {"code": "2016489", "name": "Estructuras de Datos"},
+                {"code": "3000003", "name": "Fisica"},
             ],
             view_state="vs-2",
         )
@@ -81,9 +79,9 @@ def mock_rust_session():
                 "is_electives": False,
                 "status": "ON_CAREER_PAGE",
                 "course_list": [
-                    {"course_code": "1000001", "course_name": "Calculo"},
-                    {"course_code": "2016489", "course_name": "Estructuras de Datos"},
-                    {"course_code": "3000003", "course_name": "Fisica"},
+                    {"code": "1000001", "name": "Calculo"},
+                    {"code": "2016489", "name": "Estructuras de Datos"},
+                    {"code": "3000003", "name": "Fisica"},
                 ],
             },
         }
@@ -155,9 +153,9 @@ class TestSiaSessionCareerFlow:
             assert session.is_electives is True
             assert session.career_name == "Ingenieria de Sistemas"
             assert session.course_list == [
-                {"1000001": "Calculo"},
-                {"2016489": "Estructuras de Datos"},
-                {"3000003": "Fisica"},
+                {"code": "1000001", "name": "Calculo"},
+                {"code": "2016489", "name": "Estructuras de Datos"},
+                {"code": "3000003", "name": "Fisica"},
             ]
             mock_rust_session.set_career.assert_awaited_once_with("0-2-8-3", True)
         finally:
@@ -232,7 +230,7 @@ class TestSiaSessionLifecycle:
             assert data["state_dict"]["career_name"] == "Ingenieria de Sistemas"
             assert data["state_dict"]["is_electives"] is False
             assert data["state_dict"]["status"] == "ON_CAREER_PAGE"
-            assert [c["course_code"] for c in data["state_dict"]["course_list"]] == [
+            assert [c["code"] for c in data["state_dict"]["course_list"]] == [
                 "1000001",
                 "2016489",
                 "3000003",

@@ -10,8 +10,8 @@ class TestCourseListEntryModel:
 
     def test_creation_with_positional_args(self):
         entry = sia_scraper_rust.CourseListEntryModel("1000001", "Calculo")
-        assert entry.course_code == "1000001"
-        assert entry.course_name == "Calculo"
+        assert entry.code == "1000001"
+        assert entry.name == "Calculo"
 
     def test_repr_output(self):
         entry = sia_scraper_rust.CourseListEntryModel("1000001", "Calculo")
@@ -20,11 +20,11 @@ class TestCourseListEntryModel:
 
     def test_creation_with_keyword_args(self):
         entry = sia_scraper_rust.CourseListEntryModel(
-            course_code="1000001",
-            course_name="Calculo",
+            code="1000001",
+            name="Calculo",
         )
-        assert entry.course_code == "1000001"
-        assert entry.course_name == "Calculo"
+        assert entry.code == "1000001"
+        assert entry.name == "Calculo"
 
 
 class TestSessionStateModel:
@@ -95,8 +95,8 @@ class TestSessionStateModel:
             javax_faces_view_state="vs-1",
         )
         assert len(state.course_list) == 2
-        assert state.course_list[0].course_code == "1000001"
-        assert state.course_list[1].course_code == "1000002"
+        assert state.course_list[0].code == "1000001"
+        assert state.course_list[1].code == "1000002"
 
     def test_pickle_serialization_roundtrip(self):
         entry = sia_scraper_rust.CourseListEntryModel("1000001", "Calculo")
@@ -120,7 +120,7 @@ class TestSessionStateModel:
         assert unpickled.is_electives is False
         assert unpickled.javax_faces_view_state == "vs-1"
         assert len(unpickled.course_list) == 1
-        assert unpickled.course_list[0].course_code == "1000001"
+        assert unpickled.course_list[0].code == "1000001"
 
     def test_pickle_with_multiple_course_entries(self):
         entry1 = sia_scraper_rust.CourseListEntryModel("1000001", "Calculo")
@@ -141,7 +141,7 @@ class TestSessionStateModel:
         unpickled = pickle.loads(pickled)
 
         assert len(unpickled.course_list) == 3
-        assert unpickled.course_list[0].course_name == "Calculo"
-        assert unpickled.course_list[1].course_name == "Algebra"
-        assert unpickled.course_list[2].course_name == "Fisica"
+        assert unpickled.course_list[0].name == "Calculo"
+        assert unpickled.course_list[1].name == "Algebra"
+        assert unpickled.course_list[2].name == "Fisica"
         assert unpickled.is_electives is True

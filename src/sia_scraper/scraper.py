@@ -97,9 +97,7 @@ class SiaScraper:
             state.career_code.split("-") if state.career_code else []
         )
         self._sia_session._status = status.SiaSessionStatus[state.status]
-        self._sia_session._course_list = [
-            {entry.course_code: entry.course_name} for entry in state.course_list
-        ]
+        self._sia_session._course_list = [{entry.code: entry.name} for entry in state.course_list]
 
     def load_session_dict(self, session_data: dict[str, object]) -> "SiaScraper":
         """Restore session from dict (legacy path)."""
