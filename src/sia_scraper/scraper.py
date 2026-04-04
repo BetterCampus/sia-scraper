@@ -230,6 +230,10 @@ class SiaScraper:
 
         Returns:
             List of CourseInfoModel in abort mode, or ScrapeResult in skip/retry mode.
+
+        Raises:
+            ValueError: If both courses_indices and courses_codes are provided
+                but their lengths differ.
         """
         courses_indices = courses_indices or []
         courses_codes = courses_codes or []
