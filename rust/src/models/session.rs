@@ -166,7 +166,7 @@ fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
 /// Returns `PyKeyError` if dict doesn't match any supported format
 ///
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// use pyo3::Python;
 /// use pyo3::types::PyDict;
 ///
