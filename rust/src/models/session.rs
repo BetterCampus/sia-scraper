@@ -359,13 +359,19 @@ impl SessionStateModel {
         let mut course_list = Vec::with_capacity(list.len());
         for item in list.iter() {
             let course_dict = item.downcast::<PyDict>()?;
-            let code: String = match required_item(course_dict, "code") {
-                Ok(val) => val.extract()?,
-                Err(_) => required_item(course_dict, "course_code")?.extract()?,
+            let code: String = if let Some(val) = course_dict.get_item("code")? {
+                val.extract()?
+            } else if let Some(legacy) = course_dict.get_item("course_code")? {
+                legacy.extract()?
+            } else {
+                return Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'"));
             };
-            let name: String = match required_item(course_dict, "name") {
-                Ok(val) => val.extract()?,
-                Err(_) => required_item(course_dict, "course_name")?.extract()?,
+            let name: String = if let Some(val) = course_dict.get_item("name")? {
+                val.extract()?
+            } else if let Some(legacy) = course_dict.get_item("course_name")? {
+                legacy.extract()?
+            } else {
+                return Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'"));
             };
             course_list.push(CourseListEntryModel { code, name });
         }
@@ -460,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn test_from_session_state_flattens_course_maps_to_typed_entries() {
+    fn test_from_session_state_copies_course_list_entries() {
         let state = SessionState {
             course_list: vec![
                 CourseListEntryModel {
