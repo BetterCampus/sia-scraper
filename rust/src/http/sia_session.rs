@@ -1,5 +1,6 @@
 //! Async SIA Session manager with retry logic.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -724,6 +725,12 @@ impl SiaSession {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// **Note on Abort Mode Semantics:** Unlike `scrape_courses_batch` which returns
+    /// immediately on the first error, this concurrent implementation uses
+    /// `buffer_unordered` which runs tasks to completion. In abort mode, the first
+    /// failing task will signal other in-flight tasks to abort early, but they may
+    /// still complete their current retry attempt before stopping.
     pub async fn scrape_courses_concurrent(
         &self,
         indices: Vec<i32>,
@@ -740,17 +747,35 @@ impl SiaSession {
             0
         };
 
+        let abort_flag = Arc::new(AtomicBool::new(false));
+
         let results: Vec<Result<CourseInfoModel, (i32, HttpError)>> = stream::iter(indices)
             .map(|index| {
                 let session = self.clone();
+                let abort = Arc::clone(&abort_flag);
                 async move {
                     for attempt in 0..=effective_retries {
+                        if abort.load(Ordering::SeqCst) {
+                            return Err((
+                                index,
+                                HttpError::InvalidInput("Aborted by concurrent error".to_string()),
+                            ));
+                        }
                         match session.scrape_course_info(index).await {
                             Ok(info) => return Ok(info),
                             Err(e) => {
+                                if abort.load(Ordering::SeqCst) {
+                                    return Err((
+                                        index,
+                                        HttpError::InvalidInput("Aborted by concurrent error".to_string()),
+                                    ));
+                                }
                                 if !should_retry(&e, &session.retry_config)
                                     || attempt == effective_retries
                                 {
+                                    if mode == ErrorMode::Abort {
+                                        abort.store(true, Ordering::SeqCst);
+                                    }
                                     return Err((index, e));
                                 }
                                 let base = retry_delay_ms.max(1);
