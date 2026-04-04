@@ -1065,6 +1065,55 @@ class PySiaSession:
         """
         ...
 
+    def scrape_courses_parallel(
+        self,
+        indices: list[int],
+        mode: str,
+        max_concurrent: int | None = None,
+        retries: int | None = None,
+        delay: int | None = None,
+    ) -> Awaitable[ScrapeResult]:
+        """Scrape multiple courses concurrently with configurable parallelism.
+
+        Uses Rust's tokio and futures ecosystem to execute up to
+        max_concurrent scraping operations simultaneously. This can provide
+        significant speedups (3x-5x) compared to sequential scraping for
+        batches of 20+ courses.
+
+        Errors are handled according to the specified mode:
+
+        - "abort": Stop immediately on the first error.
+        - "skip": Record the failure and continue to the next course.
+        - "retry": Retry failed courses up to retries times with exponential
+          backoff before recording as a failure.
+
+        Args:
+            indices: List of course indices to scrape (0-based).
+            mode: Error handling mode: "abort", "skip", or "retry".
+            max_concurrent: Maximum number of concurrent scraping operations (default: 5).
+            retries: Maximum retry attempts per course (default: 3).
+                Used only in "retry" mode.
+            delay: Base delay between retries in milliseconds (default: 800).
+
+        Returns:
+            ScrapeResult with successes and failures lists.
+
+        Raises:
+            SessionError: If session not initialized or in Abort mode on first failure.
+            ValueError: If mode is not one of "abort", "skip", "retry".
+            NetworkError: If connection fails.
+            HttpStatusError: If server returns error status.
+            SiaTimeoutError: If request times out.
+            ParseError: If response cannot be parsed.
+
+        Example:
+            >>> result = await session.scrape_courses_parallel([0, 1, 2], mode="skip", max_concurrent=5)
+            >>> print(f"Success rate: {result.success_rate():.1%}")
+            >>> for course in result.successes:
+            ...     print(course.course_name)
+        """
+        ...
+
     def get_state(self) -> Awaitable[SessionStateModel]:
         """Get the current session state.
 
