@@ -1429,7 +1429,7 @@ mod tests {
             .with_status(200)
             .with_body_from_request(move |_req| {
                 let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
-                if count % 3 == 0 {
+                if count.is_multiple_of(3) {
                     success_body.clone().into_bytes()
                 } else {
                     noop_body.clone().into_bytes()
@@ -1437,18 +1437,27 @@ mod tests {
             })
             .create();
 
-        let mut state = SessionState::default();
-        state.status = "ON_CAREER_PAGE".to_string();
-        state.career_code = "0-2-8-3".to_string();
-        state.javax_faces_ViewState = Some("mock_viewstate".to_string());
-        state.params.insert("Adf-Window-Id".to_string(), "w1".to_string());
-        state.params.insert("Adf-Page-Id".to_string(), "p1".to_string());
-
-        for i in 0..5 {
-            let mut course = HashMap::new();
-            course.insert(format!("code{i}"), format!("Course {i}"));
-            state.course_list.push(course);
-        }
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: {
+                let mut v = Vec::new();
+                for i in 0..5 {
+                    let mut course = HashMap::new();
+                    course.insert(format!("code{i}"), format!("Course {i}"));
+                    v.push(course);
+                }
+                v
+            },
+            ..Default::default()
+        };
 
         let session = SiaSession::from_state(15, mock_url, state).unwrap();
 
@@ -1467,6 +1476,8 @@ mod tests {
         use std::collections::HashMap;
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::thread;
+        use std::time::Duration;
 
         let mut server = mockito::Server::new_async().await;
         let mock_url = server.url();
@@ -1512,22 +1523,35 @@ mod tests {
 
                 let _ = count_clone.fetch_add(1, Ordering::SeqCst);
 
+                thread::sleep(Duration::from_millis(50));
+
+                active_clone.fetch_sub(1, Ordering::SeqCst);
+
                 response_body.clone()
             })
             .create();
 
-        let mut state = SessionState::default();
-        state.status = "ON_CAREER_PAGE".to_string();
-        state.career_code = "0-2-8-3".to_string();
-        state.javax_faces_ViewState = Some("mock_viewstate".to_string());
-        state.params.insert("Adf-Window-Id".to_string(), "w1".to_string());
-        state.params.insert("Adf-Page-Id".to_string(), "p1".to_string());
-
-        for i in 0..10 {
-            let mut course = HashMap::new();
-            course.insert(format!("code{i}"), format!("Course {i}"));
-            state.course_list.push(course);
-        }
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: {
+                let mut v = Vec::new();
+                for i in 0..10 {
+                    let mut course = HashMap::new();
+                    course.insert(format!("code{i}"), format!("Course {i}"));
+                    v.push(course);
+                }
+                v
+            },
+            ..Default::default()
+        };
 
         let session = SiaSession::from_state(15, mock_url, state).unwrap();
 
