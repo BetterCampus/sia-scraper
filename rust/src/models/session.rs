@@ -376,18 +376,7 @@ impl SessionStateModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        let restored = Self::from_dict(dict)?;
-
-        self.session_headers = restored.session_headers;
-        self.session_cookies = restored.session_cookies;
-        self.params = restored.params;
-        self.javax_faces_view_state = restored.javax_faces_view_state;
-        self.career_code = restored.career_code;
-        self.career_name = restored.career_name;
-        self.is_electives = restored.is_electives;
-        self.status = restored.status;
-        self.course_list = restored.course_list;
-
+        *self = Self::from_dict(dict)?;
         Ok(())
     }
 }
@@ -505,9 +494,12 @@ impl SessionStateModel {
 
     /// Parse from Python dictionary (for session restoration).
     ///
-    /// Supports legacy key fallback for course list entries:
-    /// - "code" or "course_code"
-    /// - "name" or "course_name"
+    /// Supports multiple formats for course list entries (legacy compatibility):
+    /// - **Current format**: `{"code": "1000001", "name": "Calculo"}`
+    /// - **Legacy named keys**: `{"course_code": "1000001", "course_name": "Calculo"}`
+    /// - **Legacy single-entry**: `{"1000001": "Calculo"}` (dict mapping code->name;
+    ///   deprecated, emits deprecation warning)
+    /// - **Mixed formats**: Entries can use different formats within the same course_list
     ///
     /// # Arguments
     /// * `dict` - Python dictionary containing session state
@@ -530,15 +522,48 @@ impl SessionStateModel {
     ///     dict.set_item("session_headers", PyDict::new(py)).unwrap();
     ///     dict.set_item("session_cookies", PyDict::new(py)).unwrap();
     ///     dict.set_item("params", PyDict::new(py)).unwrap();
-    ///     dict.set_item("career_code", "").unwrap();
-    ///     dict.set_item("career_name", "").unwrap();
+    ///     dict.set_item("career_code", "0-2-8-3").unwrap();
+    ///     dict.set_item("career_name", "Ingenieria").unwrap();
     ///     dict.set_item("is_electives", false).unwrap();
-    ///     dict.set_item("status", "NO_SESSION").unwrap();
-    ///     dict.set_item("course_list", PyList::empty(py)).unwrap();
-    ///     dict.set_item("javax_faces_view_state", "").unwrap();
+    ///     dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+    ///     dict.set_item("javax_faces_view_state", "vs-123").unwrap();
+    ///
+    ///     // Current format: {"code": "...", "name": "..."}
+    ///     let courses = PyList::empty(py);
+    ///     let course = PyDict::new(py);
+    ///     course.set_item("code", "1000001").unwrap();
+    ///     course.set_item("name", "Calculo").unwrap();
+    ///     courses.append(course).unwrap();
+    ///
+    ///     // Legacy named keys format (deprecated)
+    ///     let legacy_course = PyDict::new(py);
+    ///     legacy_course.set_item("course_code", "2016489").unwrap();
+    ///     legacy_course.set_item("course_name", "Estructuras").unwrap();
+    ///     courses.append(legacy_course).unwrap();
+    ///
+    ///     // Legacy single-entry format (deprecated, requires catch_warnings)
+    ///     let single_entry = PyDict::new(py);
+    ///     single_entry.set_item("3015489", "Algebra Lineal").unwrap();
+    ///     courses.append(single_entry).unwrap();
+    ///
+    ///     dict.set_item("course_list", courses).unwrap();
+    ///
+    ///     // Suppress deprecation warning for legacy formats
+    ///     let warnings = py.import("warnings").unwrap();
+    ///     let catch_warnings = warnings.call_method0("catch_warnings").unwrap();
+    ///     catch_warnings.call_method0("__enter__").unwrap();
+    ///     warnings.call_method1("simplefilter", ("ignore",)).unwrap();
     ///
     ///     let model = SessionStateModel::from_dict(dict).unwrap();
-    ///     assert_eq!(model.status, "NO_SESSION");
+    ///
+    ///     catch_warnings
+    ///         .call_method1("__exit__", (py.None(), py.None(), py.None()))
+    ///         .unwrap();
+    ///
+    ///     assert_eq!(model.course_list.len(), 3);
+    ///     assert_eq!(model.course_list[0].code, "1000001");
+    ///     assert_eq!(model.course_list[1].code, "2016489");
+    ///     assert_eq!(model.course_list[2].code, "3015489");
     /// });
     /// ```
     pub fn from_dict(dict: &PyDict) -> PyResult<Self> {
