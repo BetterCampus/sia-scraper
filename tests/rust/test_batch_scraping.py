@@ -15,7 +15,7 @@ async def initialized_session():
     session = sia_scraper_rust.PySiaSession()
     await session.init_session()
     yield session
-    await session.close()
+    await session.reset()
 
 
 class TestScrapeResultModel:
