@@ -1054,4 +1054,53 @@ mod tests {
         assert_eq!(result.successes.len(), 0);
         assert_eq!(result.failures.len(), 2);
     }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_skip_mode_processes_all_indices() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let indices = vec![0, 1, 2, 3, 4];
+        let result = session
+            .scrape_courses_batch(indices.clone(), ErrorMode::Skip, 0, 100)
+            .await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        // All indices should be recorded as failures (no valid session)
+        assert_eq!(result.total(), indices.len());
+        assert_eq!(result.successes.len(), 0);
+        assert_eq!(result.failures.len(), indices.len());
+        // Verify all indices are recorded
+        let failure_indices: Vec<i32> = result.failures.iter().map(|(idx, _)| *idx).collect();
+        for idx in &indices {
+            assert!(failure_indices.contains(idx));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_stops_on_first_failure() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        let result = session
+            .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Abort, 0, 100)
+            .await;
+        // Should fail on first index and not process remaining
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Error should reference the first index
+        assert!(err.to_string().contains("0"));
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_empty_indices_all_modes() {
+        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        for mode in [ErrorMode::Abort, ErrorMode::Skip, ErrorMode::Retry] {
+            let result = session
+                .scrape_courses_batch(vec![], mode, 0, 100)
+                .await;
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.total(), 0);
+            assert_eq!(result.success_rate(), 1.0);
+            assert!(result.successes.is_empty());
+            assert!(result.failures.is_empty());
+        }
+    }
 }
