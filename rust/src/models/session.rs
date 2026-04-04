@@ -355,8 +355,18 @@ impl SessionStateModel {
         let mut course_list = Vec::with_capacity(list.len());
         for item in list.iter() {
             let course_dict = item.downcast::<PyDict>()?;
-            let code: String = required_item(course_dict, "code")?.extract()?;
-            let name: String = required_item(course_dict, "name")?.extract()?;
+            let code: String =
+                if let Ok(c) = required_item(course_dict, "code")?.extract::<String>() {
+                    c
+                } else {
+                    required_item(course_dict, "course_code")?.extract()?
+                };
+            let name: String =
+                if let Ok(n) = required_item(course_dict, "name")?.extract::<String>() {
+                    n
+                } else {
+                    required_item(course_dict, "course_name")?.extract()?
+                };
             course_list.push(CourseListEntryModel { code, name });
         }
 

@@ -287,7 +287,8 @@ class SiaScraper:
             raise SiaSessionException.InvalidStatus from None
 
         for i, course in enumerate(self.course_list):
-            code = course.get("code") or next(iter(course), None)
+            raw = course.get("code")
+            code = raw if raw is not None else next(iter(course), None)
             if code == course_code:
                 return i
         raise ValueError(f"Course code '{course_code}' not found")

@@ -343,7 +343,7 @@ class TestSiaScraperSessionState:
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
-        scraper.sia_session._course_list = [{"1000001": "Calculo"}]
+        scraper.sia_session._course_list = [{"code": "1000001", "name": "Calculo"}]
 
         with pytest.raises(ValueError, match="Course code '9999999' not found"):
             scraper.get_course_index("9999999")
@@ -427,7 +427,10 @@ class TestSiaScraperScrapeCoursesEdgeCases:
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
-        mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
+        mock_session.course_list = [
+            {"code": "1000001", "name": "Calculo"},
+            {"code": "2016489", "name": "Estructuras"},
+        ]
 
         course = sia_scraper_rust.CourseInfoModel(
             course_name="Course 0",
