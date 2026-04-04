@@ -64,6 +64,19 @@ pub struct ScrapeResult {
 #[pymethods]
 impl ScrapeResult {
     /// Create a new empty ScrapeResult.
+    ///
+    /// # Returns
+    /// An empty `ScrapeResult` with no successes or failures.
+    ///
+    /// # Errors
+    /// This function does not return errors.
+    ///
+    /// # Examples
+    /// ```python
+    /// result = sia_scraper_rust.ScrapeResult()
+    /// assert result.total() == 0
+    /// assert result.success_rate() == 1.0
+    /// ```
     #[new]
     pub fn new() -> Self {
         Self {
@@ -75,7 +88,16 @@ impl ScrapeResult {
     /// Return the total number of courses processed (successes + failures).
     ///
     /// # Returns
-    /// Total count of courses attempted.
+    /// The sum of `successes.len()` and `failures.len()`.
+    ///
+    /// # Errors
+    /// This function does not return errors.
+    ///
+    /// # Examples
+    /// ```python
+    /// result = await session.scrape_courses([0, 1], mode="skip")
+    /// print(result.total())  # 2
+    /// ```
     pub fn total(&self) -> usize {
         self.successes.len() + self.failures.len()
     }
@@ -85,6 +107,15 @@ impl ScrapeResult {
     /// # Returns
     /// Ratio of successful courses to total courses.
     /// Returns 1.0 if no courses were processed.
+    ///
+    /// # Errors
+    /// This function does not return errors.
+    ///
+    /// # Examples
+    /// ```python
+    /// result = await session.scrape_courses([0, 1], mode="skip")
+    /// print(f"{result.success_rate():.1%}")  # 50.0% if one succeeded
+    /// ```
     pub fn success_rate(&self) -> f64 {
         let total = self.total();
         if total == 0 {
@@ -97,6 +128,15 @@ impl ScrapeResult {
     ///
     /// # Returns
     /// String in the format "ScrapeResult: X successes, Y failures".
+    ///
+    /// # Errors
+    /// This function does not return errors.
+    ///
+    /// # Examples
+    /// ```python
+    /// result = await session.scrape_courses([0, 1], mode="skip")
+    /// print(result)  # ScrapeResult: 1 successes, 1 failures
+    /// ```
     pub fn __repr__(&self) -> String {
         format!(
             "ScrapeResult: {} successes, {} failures",
@@ -191,5 +231,45 @@ mod tests {
         };
         assert_eq!(result.total(), 1);
         assert_eq!(result.success_rate(), 0.0);
+    }
+
+    #[test]
+    fn test_scrape_result_total_with_successes() {
+        let result = ScrapeResult {
+            successes: vec![],
+            failures: vec![(0, "err".to_string())],
+        };
+        assert_eq!(result.total(), 1);
+    }
+
+    #[test]
+    fn test_scrape_result_success_rate_mixed() {
+        let result = ScrapeResult {
+            successes: vec![],
+            failures: vec![(0, "err".to_string()), (1, "err2".to_string())],
+        };
+        assert_eq!(result.success_rate(), 0.0);
+    }
+
+    #[test]
+    fn test_scrape_result_success_rate_all_success() {
+        let result = ScrapeResult {
+            successes: vec![],
+            failures: vec![],
+        };
+        assert_eq!(result.total(), 0);
+        assert_eq!(result.success_rate(), 1.0);
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr() {
+        let result = ScrapeResult {
+            successes: vec![],
+            failures: vec![(0, "err".to_string()), (1, "err2".to_string())],
+        };
+        let repr = format!("{:?}", result);
+        assert!(repr.contains("ScrapeResult"));
+        assert!(repr.contains("successes"));
+        assert!(repr.contains("failures"));
     }
 }
