@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Typed Error Hierarchy (Phase 8)**: Complete Rust-to-Python exception mapping
+  - 5 granular Rust exception types: `NetworkError`, `HttpStatusError`, `SiaTimeoutError`, `ParseError`, `SessionError`
+  - All inherit from `SiaScraperException` base class
+  - HTTP-facing Rust endpoints map `HttpError` variants to specific Python exceptions
+  - Python `SiaSession` wrapper translates Rust exceptions to Python-native exceptions
+  - Comprehensive test suite (32 tests) covering exception raising, inheritance, and translation
+  - Zero-Panic Policy: No `.unwrap()` or `.expect()` in production Rust code
 
 ### Changed
 
@@ -18,12 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `SessionStateModel` serialization now delegates to `CourseListEntryModel.to_dict()` for course entries
   - **Backward compatibility maintained**: Legacy `course_code`/`course_name` keys still supported for deserialization via `__setstate__`
   - **Migration impact**: None for end users. Existing pickled sessions and saved state dicts will continue to work. New serializations use `code`/`name` keys (aligns with Issue #54 contract)
-  - 5 granular Rust exception types: `NetworkError`, `HttpStatusError`, `SiaTimeoutError`, `ParseError`, `SessionError`
-  - All inherit from `SiaScraperException` base class
-  - HTTP-facing Rust endpoints map `HttpError` variants to specific Python exceptions
-  - Python `SiaSession` wrapper translates Rust exceptions to Python-native exceptions
-  - Comprehensive test suite (32 tests) covering exception raising, inheritance, and translation
-  - Zero-Panic Policy: No `.unwrap()` or `.expect()` in production Rust code
 - **Async HTTP Client (Rust reqwest + tokio)**: Phase 4 complete - async HTTP transport layer
   - New async `SiaSession` class for session management
   - Connection pooling enabled by default
