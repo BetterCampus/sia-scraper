@@ -693,8 +693,9 @@ impl SiaSession {
                         return Err(e);
                     }
                     last_error = Some(e);
-                    let delay = Duration::from_millis(retry_delay_ms * (1 << attempt));
-                    sleep(delay).await;
+                    let backoff = retry_delay_ms.saturating_mul(1 << attempt);
+                    let capped = backoff.min(self.retry_config.max_delay_ms);
+                    sleep(Duration::from_millis(capped)).await;
                 }
             }
         }
