@@ -8,7 +8,6 @@ import sia_scraper_rust
 from .constants import http, status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
-from .core.exceptions import SiaScraperException
 from .parsers.models import ErrorMode, ScrapeResult
 from .session import SiaSession
 
@@ -203,57 +202,6 @@ class SiaScraper:
         """Get course prerequisites using zero-copy Rust scraping."""
         resolved_index = self._resolve_course_index(course_index, course_code)
         return await self._sia_session.scrape_course_prereqs(resolved_index)
-
-    async def _scrape_abort_mode(
-        self, paired: list[tuple[int, str]]
-    ) -> list[sia_scraper_rust.CourseInfoModel]:
-        """Scrape courses and abort immediately on first failure."""
-        courses: list[sia_scraper_rust.CourseInfoModel] = []
-        for index, code in paired:
-            course = await self.get_course_info(index)
-            course.code = code
-            courses.append(course)
-        return courses
-
-    async def _scrape_resilient_mode(
-        self,
-        paired: list[tuple[int, str]],
-        error_mode: str,
-        max_retries: int,
-        retry_delay: float,
-        progress_callback: Callable[[int, int, int, int], None] | None,
-    ) -> ScrapeResult:
-        """Scrape courses with skip/retry handling."""
-        successes: list[sia_scraper_rust.CourseInfoModel] = []
-        failures: list[tuple[int, str]] = []
-
-        for i, (index, code) in enumerate(paired):
-            last_error = ""
-            attempts = max_retries if error_mode == ErrorMode.RETRY else 1
-
-            for attempt in range(attempts):
-                try:
-                    course = await self.get_course_info(index)
-                    course.code = code
-                    successes.append(course)
-                    last_error = ""
-                    break
-                except (RuntimeError, ValueError, SiaSessionException) as exc:
-                    last_error = str(exc)
-                    if error_mode == ErrorMode.RETRY and attempt < attempts - 1:
-                        await asyncio.sleep(retry_delay)
-                except SiaScraperException as exc:
-                    last_error = str(exc)
-                    if error_mode == ErrorMode.RETRY and attempt < attempts - 1:
-                        await asyncio.sleep(retry_delay)
-
-            if last_error:
-                failures.append((index, last_error))
-
-            if progress_callback:
-                progress_callback(i + 1, len(paired), len(successes), len(failures))
-
-        return ScrapeResult.create(successes, failures)
 
     async def scrape_courses(
         self,

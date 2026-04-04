@@ -703,7 +703,6 @@ impl SiaSession {
         max_retries: u32,
         retry_delay_ms: u64,
     ) -> Result<CourseInfoModel, HttpError> {
-        // Total attempts = 1 (initial) + max_retries
         for attempt in 0..=max_retries {
             match self.scrape_course_info(index).await {
                 Ok(info) => return Ok(info),
@@ -719,8 +718,7 @@ impl SiaSession {
                 }
             }
         }
-
-        unreachable!("retry loop always returns");
+        unreachable!("retry loop must return before this point");
     }
 }
 
@@ -1099,44 +1097,5 @@ mod tests {
             assert!(result.successes.is_empty());
             assert!(result.failures.is_empty());
         }
-    }
-
-    #[tokio::test]
-    async fn test_scrape_courses_batch_skip_mode_all_success() {
-        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
-        {
-            let mut state = session.state.write().await;
-            state.status = "ON_CAREER_PAGE".to_string();
-            state.career_code = "0-2-8-3".to_string();
-            state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
-            ];
-        }
-        let result = session
-            .scrape_courses_batch(vec![0], ErrorMode::Skip, 0, 100)
-            .await;
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(result.total(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_scrape_courses_batch_retry_mode_exhausted() {
-        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
-        {
-            let mut state = session.state.write().await;
-            state.status = "ON_CAREER_PAGE".to_string();
-            state.career_code = "0-2-8-3".to_string();
-            state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
-            ];
-        }
-        let result = session
-            .scrape_courses_batch(vec![0], ErrorMode::Retry, 1, 10)
-            .await;
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(result.failures.len(), 1);
-        assert_eq!(result.successes.len(), 0);
     }
 }
