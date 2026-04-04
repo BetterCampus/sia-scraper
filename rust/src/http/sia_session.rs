@@ -700,7 +700,8 @@ impl SiaSession {
                         return Err(e);
                     }
                     last_error = Some(e);
-                    let backoff = retry_delay_ms.saturating_mul(1 << attempt);
+                    let shift = attempt.min(31) as u32;
+                    let backoff = retry_delay_ms.saturating_mul(1u64 << shift);
                     let capped = backoff.min(self.retry_config.max_delay_ms);
                     sleep(Duration::from_millis(capped)).await;
                 }
