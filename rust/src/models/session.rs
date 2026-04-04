@@ -85,17 +85,18 @@ impl CourseListEntryModel {
     /// Returns `PyErr` if dictionary item setting fails
     ///
     /// # Examples
-    /// ```rust
-    /// use pyo3::Python;
-    /// use crate::models::session::CourseListEntryModel;
+    /// ```python
+    /// from sia_scraper_rust import CourseListEntryModel
     ///
-    /// Python::with_gil(|py| {
-    ///     let entry = CourseListEntryModel {
-    ///         code: "1000001".to_string(),
-    ///         name: "Calculo".to_string(),
-    ///     };
-    ///     let dict = entry.to_dict(py).unwrap();
-    /// });
+    /// # Create a course entry
+    /// entry = CourseListEntryModel(code="1000001", name="Calculo Diferencial")
+    ///
+    /// # Convert to dictionary (current format)
+    /// course_dict = entry.to_dict()
+    /// assert course_dict == {"code": "1000001", "name": "Calculo Diferencial"}
+    ///
+    /// # This format is compatible with SessionState.from_dict()
+    /// # and can be used for serialization/pickling
     /// ```
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
