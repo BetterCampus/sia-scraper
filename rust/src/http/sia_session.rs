@@ -1456,7 +1456,7 @@ mod tests {
             loop {
                 let (mut stream, _) = listener.accept().await.unwrap();
                 let count = request_count.fetch_add(1, Ordering::SeqCst);
-                let body = if count % 2 == 0 {
+                let body = if count.is_multiple_of(2) {
                     success_body.clone()
                 } else {
                     error_body.clone()
@@ -1473,18 +1473,30 @@ mod tests {
             }
         });
 
-        let mut state = SessionState::default();
-        state.status = "ON_CAREER_PAGE".to_string();
-        state.career_code = "0-2-8-3".to_string();
-        state.javax_faces_ViewState = Some("mock_viewstate".to_string());
-        state.params.insert("Adf-Window-Id".to_string(), "w1".to_string());
-        state.params.insert("Adf-Page-Id".to_string(), "p1".to_string());
+        let params = {
+            let mut m = HashMap::new();
+            m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+            m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+            m
+        };
+        let course_list = {
+            let mut v = Vec::new();
+            for i in 0..4 {
+                let mut course = HashMap::new();
+                course.insert(format!("code{i}"), format!("Course {i}"));
+                v.push(course);
+            }
+            v
+        };
 
-        for i in 0..4 {
-            let mut course = HashMap::new();
-            course.insert(format!("code{i}"), format!("Course {i}"));
-            state.course_list.push(course);
-        }
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params,
+            course_list,
+            ..Default::default()
+        };
 
         let session = SiaSession::from_state(15, mock_url, state).unwrap();
 
