@@ -892,7 +892,6 @@ mod tests {
     }
 
     fn assert_deprecation_warning(
-        py: Python<'_>,
         warning_list: &PyAny,
         expected_format: &str,
     ) -> Result<(), pyo3::PyErr> {
@@ -959,7 +958,7 @@ mod tests {
             assert_eq!(entry.code, "2016489");
             assert_eq!(entry.name, "Estructuras de Datos");
 
-            assert_deprecation_warning(py, warning_list, "course_code/course_name").unwrap();
+            assert_deprecation_warning(warning_list, "course_code/course_name").unwrap();
         });
     }
 
@@ -990,7 +989,7 @@ mod tests {
             assert_eq!(entry.code, "1000001");
             assert_eq!(entry.name, "Calculo");
 
-            assert_deprecation_warning(py, warning_list, "course_code/course_name").unwrap();
+            assert_deprecation_warning(warning_list, "course_code/course_name").unwrap();
         });
     }
 
@@ -1052,7 +1051,7 @@ mod tests {
             assert_eq!(entry.code, "1000001");
             assert_eq!(entry.name, "Calculo");
 
-            assert_deprecation_warning(py, warning_list, "single-key dict").unwrap();
+            assert_deprecation_warning(warning_list, "single-key dict").unwrap();
         });
     }
 
@@ -1082,7 +1081,7 @@ mod tests {
             assert_eq!(entry.code, "1000003-B");
             assert_eq!(entry.name, "Álgebra Lineal");
 
-            assert_deprecation_warning(py, warning_list, "single-key dict").unwrap();
+            assert_deprecation_warning(warning_list, "single-key dict").unwrap();
         });
     }
 
@@ -1292,7 +1291,7 @@ mod tests {
             assert_eq!(model.course_list[0].code, "1000001");
             assert_eq!(model.course_list[0].name, "Calculo");
 
-            assert_deprecation_warning(py, warning_list, "single-key dict").unwrap();
+            assert_deprecation_warning(warning_list, "single-key dict").unwrap();
         });
     }
 
