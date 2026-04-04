@@ -275,7 +275,10 @@ class SiaScraper:
             error_mode: Error handling strategy - "abort", "skip", or "retry".
             max_retries: Maximum retry attempts per course (retry mode only).
             retry_delay: Base delay between retries in seconds (retry mode only).
-            progress_callback: Optional callback(current, total, successes, failures).
+            progress_callback: Optional callback called once after batch completes
+                with (total, total, successes, failures). Note: This is not
+                incremental progress; it receives final totals only.
+                Deprecated: Will be removed when real-time progress is exposed.
 
         Returns:
             List of CourseInfoModel in abort mode, or ScrapeResult in skip/retry mode.
