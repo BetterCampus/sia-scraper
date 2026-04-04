@@ -123,13 +123,11 @@ class TestBatchScrapingWithInvalidIndices:
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_skip_mode_records_failures(self):
+    async def test_scrape_courses_skip_mode_records_failures(self, initialized_session):
         """scrape_courses in skip mode should record failures, not raise."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        await session.set_career("0-2-8-3")
+        await initialized_session.set_career("0-2-8-3")
 
-        result = await session.scrape_courses([0, 999, 1], mode="skip")
+        result = await initialized_session.scrape_courses([0, 999, 1], mode="skip")
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
         assert result.total() == 3
         # Index 999 is always out of range, so it should always be in failures
@@ -138,24 +136,20 @@ class TestBatchScrapingWithInvalidIndices:
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_abort_mode_raises_on_failure(self):
+    async def test_scrape_courses_abort_mode_raises_on_failure(self, initialized_session):
         """scrape_courses in abort mode should raise on first failure."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        await session.set_career("0-2-8-3")
+        await initialized_session.set_career("0-2-8-3")
 
         with pytest.raises(sia_scraper_rust.SiaScraperException):
-            await session.scrape_courses([999], mode="abort")
+            await initialized_session.scrape_courses([999], mode="abort")
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_retry_mode_records_failures(self):
+    async def test_scrape_courses_retry_mode_records_failures(self, initialized_session):
         """scrape_courses in retry mode should record failures after retries."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        await session.set_career("0-2-8-3")
+        await initialized_session.set_career("0-2-8-3")
 
-        result = await session.scrape_courses([999], mode="retry", retries=1, delay=50)
+        result = await initialized_session.scrape_courses([999], mode="retry", retries=1, delay=50)
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
         assert len(result.failures) == 1
         assert result.failures[0][0] == 999
