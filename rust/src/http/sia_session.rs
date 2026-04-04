@@ -687,8 +687,6 @@ impl SiaSession {
         max_retries: u32,
         retry_delay_ms: u64,
     ) -> Result<CourseInfoModel, HttpError> {
-        let mut last_error: Option<HttpError> = None;
-
         // Total attempts = 1 (initial) + max_retries
         for attempt in 0..=max_retries {
             match self.scrape_course_info(index).await {
@@ -697,7 +695,6 @@ impl SiaSession {
                     if !should_retry(&e, &self.retry_config) || attempt == max_retries {
                         return Err(e);
                     }
-                    last_error = Some(e);
                     let shift = attempt.min(31);
                     let backoff = retry_delay_ms.saturating_mul(1u64 << shift);
                     let capped = backoff.min(self.retry_config.max_delay_ms);
@@ -706,9 +703,7 @@ impl SiaSession {
             }
         }
 
-        Err(last_error.unwrap_or(HttpError::NetworkError(
-            "Unknown error during course scraping".to_string(),
-        )))
+        unreachable!("retry loop always returns");
     }
 }
 
