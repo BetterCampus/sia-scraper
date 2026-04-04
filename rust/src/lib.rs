@@ -172,7 +172,7 @@ fn session_state_json(state: &http::session::SessionState) -> Result<String, err
 /// * `html` - Raw HTML string from SIA career page
 ///
 /// # Returns
-/// Python list of dictionaries: [{course_code: course_name}, ...]
+/// Python list of dictionaries: [{"code": "...", "name": "..."}, ...]
 ///
 /// # Errors
 /// Returns `SiaScraperError` if table structure invalid

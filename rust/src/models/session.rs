@@ -69,8 +69,16 @@ impl CourseListEntryModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.code = required_item(dict, "code")?.extract()?;
-        self.name = required_item(dict, "name")?.extract()?;
+        if let Ok(code) = required_item(dict, "code")?.extract::<String>() {
+            self.code = code;
+        } else if let Some(legacy) = dict.get_item("course_code")? {
+            self.code = legacy.extract()?;
+        }
+        if let Ok(name) = required_item(dict, "name")?.extract::<String>() {
+            self.name = name;
+        } else if let Some(legacy) = dict.get_item("course_name")? {
+            self.name = legacy.extract()?;
+        }
         Ok(())
     }
 }
@@ -404,8 +412,6 @@ fn denormalize_status(status: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::{CourseListEntryModel, SessionStateModel};
     use crate::http::session::SessionState;
 

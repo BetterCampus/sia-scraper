@@ -146,7 +146,10 @@ class TestSiaScraperScraping:
         scraper = SiaScraper(init_session=False)
         mock_session = _mock_session(scraper)
         mock_session.status = SiaSessionStatus.ON_CAREER_PAGE
-        mock_session.course_list = [{"1000001": "Calculo"}, {"2016489": "Estructuras"}]
+        mock_session.course_list = [
+            {"code": "1000001", "name": "Calculo"},
+            {"code": "2016489", "name": "Estructuras"},
+        ]
         mock_session.scrape_course_info.return_value = sia_scraper_rust.CourseInfoModel(
             course_name="Test Course",
             credits=3,

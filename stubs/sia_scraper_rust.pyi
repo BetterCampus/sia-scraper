@@ -16,7 +16,7 @@ Example:
 """
 
 from collections.abc import Awaitable
-from typing import Any
+from typing import Any, TypedDict
 
 class SiaScraperException(Exception):
     """Custom exception raised by sia_scraper_rust for parsing and validation errors.
@@ -708,7 +708,13 @@ def parse_prereqs_json(xml: str) -> str:
         JSON string with prerequisite data.
     """
 
-def get_course_list(html: str | bytes) -> list[dict[str, str]]:
+class CourseListEntry(TypedDict):
+    """A single course entry with code and name."""
+
+    code: str
+    name: str
+
+def get_course_list(html: str | bytes) -> list[CourseListEntry]:
     """Extract course list from Oracle ADF table HTML.
 
     Parses the course selection table from a career page and returns
@@ -718,11 +724,16 @@ def get_course_list(html: str | bytes) -> list[dict[str, str]]:
         html: Raw HTML string or bytes from SIA course list page.
 
     Returns:
-        List of dictionaries with "code" and "name" keys,
+        List of CourseListEntry dicts with "code" and "name" keys,
         e.g. [{"code": "1000001", "name": "Cálculo I"}].
 
     Example:
-        >>> html = '<table><tr><td>1000001</td><td>Cálculo I</td></tr></table>'
+        >>> html = '''
+        ... <tr class="af_table_data-row">
+        ...     <td><span class="af_column_data-container">1000001</span></td>
+        ...     <td><span class="af_column_data-container">Cálculo I</span></td>
+        ... </tr>
+        ... '''
         >>> courses = sia_scraper_rust.get_course_list(html)
         >>> courses[0]["code"]
         '1000001'

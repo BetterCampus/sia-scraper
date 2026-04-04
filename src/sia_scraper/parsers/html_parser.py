@@ -245,15 +245,7 @@ def get_course_list(content: bytes | str) -> list[dict[str, str]]:
         content: Oracle ADF page HTML (bytes or string).
 
     ## Returns
-        List of course dictionaries: [{course_code: course_name}, ...].
-
-    ## Note
-        Target: Oracle ADF table → <tr class="af_table_data-row"> elements.
-        Each row contains <span class="af_column_data-container"> for code and name.
-        First span = course code, second span = course name.
-
-    ## Implementation
-        Uses Rust extension for performance (sia_scraper_rust.get_course_list).
+        List of course dictionaries: [{"code": ..., "name": ...}, ...].
     """
     from sia_scraper_rust import (
         get_course_list as rust_get_course_list,  # type: ignore[attr-defined]
@@ -261,4 +253,4 @@ def get_course_list(content: bytes | str) -> list[dict[str, str]]:
 
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="ignore")
-    return rust_get_course_list(content)
+    return rust_get_course_list(content)  # type: ignore[return-value]

@@ -97,7 +97,9 @@ class SiaScraper:
             state.career_code.split("-") if state.career_code else []
         )
         self._sia_session._status = status.SiaSessionStatus[state.status]
-        self._sia_session._course_list = [{entry.code: entry.name} for entry in state.course_list]
+        self._sia_session._course_list = [
+            {"code": entry.code, "name": entry.name} for entry in state.course_list
+        ]
 
     def load_session_dict(self, session_data: dict[str, object]) -> "SiaScraper":
         """Restore session from dict (legacy path)."""
@@ -129,16 +131,23 @@ class SiaScraper:
                     raise SiaSessionException(
                         f"Invalid session_data: 'course_list[{index}]' must be a dict"
                     )
-                if len(item) != 1:
-                    raise SiaSessionException(
-                        f"Invalid session_data: 'course_list[{index}]' must contain exactly one entry"
-                    )
-                for k, v in item.items():
+                if "code" in item and "name" in item:
+                    if not isinstance(item["code"], str) or not isinstance(item["name"], str):
+                        raise SiaSessionException(
+                            f"Invalid session_data: 'course_list[{index}]' code and name must be strings"
+                        )
+                    course_list_raw.append(item)
+                elif len(item) == 1:
+                    k, v = next(iter(item.items()))
                     if not isinstance(k, str) or not isinstance(v, str):
                         raise SiaSessionException(
                             f"Invalid session_data: 'course_list[{index}]' key and value must be strings"
                         )
-                course_list_raw.append(item)
+                    course_list_raw.append({"code": k, "name": v})
+                else:
+                    raise SiaSessionException(
+                        f"Invalid session_data: 'course_list[{index}]' must have 'code'/'name' keys or be a single-key dict"
+                    )
 
         self._sia_session._course_list = course_list_raw
         return self
@@ -278,7 +287,8 @@ class SiaScraper:
             raise SiaSessionException.InvalidStatus from None
 
         for i, course in enumerate(self.course_list):
-            if course_code in course:
+            code = course.get("code") or next(iter(course), None)
+            if code == course_code:
                 return i
         raise ValueError(f"Course code '{course_code}' not found")
 
