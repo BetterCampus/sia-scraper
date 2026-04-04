@@ -55,7 +55,7 @@ pub struct ScrapeResult {
     /// Successfully scraped courses.
     pub successes: Vec<CourseInfoModel>,
     /// Failed course indices with their error messages.
-    pub failures: Vec<(usize, String)>,
+    pub failures: Vec<(i32, String)>,
 }
 
 #[pymethods]

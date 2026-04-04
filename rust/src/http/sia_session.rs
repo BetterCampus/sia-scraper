@@ -655,10 +655,10 @@ impl SiaSession {
                         )));
                     }
                     ErrorMode::Skip => {
-                        result.failures.push((index as usize, e.to_string()));
+                        result.failures.push((index, e.to_string()));
                     }
                     ErrorMode::Retry => {
-                        result.failures.push((index as usize, e.to_string()));
+                        result.failures.push((index, e.to_string()));
                     }
                 },
             }
