@@ -383,6 +383,24 @@ class CourseListEntryModel:
             >>> entry = CourseListEntryModel("1000001", "Cálculo I")
         """
 
+    def to_dict(self) -> dict[str, str]:
+        """Convert to dictionary with "code" and "name" keys.
+
+        Returns:
+            Dictionary with "code" and "name" string keys.
+        """
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> CourseListEntryModel:
+        """Create from dictionary with code/name or legacy course_code/course_name keys.
+
+        Args:
+            data: Dictionary with either new keys ("code", "name") or legacy keys.
+
+        Returns:
+            CourseListEntryModel instance.
+        """
+
 class SessionStateModel:
     """Represents the complete session state for SIA interactions.
 
@@ -457,6 +475,26 @@ class SessionStateModel:
             ...     {"page": "1"}, "0-2-8-3", "Ingeniería",
             ...     False, "ON_CAREER_PAGE", [], "viewstate"
             ... )
+        """
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for transport/persistence.
+
+        Returns:
+            Dictionary containing all session state including course_list
+            with "code" and "name" keys.
+        """
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SessionStateModel:
+        """Create from dictionary (supports legacy course keys).
+
+        Args:
+            data: Dictionary with session state. Course entries can use
+                either new keys ("code", "name") or legacy keys ("course_code", "course_name").
+
+        Returns:
+            SessionStateModel instance.
         """
 
 class PrerequisiteModel:

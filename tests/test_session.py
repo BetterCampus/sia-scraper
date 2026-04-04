@@ -252,3 +252,23 @@ class TestSiaSessionErrorPaths:
                 await session.scrape_course_info(999)
         finally:
             await session.close()
+
+
+class TestSessionStateSerialization:
+    """Test SessionStateModel serialization round-trip and backward compatibility."""
+
+    def test_course_entry_to_dict_returns_code_and_name(self):
+        """CourseListEntryModel.to_dict() produces {"code", "name"} keys."""
+        import sia_scraper_rust
+
+        entry = sia_scraper_rust.CourseListEntryModel(code="1000001", name="Calculo")
+        entry_dict = entry.to_dict()
+
+        assert "code" in entry_dict
+        assert "name" in entry_dict
+        assert entry_dict["code"] == "1000001"
+        assert entry_dict["name"] == "Calculo"
+
+        # Legacy keys should NOT be present
+        assert "course_code" not in entry_dict
+        assert "course_name" not in entry_dict

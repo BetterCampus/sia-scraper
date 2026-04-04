@@ -85,6 +85,55 @@ impl CourseListEntryModel {
         }
         Ok(())
     }
+
+    /// Convert to Python dictionary.
+    ///
+    /// # Arguments
+    /// * `py` - Python GIL token
+    ///
+    /// # Returns
+    /// `PyObject` containing `{"code": String, "name": String}`
+    ///
+    /// # Errors
+    /// Returns `PyErr` if dictionary item setting fails
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pyo3::Python;
+    /// use crate::models::session::CourseListEntryModel;
+    ///
+    /// Python::with_gil(|py| {
+    ///     let entry = CourseListEntryModel {
+    ///         code: "1000001".to_string(),
+    ///         name: "Calculo".to_string(),
+    ///     };
+    ///     let dict = entry.to_dict(py).unwrap();
+    /// });
+    /// ```
+    fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let dict = PyDict::new(py);
+        dict.set_item("code", &self.code)?;
+        dict.set_item("name", &self.name)?;
+        Ok(dict.into())
+    }
+}
+
+fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
+    let code: String = if let Some(val) = dict.get_item("code")? {
+        val.extract()?
+    } else if let Some(legacy) = dict.get_item("course_code")? {
+        legacy.extract()?
+    } else {
+        return Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'"));
+    };
+    let name: String = if let Some(val) = dict.get_item("name")? {
+        val.extract()?
+    } else if let Some(legacy) = dict.get_item("course_name")? {
+        legacy.extract()?
+    } else {
+        return Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'"));
+    };
+    Ok(CourseListEntryModel { code, name })
 }
 
 /// Typed session payload used by Python wrappers.
@@ -110,6 +159,25 @@ pub struct SessionStateModel {
     pub status: String,
     #[pyo3(get)]
     pub course_list: Vec<CourseListEntryModel>,
+}
+
+impl Default for SessionStateModel {
+    fn default() -> Self {
+        Self {
+            session_headers: HashMap::new(),
+            session_cookies: HashMap::new(),
+            params: HashMap::from([
+                ("Adf-Page-Id".to_string(), "1".to_string()),
+                ("Adf-Window-Id".to_string(), String::new()),
+            ]),
+            javax_faces_view_state: None,
+            career_code: String::new(),
+            career_name: String::new(),
+            is_electives: false,
+            status: "NO_SESSION".to_string(),
+            course_list: Vec::new(),
+        }
+    }
 }
 
 #[pymethods]
@@ -273,6 +341,26 @@ impl SessionStateModel {
 
 impl SessionStateModel {
     /// Build a typed transport model from internal session state.
+    ///
+    /// This method performs normalization of status values for Python consumption:
+    /// - "CREATED" → "NO_SESSION"
+    /// - "SESSION_SET" → "CAREER_NOT_SET"
+    ///
+    /// # Arguments
+    /// * `state` - Reference to the internal `SessionState` struct
+    ///
+    /// # Returns
+    /// A new `SessionStateModel` with normalized status and cloned fields
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::http::session::SessionState;
+    /// use crate::models::session::SessionStateModel;
+    ///
+    /// let state = SessionState::default();
+    /// let model = SessionStateModel::from_session_state(&state);
+    /// assert_eq!(model.status, "NO_SESSION");
+    /// ```
     #[must_use]
     pub fn from_session_state(state: &SessionState) -> Self {
         Self {
@@ -289,6 +377,29 @@ impl SessionStateModel {
     }
 
     /// Convert to Python dictionary for transport/persistence.
+    ///
+    /// Serializes all session state including headers, cookies, parameters,
+    /// and course list entries using the `code`/`name` contract.
+    ///
+    /// # Arguments
+    /// * `py` - Python GIL token
+    ///
+    /// # Returns
+    /// `PyObject` containing a dictionary representation of the session state
+    ///
+    /// # Errors
+    /// Returns `PyErr` if dictionary item setting fails
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pyo3::Python;
+    /// use crate::models::session::SessionStateModel;
+    ///
+    /// Python::with_gil(|py| {
+    ///     let model = SessionStateModel::default();
+    ///     let dict = model.to_dict(py).unwrap();
+    /// });
+    /// ```
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
 
@@ -321,10 +432,7 @@ impl SessionStateModel {
 
         let courses = PyList::empty(py);
         for course in &self.course_list {
-            let course_dict = PyDict::new(py);
-            course_dict.set_item("code", &course.code)?;
-            course_dict.set_item("name", &course.name)?;
-            courses.append(course_dict)?;
+            courses.append(course.to_dict(py)?)?;
         }
         dict.set_item("course_list", courses)?;
 
@@ -332,6 +440,33 @@ impl SessionStateModel {
     }
 
     /// Parse from Python dictionary (for session restoration).
+    ///
+    /// Supports legacy key fallback for course list entries:
+    /// - "code" or "course_code"
+    /// - "name" or "course_name"
+    ///
+    /// # Arguments
+    /// * `dict` - Python dictionary containing session state
+    ///
+    /// # Returns
+    /// Reconstructed `SessionStateModel` instance
+    ///
+    /// # Errors
+    /// Returns `PyKeyError` if required keys are missing
+    /// Returns `PyErr` if type extraction fails
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pyo3::Python;
+    /// use pyo3::types::PyDict;
+    /// use crate::models::session::SessionStateModel;
+    ///
+    /// Python::with_gil(|py| {
+    ///     let dict = PyDict::new(py);
+    ///     // ... populate required fields ...
+    ///     let model = SessionStateModel::from_dict(dict).unwrap();
+    /// });
+    /// ```
     pub fn from_dict(dict: &PyDict) -> PyResult<Self> {
         let get_str_map = |key: &str| -> PyResult<HashMap<String, String>> {
             let sub_dict = required_item(dict, key)?.downcast::<PyDict>()?;
@@ -359,21 +494,7 @@ impl SessionStateModel {
         let mut course_list = Vec::with_capacity(list.len());
         for item in list.iter() {
             let course_dict = item.downcast::<PyDict>()?;
-            let code: String = if let Some(val) = course_dict.get_item("code")? {
-                val.extract()?
-            } else if let Some(legacy) = course_dict.get_item("course_code")? {
-                legacy.extract()?
-            } else {
-                return Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'"));
-            };
-            let name: String = if let Some(val) = course_dict.get_item("name")? {
-                val.extract()?
-            } else if let Some(legacy) = course_dict.get_item("course_name")? {
-                legacy.extract()?
-            } else {
-                return Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'"));
-            };
-            course_list.push(CourseListEntryModel { code, name });
+            course_list.push(parse_course_dict(course_dict)?);
         }
 
         Ok(Self {
@@ -390,6 +511,22 @@ impl SessionStateModel {
     }
 
     /// Convert back to internal SessionState for Rust session restoration.
+    ///
+    /// This method performs denormalization of status values from Python representation:
+    /// - "NO_SESSION" → "CREATED"
+    /// - "CAREER_NOT_SET" → "SESSION_SET"
+    ///
+    /// # Returns
+    /// Internal `SessionState` struct with denormalized status
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::models::session::SessionStateModel;
+    ///
+    /// let model = SessionStateModel::default();
+    /// let state = model.into_session_state();
+    /// assert_eq!(state.status, "CREATED");
+    /// ```
     #[must_use]
     pub fn into_session_state(self) -> SessionState {
         SessionState {
@@ -430,6 +567,7 @@ fn denormalize_status(status: &str) -> String {
 mod tests {
     use super::{CourseListEntryModel, SessionStateModel};
     use crate::http::session::SessionState;
+    use pyo3::Python;
 
     #[test]
     fn test_from_session_state_preserves_core_fields() {
@@ -496,5 +634,206 @@ mod tests {
                 }
             ]
         );
+    }
+
+    #[test]
+    fn test_course_entry_to_dict_from_dict_round_trip() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let entry = CourseListEntryModel {
+                code: "1000001".to_string(),
+                name: "Calculo".to_string(),
+            };
+
+            let dict_obj = entry.to_dict(py).unwrap();
+            let dict = dict_obj.downcast::<PyDict>(py).unwrap();
+
+            assert_eq!(
+                dict.get_item("code")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap(),
+                "1000001"
+            );
+            assert_eq!(
+                dict.get_item("name")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap(),
+                "Calculo"
+            );
+
+            let restored = parse_course_dict(&dict).unwrap();
+            assert_eq!(restored, entry);
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_legacy_keys() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("course_code", "2016489").unwrap();
+            dict.set_item("course_name", "Estructuras de Datos")
+                .unwrap();
+
+            let entry = parse_course_dict(dict).unwrap();
+            assert_eq!(entry.code, "2016489");
+            assert_eq!(entry.name, "Estructuras de Datos");
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_mixed_keys() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("code", "1000001").unwrap();
+            dict.set_item("course_name", "Calculo").unwrap();
+
+            let entry = parse_course_dict(dict).unwrap();
+            assert_eq!(entry.code, "1000001");
+            assert_eq!(entry.name, "Calculo");
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_missing_code() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("name", "Calculo").unwrap();
+
+            let result = parse_course_dict(dict);
+            assert!(result.is_err());
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("Missing key: 'code' or 'course_code'"));
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_missing_name() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("code", "1000001").unwrap();
+
+            let result = parse_course_dict(dict);
+            assert!(result.is_err());
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("Missing key: 'name' or 'course_name'"));
+        });
+    }
+
+    #[test]
+    fn test_session_model_to_dict_course_list_structure() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let model = SessionStateModel {
+                course_list: vec![CourseListEntryModel {
+                    code: "1000001".to_string(),
+                    name: "Calculo".to_string(),
+                }],
+                ..Default::default()
+            };
+
+            let dict_obj = model.to_dict(py).unwrap();
+            let dict = dict_obj.downcast::<PyDict>(py).unwrap();
+            let courses = dict
+                .get_item("course_list")
+                .unwrap()
+                .unwrap()
+                .downcast::<PyList>()
+                .unwrap();
+
+            assert_eq!(courses.len(), 1);
+            let course_dict = courses.get_item(0).unwrap().downcast::<PyDict>().unwrap();
+            assert_eq!(
+                course_dict
+                    .get_item("code")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap(),
+                "1000001"
+            );
+            assert_eq!(
+                course_dict
+                    .get_item("name")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap(),
+                "Calculo"
+            );
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_to_dict_round_trip() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let original = SessionStateModel {
+                course_list: vec![CourseListEntryModel {
+                    code: "1000001".to_string(),
+                    name: "Calculo".to_string(),
+                }],
+                career_code: "0-2-8-3".to_string(),
+                career_name: "Ingenieria".to_string(),
+                status: "ON_CAREER_PAGE".to_string(),
+                ..Default::default()
+            };
+
+            let dict_obj = original.to_dict(py).unwrap();
+            let dict = dict_obj.downcast::<PyDict>(py).unwrap();
+            let restored = SessionStateModel::from_dict(dict).unwrap();
+
+            assert_eq!(restored.course_list, original.course_list);
+            assert_eq!(restored.career_code, original.career_code);
+            assert_eq!(restored.status, original.status);
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_legacy_course_keys() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            dict.set_item("javax_faces_view_state", py.None()).unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+
+            let courses = PyList::empty(py);
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("course_code", "1000001").unwrap();
+            course_dict.set_item("course_name", "Calculo").unwrap();
+            courses.append(course_dict).unwrap();
+            dict.set_item("course_list", courses).unwrap();
+
+            let model = SessionStateModel::from_dict(dict).unwrap();
+            assert_eq!(model.course_list.len(), 1);
+            assert_eq!(model.course_list[0].code, "1000001");
+            assert_eq!(model.course_list[0].name, "Calculo");
+        });
     }
 }
