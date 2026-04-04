@@ -19,11 +19,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Session Serialization Refactoring (Internal)**: Centralized course list entry serialization logic
-  - `CourseListEntryModel` now provides `to_dict()` method for serialization
-  - `SessionStateModel` serialization now delegates to `CourseListEntryModel.to_dict()` for course entries
-  - **Backward compatibility maintained**: Legacy `course_code`/`course_name` keys still supported for deserialization via `__setstate__`
-  - **Migration impact**: None for end users. Existing pickled sessions and saved state dicts will continue to work. New serializations use `code`/`name` keys (aligns with Issue #54 contract)
+- **Session Serialization Breaking Change**: Standardized course list entry format (Issue #54)
+  - **BREAKING**: `get_course_list()` now returns `[{"code": "1000001", "name": "Calculo"}]` instead of `[{"1000001": "Calculo"}]`
+    - Old format: `[{"1000001": "Calculo I"}, {"1000002": "Algebra"}]` (single-key dict per course)
+    - New format: `[{"code": "1000001", "name": "Calculo I"}, {"code": "1000002", "name": "Algebra"}]` (explicit keys)
+  - **BREAKING**: `CourseListEntryModel` fields renamed:
+    - `course_code` → `code`
+    - `course_name` → `name`
+  - **Backward compatibility**:
+    - Deserialization supports all legacy formats with deprecation warnings:
+      1. Single-key dict: `{"1000001": "Calculo"}` (emits `DeprecationWarning`)
+      2. Legacy named keys: `{"course_code": "...", "course_name": "..."}` (emits `DeprecationWarning`)
+      3. Current format: `{"code": "...", "name": "..."}` (no warning)
+    - Legacy support will be removed in version 4.0.0
+  - **Migration for integrators**:
+    - **If consuming `get_course_list()` output**: Update code to access `course["code"]` and `course["name"]` instead of extracting the single key/value
+    - **If creating `CourseListEntryModel` instances**: Use `code=` and `name=` kwargs instead of `course_code=` and `course_name=`
+    - **If loading saved sessions**: No action needed - backward deserialization is automatic (with deprecation warnings)
+  - **New features**:
+    - `CourseListEntryModel.to_dict()` method serializes to `{"code": ..., "name": ...}`
+    - `CourseListEntryModel.from_dict()` classmethod deserializes from dict (supports all formats)
+    - `SessionStateModel` pickle support with automatic legacy format migration
 - **Async HTTP Client (Rust reqwest + tokio)**: Phase 4 complete - async HTTP transport layer
   - New async `SiaSession` class for session management
   - Connection pooling enabled by default
