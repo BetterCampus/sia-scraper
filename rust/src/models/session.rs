@@ -100,7 +100,7 @@ impl CourseListEntryModel {
     ///     let dict = entry.to_dict(py).unwrap();
     /// });
     /// ```
-    fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("code", &self.code)?;
         dict.set_item("name", &self.name)?;
@@ -533,7 +533,7 @@ impl SessionStateModel {
     ///     let dict = model.to_dict(py).unwrap();
     /// });
     /// ```
-    pub fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
 
         let headers = PyDict::new(py);
@@ -604,6 +604,7 @@ impl SessionStateModel {
     ///     dict.set_item("is_electives", false).unwrap();
     ///     dict.set_item("status", "NO_SESSION").unwrap();
     ///     dict.set_item("course_list", PyList::empty(py)).unwrap();
+    ///     dict.set_item("javax_faces_view_state", "").unwrap();
     ///
     ///     let model = SessionStateModel::from_dict(dict).unwrap();
     ///     assert_eq!(model.status, "NO_SESSION");
@@ -781,8 +782,6 @@ mod tests {
 
     #[test]
     fn test_into_session_state_preserves_course_list_and_denormalizes_status() {
-        use crate::http::session::SessionState;
-
         let model = SessionStateModel {
             session_headers: HashMap::new(),
             session_cookies: HashMap::new(),
@@ -902,19 +901,18 @@ mod tests {
 
     #[test]
     fn test_course_entry_to_dict_from_dict_round_trip() {
-        use pyo3::types::PyDict;
-
         Python::with_gil(|py| {
             let entry = CourseListEntryModel {
                 code: "1000001".to_string(),
                 name: "Calculo".to_string(),
             };
 
-            let dict_obj = entry.to_dict(py).unwrap();
-            let dict = dict_obj.downcast::<PyDict>(py).unwrap();
+            let dict = entry.to_dict(py).unwrap();
+            let dict_ref = dict.as_ref(py);
 
             assert_eq!(
-                dict.get_item("code")
+                dict_ref
+                    .get_item("code")
                     .unwrap()
                     .unwrap()
                     .extract::<String>()
@@ -922,7 +920,8 @@ mod tests {
                 "1000001"
             );
             assert_eq!(
-                dict.get_item("name")
+                dict_ref
+                    .get_item("name")
                     .unwrap()
                     .unwrap()
                     .extract::<String>()
@@ -930,7 +929,7 @@ mod tests {
                 "Calculo"
             );
 
-            let restored = parse_course_dict(dict).unwrap();
+            let restored = parse_course_dict(dict_ref).unwrap();
             assert_eq!(restored, entry);
         });
     }
@@ -1115,9 +1114,9 @@ mod tests {
                 ..Default::default()
             };
 
-            let dict_obj = model.to_dict(py).unwrap();
-            let dict = dict_obj.downcast::<PyDict>(py).unwrap();
-            let courses = dict
+            let dict = model.to_dict(py).unwrap();
+            let dict_ref = dict.as_ref(py);
+            let courses = dict_ref
                 .get_item("course_list")
                 .unwrap()
                 .unwrap()
@@ -1149,8 +1148,6 @@ mod tests {
 
     #[test]
     fn test_session_model_from_dict_to_dict_round_trip() {
-        use pyo3::types::PyDict;
-
         Python::with_gil(|py| {
             let original = SessionStateModel {
                 course_list: vec![CourseListEntryModel {
@@ -1163,9 +1160,9 @@ mod tests {
                 ..Default::default()
             };
 
-            let dict_obj = original.to_dict(py).unwrap();
-            let dict = dict_obj.downcast::<PyDict>(py).unwrap();
-            let restored = SessionStateModel::from_dict(dict).unwrap();
+            let dict = original.to_dict(py).unwrap();
+            let dict_ref = dict.as_ref(py);
+            let restored = SessionStateModel::from_dict(dict_ref).unwrap();
 
             assert_eq!(restored.course_list, original.course_list);
             assert_eq!(restored.career_code, original.career_code);
