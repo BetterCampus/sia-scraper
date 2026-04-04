@@ -202,11 +202,15 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
     // Try legacy single-entry format {<course_code>: <course_name>}
     if dict.len() == 1 {
         if let Some((key, value)) = dict.iter().next() {
-            emit_legacy_warning(py, "single-key dict")?;
-            return Ok(CourseListEntryModel {
-                code: key.extract()?,
-                name: value.extract()?,
-            });
+            let key_str: String = key.extract()?;
+
+            if !["code", "name", "course_code", "course_name"].contains(&key_str.as_str()) {
+                emit_legacy_warning(py, "single-key dict")?;
+                return Ok(CourseListEntryModel {
+                    code: key_str,
+                    name: value.extract()?,
+                });
+            }
         }
     }
 
@@ -457,10 +461,21 @@ impl SessionStateModel {
     /// ```rust
     /// use crate::http::session::SessionState;
     /// use crate::models::session::SessionStateModel;
+    /// use std::collections::HashMap;
     ///
-    /// let state = SessionState::default();
+    /// let state = SessionState {
+    ///     session_headers: HashMap::new(),
+    ///     session_cookies: HashMap::new(),
+    ///     params: HashMap::new(),
+    ///     javax_faces_ViewState: None,
+    ///     career_code: String::new(),
+    ///     career_name: String::new(),
+    ///     is_electives: false,
+    ///     status: "CREATED".to_string(),
+    ///     course_list: Vec::new(),
+    /// };
     /// let model = SessionStateModel::from_session_state(&state);
-    /// assert_eq!(model.status, "NO_SESSION");
+    /// assert_eq!(model.status, "NO_SESSION"); // "CREATED" normalized to "NO_SESSION"
     /// ```
     #[must_use]
     pub fn from_session_state(state: &SessionState) -> Self {
@@ -892,8 +907,39 @@ mod tests {
     }
 
     #[test]
+    fn test_course_entry_from_dict_single_reserved_key_code() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("code", "1000001").unwrap();
+
+            let result = parse_course_dict(dict);
+            assert!(result.is_err());
+            let err_msg = result.unwrap_err().to_string();
+            assert!(err_msg.contains("'code'/'name'"));
+        });
+    }
+
+    #[test]
+    fn test_course_entry_from_dict_single_reserved_key_name() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("name", "Calculo").unwrap();
+
+            let result = parse_course_dict(dict);
+            assert!(result.is_err());
+            let err_msg = result.unwrap_err().to_string();
+            assert!(err_msg.contains("'code'/'name'"));
+        });
+    }
+
+    #[test]
     fn test_course_entry_from_dict_classmethod() {
-        use pyo3::types::{PyDict, PyType};
+        use pyo3::types::PyDict;
+        use pyo3::PyTypeInfo;
 
         Python::with_gil(|py| {
             let cls = CourseListEntryModel::type_object(py);
