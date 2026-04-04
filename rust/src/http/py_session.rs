@@ -323,6 +323,78 @@ impl PySiaSession {
         })
     }
 
+    /// Scrape multiple courses concurrently with configurable parallelism.
+    ///
+    /// Uses Rust's `tokio` and `futures` ecosystem to execute up to
+    /// `max_concurrent` scraping operations simultaneously. This can provide
+    /// significant speedups (3x-5x) compared to sequential scraping for
+    /// batches of 20+ courses.
+    ///
+    /// Errors are handled according to the specified `mode`:
+    ///
+    /// - `"abort"`: Stop immediately on the first error.
+    /// - `"skip"`: Record the failure and continue to the next course.
+    /// - `"retry"`: Retry failed courses up to `retries` times with
+    ///   exponential backoff before recording as a failure.
+    ///
+    /// # Arguments
+    /// * `indices` - List of course indices to scrape
+    /// * `max_concurrent` - Maximum number of concurrent scraping operations (default: 5)
+    /// * `mode` - Error handling mode: "abort", "skip", or "retry"
+    /// * `retries` - Maximum retry attempts per course (default: 3, used only in retry mode)
+    /// * `delay` - Base delay between retries in milliseconds (default: 800)
+    ///
+    /// # Returns
+    /// `ScrapeResult` with successes and failures lists
+    ///
+    /// # Raises
+    /// SessionError: If session not initialized or in Abort mode on first failure
+    /// NetworkError: If connection fails
+    /// HttpStatusError: If server returns error status
+    /// SiaTimeoutError: If request times out
+    /// ParseError: If response cannot be parsed
+    ///
+    /// # Example
+    /// ```python
+    /// result = await session.scrape_courses_parallel([0, 1, 2], max_concurrent=5, mode="skip")
+    /// print(f"Success rate: {result.success_rate():.1%}")
+    /// for course in result.successes:
+    ///     print(course.course_name)
+    /// ```
+    #[pyo3(signature = (indices, mode, max_concurrent=None, retries=None, delay=None))]
+    fn scrape_courses_parallel<'py>(
+        &self,
+        py: Python<'py>,
+        indices: Vec<i32>,
+        mode: String,
+        max_concurrent: Option<usize>,
+        retries: Option<u32>,
+        delay: Option<u64>,
+    ) -> PyResult<&'py PyAny> {
+        let inner = Arc::clone(&self.inner);
+        let error_mode = ErrorMode::from_str(&mode)?;
+        let concurrency = max_concurrent.unwrap_or(5);
+        let max_retries = retries.unwrap_or(3);
+        let retry_delay_ms = delay.unwrap_or(800);
+
+        future_into_py(py, async move {
+            let session = {
+                let session_guard = inner.read().await;
+                session_guard
+                    .as_ref()
+                    .ok_or_else(|| SessionError::new_err(
+                        "Session not initialized. Call init_session() first."
+                    ))?
+                    .clone()
+            };
+
+            session
+                .scrape_courses_concurrent(indices, concurrency, error_mode, max_retries, retry_delay_ms)
+                .await
+                .map_err(pyo3::PyErr::from)
+        })
+    }
+
     /// Get the current session state.
     ///
     /// # Returns
