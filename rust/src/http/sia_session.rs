@@ -119,6 +119,9 @@ impl SiaSession {
     /// isolated state to prevent interleaving mutations. The HTTP client
     /// is shared (it's Clone + refcounted internally).
     ///
+    /// # Arguments
+    /// None.
+    ///
     /// # Returns
     /// New SiaSession with cloned state
     ///
@@ -966,7 +969,7 @@ mod tests {
     #[tokio::test]
     async fn test_clone_with_owned_state_creates_independent_state() {
         let session = SiaSession::new(15, "https://httpbin.org".to_string()).expect("session should create");
-        
+
         let original_state = session.get_state().await;
         assert_eq!(original_state.status, "CREATED");
 
@@ -986,13 +989,28 @@ mod tests {
         {
             let mut cloned_state = cloned.state.write().await;
             cloned_state.status = "CLONED_MODIFIED".to_string();
+            cloned_state.params.insert("extra".to_string(), "value".to_string());
+            let mut course = std::collections::HashMap::new();
+            course.insert("test".to_string(), "Test Course".to_string());
+            cloned_state.course_list.push(course);
         }
 
         let original_after = session.get_state().await;
         assert_eq!(original_after.status, "MODIFIED");
+        assert!(
+            !original_after.params.contains_key("extra"),
+            "Original state should not have 'extra' param added to clone"
+        );
+        assert_eq!(
+            original_after.course_list.len(),
+            0,
+            "Original state should not have course added to clone"
+        );
 
         let cloned_final = cloned.get_state().await;
         assert_eq!(cloned_final.status, "CLONED_MODIFIED");
+        assert_eq!(cloned_final.params.get("extra"), Some(&"value".to_string()));
+        assert_eq!(cloned_final.course_list.len(), 1);
     }
 
     #[test]
@@ -1408,11 +1426,79 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_abort_stops_on_first_failure() {
-        let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tokio::io::AsyncWriteExt;
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mock_url = format!("http://{}", listener.local_addr().unwrap());
+
+        let success_body = r#"<?xml version="1.0"?>
+<partial-response>
+    <changes>
+        <change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos">4</span>
+            </div>
+        ]]></change>
+    </changes>
+</partial-response>"#
+        .to_string();
+
+        let error_body = r#"<?xml version="1.0"?><partial-response><error/></partial-response>"#
+            .to_string();
+
+        tokio::spawn(async move {
+            loop {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let count = request_count.fetch_add(1, Ordering::SeqCst);
+                let body = if count % 2 == 0 {
+                    success_body.clone()
+                } else {
+                    error_body.clone()
+                };
+
+                tokio::spawn(async move {
+                    let http_response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(http_response.as_bytes()).await;
+                });
+            }
+        });
+
+        let mut state = SessionState::default();
+        state.status = "ON_CAREER_PAGE".to_string();
+        state.career_code = "0-2-8-3".to_string();
+        state.javax_faces_ViewState = Some("mock_viewstate".to_string());
+        state.params.insert("Adf-Window-Id".to_string(), "w1".to_string());
+        state.params.insert("Adf-Page-Id".to_string(), "p1".to_string());
+
+        for i in 0..4 {
+            let mut course = HashMap::new();
+            course.insert(format!("code{i}"), format!("Course {i}"));
+            state.course_list.push(course);
+        }
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
         let result = session
-            .scrape_courses_concurrent(vec![0, 1, 2], 3, ErrorMode::Abort, 0, 100)
+            .scrape_courses_concurrent(vec![0, 1, 2, 3], 2, ErrorMode::Abort, 0, 100)
             .await;
-        assert!(result.is_err());
+
+        assert!(result.is_err(), "Abort mode should return Err on first failure");
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, HttpError::ParseError(_)),
+            "Expected ParseError from invalid XML, got {:?}",
+            err
+        );
     }
 
     #[tokio::test]
