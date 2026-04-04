@@ -1,5 +1,7 @@
 //! Types for batch scraping operations.
 
+#![allow(non_local_definitions)]
+
 use pyo3::prelude::*;
 use std::str::FromStr;
 
@@ -50,7 +52,7 @@ impl FromStr for ErrorMode {
 ///     print(f"Course {index} failed: {error}")
 /// ```
 #[pyclass(get_all, module = "sia_scraper_rust")]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ScrapeResult {
     /// Successfully scraped courses.
     pub successes: Vec<CourseInfoModel>,
@@ -100,15 +102,6 @@ impl ScrapeResult {
             self.successes.len(),
             self.failures.len()
         )
-    }
-}
-
-impl Default for ScrapeResult {
-    fn default() -> Self {
-        Self {
-            successes: Vec::new(),
-            failures: Vec::new(),
-        }
     }
 }
 
