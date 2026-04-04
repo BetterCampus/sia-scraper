@@ -237,6 +237,9 @@ class SiaScraper:
         if not courses_indices:
             courses_indices = [self.get_course_index(course_code) for course_code in courses_codes]
 
+        if not courses_codes and courses_indices:
+            courses_codes = [""] * len(courses_indices)
+
         if courses_indices and courses_codes and len(courses_indices) != len(courses_codes):
             raise ValueError(
                 f"Length mismatch: courses_indices has {len(courses_indices)} items, "
@@ -270,10 +273,13 @@ class SiaScraper:
             delay=delay_ms,
         )
 
+        failed_indices = {idx for idx, _ in rust_result.failures}
+        successful_indices = [idx for idx in indices if idx not in failed_indices]
+
         code_map = {idx: code for idx, code in paired if code}
-        for idx, course in enumerate(rust_result.successes):
-            if idx < len(indices) and indices[idx] in code_map:
-                course.code = code_map[indices[idx]]
+        for i, course in enumerate(rust_result.successes):
+            if i < len(successful_indices) and successful_indices[i] in code_map:
+                course.code = code_map[successful_indices[i]]
 
         if progress_callback:
             progress_callback(
