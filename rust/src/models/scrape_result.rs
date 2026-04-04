@@ -304,9 +304,7 @@ mod tests {
             successes: vec![],
             failures: vec![(0, "err".to_string()), (1, "err2".to_string())],
         };
-        let repr = format!("{:?}", result);
-        assert!(repr.contains("ScrapeResult"));
-        assert!(repr.contains("successes"));
-        assert!(repr.contains("failures"));
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 0 successes, 2 failures");
     }
 }
