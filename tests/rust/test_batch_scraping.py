@@ -9,6 +9,15 @@ import pytest
 sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 
 
+@pytest.fixture
+async def initialized_session():
+    """Provide an initialized PySiaSession with cleanup."""
+    session = sia_scraper_rust.PySiaSession()
+    await session.init_session()
+    yield session
+    await session.close()
+
+
 class TestScrapeResultModel:
     """Verify ScrapeResult model behavior."""
 
@@ -53,39 +62,31 @@ class TestErrorModeValidation:
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_accepts_abort_mode(self):
+    async def test_scrape_courses_accepts_abort_mode(self, initialized_session):
         """scrape_courses should accept 'abort' mode."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        result = await session.scrape_courses([], mode="abort")
+        result = await initialized_session.scrape_courses([], mode="abort")
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_accepts_skip_mode(self):
+    async def test_scrape_courses_accepts_skip_mode(self, initialized_session):
         """scrape_courses should accept 'skip' mode."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        result = await session.scrape_courses([], mode="skip")
+        result = await initialized_session.scrape_courses([], mode="skip")
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_accepts_retry_mode(self):
+    async def test_scrape_courses_accepts_retry_mode(self, initialized_session):
         """scrape_courses should accept 'retry' mode."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        result = await session.scrape_courses([], mode="retry")
+        result = await initialized_session.scrape_courses([], mode="retry")
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_case_insensitive_mode(self):
+    async def test_scrape_courses_case_insensitive_mode(self, initialized_session):
         """scrape_courses should accept case-insensitive mode strings."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
         for mode in ["ABORT", "Abort", "SKIP", "Skip", "RETRY", "Retry"]:
-            result = await session.scrape_courses([], mode=mode)
+            result = await initialized_session.scrape_courses([], mode=mode)
             assert isinstance(result, sia_scraper_rust.ScrapeResult)
 
 
@@ -94,11 +95,9 @@ class TestBatchScrapingEmptyIndices:
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_empty_list_returns_empty_result(self):
+    async def test_scrape_courses_empty_list_returns_empty_result(self, initialized_session):
         """scrape_courses with empty list should return empty ScrapeResult."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        result = await session.scrape_courses([], mode="skip")
+        result = await initialized_session.scrape_courses([], mode="skip")
         assert result.total() == 0
         assert result.success_rate() == 1.0
         assert len(result.successes) == 0
@@ -106,20 +105,16 @@ class TestBatchScrapingEmptyIndices:
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_empty_list_abort_mode(self):
+    async def test_scrape_courses_empty_list_abort_mode(self, initialized_session):
         """scrape_courses with empty list should work in abort mode."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        result = await session.scrape_courses([], mode="abort")
+        result = await initialized_session.scrape_courses([], mode="abort")
         assert result.total() == 0
 
     @pytest.mark.asyncio
     @pytest.mark.network
-    async def test_scrape_courses_empty_list_retry_mode(self):
+    async def test_scrape_courses_empty_list_retry_mode(self, initialized_session):
         """scrape_courses with empty list should work in retry mode."""
-        session = sia_scraper_rust.PySiaSession()
-        await session.init_session()
-        result = await session.scrape_courses([], mode="retry", retries=5, delay=100)
+        result = await initialized_session.scrape_courses([], mode="retry", retries=5, delay=100)
         assert result.total() == 0
 
 
