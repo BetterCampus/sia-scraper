@@ -667,7 +667,7 @@ fn denormalize_status(status: &str) -> String {
 mod tests {
     use super::{parse_course_dict, CourseListEntryModel, SessionStateModel};
     use crate::http::session::SessionState;
-    use pyo3::Python;
+    use pyo3::{types::PyList, PyAny, Python};
     use std::collections::HashMap;
 
     #[test]
@@ -891,6 +891,46 @@ mod tests {
         });
     }
 
+    fn assert_deprecation_warning(
+        py: Python<'_>,
+        warning_list: &PyAny,
+        expected_format: &str,
+    ) -> Result<(), pyo3::PyErr> {
+        let warnings_list = warning_list.downcast::<PyList>()?;
+        assert_eq!(
+            warnings_list.len(),
+            1,
+            "Expected exactly 1 deprecation warning, got {}",
+            warnings_list.len()
+        );
+
+        let warning = warnings_list.get_item(0)?;
+        let category = warning.getattr("category")?;
+        let message = warning.getattr("message")?;
+        let message_str = message.str()?.to_string();
+
+        let category_name = category.str()?.to_string();
+        assert!(
+            category_name.contains("DeprecationWarning"),
+            "Warning category is not DeprecationWarning, got: {}",
+            category_name
+        );
+
+        assert!(
+            message_str.contains(expected_format),
+            "Warning message '{}' does not contain expected format '{}'",
+            message_str,
+            expected_format
+        );
+        assert!(
+            message_str.contains("4.0.0"),
+            "Warning message '{}' does not contain version 4.0.0",
+            message_str
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn test_course_entry_from_dict_legacy_keys() {
         use pyo3::types::PyDict;
@@ -901,9 +941,25 @@ mod tests {
             dict.set_item("course_name", "Estructuras de Datos")
                 .unwrap();
 
+            let warnings = py.import("warnings").unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
+
             let entry = parse_course_dict(dict).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
             assert_eq!(entry.code, "2016489");
             assert_eq!(entry.name, "Estructuras de Datos");
+
+            assert_deprecation_warning(py, warning_list, "course_code/course_name").unwrap();
         });
     }
 
@@ -916,9 +972,25 @@ mod tests {
             dict.set_item("code", "1000001").unwrap();
             dict.set_item("course_name", "Calculo").unwrap();
 
+            let warnings = py.import("warnings").unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
+
             let entry = parse_course_dict(dict).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
             assert_eq!(entry.code, "1000001");
             assert_eq!(entry.name, "Calculo");
+
+            assert_deprecation_warning(py, warning_list, "course_code/course_name").unwrap();
         });
     }
 
@@ -963,9 +1035,13 @@ mod tests {
             dict.set_item("1000001", "Calculo").unwrap();
 
             let warnings = py.import("warnings").unwrap();
-            let catch_warnings = warnings.call_method0("catch_warnings").unwrap();
-            catch_warnings.call_method0("__enter__").unwrap();
-            warnings.call_method1("simplefilter", ("ignore",)).unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
 
             let entry = parse_course_dict(dict).unwrap();
 
@@ -975,6 +1051,8 @@ mod tests {
 
             assert_eq!(entry.code, "1000001");
             assert_eq!(entry.name, "Calculo");
+
+            assert_deprecation_warning(py, warning_list, "single-key dict").unwrap();
         });
     }
 
@@ -987,9 +1065,13 @@ mod tests {
             dict.set_item("1000003-B", "Álgebra Lineal").unwrap();
 
             let warnings = py.import("warnings").unwrap();
-            let catch_warnings = warnings.call_method0("catch_warnings").unwrap();
-            catch_warnings.call_method0("__enter__").unwrap();
-            warnings.call_method1("simplefilter", ("ignore",)).unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
 
             let entry = parse_course_dict(dict).unwrap();
 
@@ -999,6 +1081,8 @@ mod tests {
 
             assert_eq!(entry.code, "1000003-B");
             assert_eq!(entry.name, "Álgebra Lineal");
+
+            assert_deprecation_warning(py, warning_list, "single-key dict").unwrap();
         });
     }
 
@@ -1190,9 +1274,13 @@ mod tests {
             dict.set_item("course_list", courses).unwrap();
 
             let warnings = py.import("warnings").unwrap();
-            let catch_warnings = warnings.call_method0("catch_warnings").unwrap();
-            catch_warnings.call_method0("__enter__").unwrap();
-            warnings.call_method1("simplefilter", ("ignore",)).unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
 
             let model = SessionStateModel::from_dict(dict).unwrap();
 
@@ -1203,6 +1291,8 @@ mod tests {
             assert_eq!(model.course_list.len(), 1);
             assert_eq!(model.course_list[0].code, "1000001");
             assert_eq!(model.course_list[0].name, "Calculo");
+
+            assert_deprecation_warning(py, warning_list, "single-key dict").unwrap();
         });
     }
 
