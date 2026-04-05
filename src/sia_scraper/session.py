@@ -96,6 +96,13 @@ class SiaSession:
     @property
     def course_list(self) -> list[dict[str, str]]:
         """Get loaded course list for the selected career."""
+        for i, course in enumerate(self._course_list):
+            if "code" not in course:
+                raise ValueError(
+                    f"Invalid course list format at index {i}: {course}. "
+                    "Expected normalized format with 'code' and 'name' keys. "
+                    "Use Scraper.load_session_dict() to load properly normalized data."
+                )
         return self._course_list
 
     @property
@@ -204,14 +211,20 @@ class SiaSession:
             ScrapeResult with successes and failures.
 
         Raises:
-            SiaSessionException: If session not initialized or in Abort mode.
-            sia_scraper_rust.NetworkError: If connection fails.
-            sia_scraper_rust.HttpStatusError: If server returns error status.
-            sia_scraper_rust.SiaTimeoutError: If request times out.
-            sia_scraper_rust.ParseError: If response cannot be parsed.
+            SessionNotSet: If session not initialized.
+            SiaSessionException: If scraping fails or in Abort mode on first failure.
         """
         async with self._operation("scrape_courses"):
-            return await self._rust_session.scrape_courses(indices, mode, retries, delay)
+            try:
+                return await self._rust_session.scrape_courses(indices, mode, retries, delay)
+            except sia_scraper_rust.SessionError as exc:
+                if "not initialized" in str(exc).lower():
+                    raise SessionNotSet from exc
+                raise SiaSessionException(f"Scrape failed: {exc}") from exc
+            except SiaSessionException:
+                raise
+            except sia_scraper_rust.SiaScraperException as exc:
+                raise SiaSessionException(f"Scrape failed: {exc}") from exc
 
     async def scrape_courses_parallel(
         self,
@@ -235,16 +248,22 @@ class SiaSession:
             ScrapeResult with successes and failures.
 
         Raises:
-            SiaSessionException: If session not initialized or in Abort mode.
-            sia_scraper_rust.NetworkError: If connection fails.
-            sia_scraper_rust.HttpStatusError: If server returns error status.
-            sia_scraper_rust.SiaTimeoutError: If request times out.
-            sia_scraper_rust.ParseError: If response cannot be parsed.
+            SessionNotSet: If session not initialized.
+            SiaSessionException: If scraping fails or in Abort mode on first failure.
         """
         async with self._operation("scrape_courses_parallel"):
-            return await self._rust_session.scrape_courses_parallel(
-                indices, mode, max_concurrent, retries, delay
-            )
+            try:
+                return await self._rust_session.scrape_courses_parallel(
+                    indices, mode, max_concurrent, retries, delay
+                )
+            except sia_scraper_rust.SessionError as exc:
+                if "not initialized" in str(exc).lower():
+                    raise SessionNotSet from exc
+                raise SiaSessionException(f"Parallel scrape failed: {exc}") from exc
+            except SiaSessionException:
+                raise
+            except sia_scraper_rust.SiaScraperException as exc:
+                raise SiaSessionException(f"Parallel scrape failed: {exc}") from exc
 
     async def close(self) -> None:
         """Reset session state and clear Rust session."""

@@ -2,6 +2,10 @@
 
 Tests the Rust batch scraping implementation through the PyO3 boundary,
 verifying ErrorMode behavior, ScrapeResult structure, and exception propagation.
+
+Note: Some tests use the `initialized_session` fixture which makes real network
+requests to SIA. These are integration tests and should be skipped in environments
+without network access using @pytest.mark.network marker.
 """
 
 import pytest
@@ -9,12 +13,16 @@ import pytest
 sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def initialized_session():
     """Provide an initialized PySiaSession with cleanup.
 
     Warning: This fixture makes real network requests to SIA.
     Tests using it should be marked with @pytest.mark.network.
+
+    Scope: function - Each test gets a fresh session for maximum isolation.
+    This is intentionally kept as an integration test fixture rather than mocked
+    to test the full stack from Python through Rust to network.
     """
     session = sia_scraper_rust.PySiaSession()
     await session.init_session()

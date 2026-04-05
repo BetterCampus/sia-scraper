@@ -3,7 +3,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
+use futures::stream::Abortable;
+use tokio::sync::{RwLock, Barrier};
+use tokio::task::AbortHandle;
 use tokio::time::sleep;
 
 use crate::constants::{
@@ -874,13 +876,31 @@ impl SiaSession {
                                     return Err((pos, index, e, error_time));
                                 }
                                 let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
-                                sleep(Duration::from_millis(delay)).await;
+                                let mut remaining = delay;
+                                while remaining > 0 {
+                                    let sleep_time = std::cmp::min(remaining, 50);
+                                    sleep(Duration::from_millis(sleep_time)).await;
+
+                                    if abort.load(Ordering::SeqCst) {
+                                        return Err((
+                                            pos,
+                                            index,
+                                            HttpError::Aborted("Cancelled during retry backoff".to_string()),
+                                            Instant::now(),
+                                        ));
+                                    }
+
+                                    remaining = remaining.saturating_sub(sleep_time);
+                                }
                             }
                         }
                     }
-                    // Safety: loop runs at least once (0..=effective_retries) and always
-                    // returns Ok or Err before reaching here.
-                    unreachable!("retry loop must return before this point")
+                    Err((
+                        pos,
+                        index,
+                        HttpError::SessionError("Retry loop completed unexpectedly".to_string()),
+                        Instant::now(),
+                    ))
                 }
             })
             .buffer_unordered(max_concurrent)
@@ -1505,31 +1525,43 @@ mod tests {
         ]]></change>
     </changes>
 </partial-response>"#
-        .to_string();
+            .to_string();
 
         let error_body = r#"<?xml version="1.0"?><partial-response><error/></partial-response>"#
             .to_string();
 
-        tokio::spawn(async move {
-            loop {
-                let (mut stream, _) = listener.accept().await.unwrap();
-                let count = request_count.fetch_add(1, Ordering::SeqCst);
-                let body = if count.is_multiple_of(2) {
-                    success_body.clone()
-                } else {
-                    error_body.clone()
-                };
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        let server_task = tokio::spawn(Abortable::new(
+            async move {
+                loop {
+                    let (mut stream, _) = match listener.accept().await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            if e.kind() == std::io::ErrorKind::Aborted {
+                                break;
+                            }
+                            continue;
+                        }
+                    };
+                    let count = request_count.fetch_add(1, Ordering::SeqCst);
+                    let body = if count.is_multiple_of(2) {
+                        success_body.clone()
+                    } else {
+                        error_body.clone()
+                    };
 
-                tokio::spawn(async move {
-                    let http_response = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
-                        body.len(),
-                        body
-                    );
-                    let _ = stream.write_all(http_response.as_bytes()).await;
-                });
-            }
-        });
+                    tokio::spawn(async move {
+                        let http_response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
+                            body.len(),
+                            body
+                        );
+                        let _ = stream.write_all(http_response.as_bytes()).await;
+                    });
+                }
+            },
+            abort_registration,
+        ));
 
         let params = {
             let mut m = HashMap::new();
@@ -1562,6 +1594,9 @@ mod tests {
         let result = session
             .scrape_courses_concurrent(vec![0, 1, 2, 3], 2, ErrorMode::Abort, 0, 100)
             .await;
+
+        abort_handle.abort();
+        let _ = server_task.await;
 
         assert!(result.is_err(), "Abort mode should return Err on first failure");
         let err = result.unwrap_err();
@@ -1666,7 +1701,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_handles_concurrent_execution() {
-        use tokio::time::sleep;
+        use tokio::sync::Barrier;
 
         let active_requests = Arc::new(AtomicUsize::new(0));
         let max_concurrent_seen = Arc::new(AtomicUsize::new(0));
@@ -1687,48 +1722,64 @@ mod tests {
         ]]></change>
     </changes>
 </partial-response>"#
-        .to_string();
+            .to_string();
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let mock_url = format!("http://{}", listener.local_addr().unwrap());
 
-        tokio::spawn(async move {
-            loop {
-                let (mut stream, _) = listener.accept().await.unwrap();
-                let active = active_clone.clone();
-                let max_seen = max_clone.clone();
-                let count = count_clone.clone();
-                let body = response_body.clone();
+        let barrier = Arc::new(Barrier::new(3));
+        let barrier_clone = barrier.clone();
 
-                tokio::spawn(async move {
-                    let _prev = active.fetch_add(1, Ordering::SeqCst);
-                    let current = active.load(Ordering::SeqCst);
-                    let mut max_val = max_seen.load(Ordering::SeqCst);
-                    while current > max_val {
-                        if max_seen
-                            .compare_exchange_weak(max_val, current, Ordering::SeqCst, Ordering::SeqCst)
-                            .is_ok()
-                        {
-                            break;
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        let server_task = tokio::spawn(Abortable::new(
+            async move {
+                loop {
+                    let (mut stream, _) = match listener.accept().await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            if e.kind() == std::io::ErrorKind::Aborted {
+                                break;
+                            }
+                            continue;
                         }
-                        max_val = max_seen.load(Ordering::SeqCst);
-                    }
+                    };
+                    let active = active_clone.clone();
+                    let max_seen = max_clone.clone();
+                    let count = count_clone.clone();
+                    let body = response_body.clone();
+                    let barrier = barrier_clone.clone();
 
-                    let _ = count.fetch_add(1, Ordering::SeqCst);
+                    tokio::spawn(async move {
+                        let _prev = active.fetch_add(1, Ordering::SeqCst);
+                        let current = active.load(Ordering::SeqCst);
+                        let mut max_val = max_seen.load(Ordering::SeqCst);
+                        while current > max_val {
+                            if max_seen
+                                .compare_exchange_weak(max_val, current, Ordering::SeqCst, Ordering::SeqCst)
+                                .is_ok()
+                            {
+                                break;
+                            }
+                            max_val = max_seen.load(Ordering::SeqCst);
+                        }
 
-                    sleep(Duration::from_millis(100)).await;
+                        let _ = count.fetch_add(1, Ordering::SeqCst);
 
-                    active.fetch_sub(1, Ordering::SeqCst);
+                        barrier.wait().await;
 
-                    let http_response = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
-                        body.len(),
-                        body
-                    );
-                    let _ = stream.write_all(http_response.as_bytes()).await;
-                });
-            }
-        });
+                        active.fetch_sub(1, Ordering::SeqCst);
+
+                        let http_response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/xml\r\n\r\n{}",
+                            body.len(),
+                            body
+                        );
+                        let _ = stream.write_all(http_response.as_bytes()).await;
+                    });
+                }
+            },
+            abort_registration,
+        ));
 
         let state = SessionState {
             status: "ON_CAREER_PAGE".to_string(),
@@ -1761,6 +1812,9 @@ mod tests {
         let result = session
             .scrape_courses_concurrent(indices, max_concurrent, ErrorMode::Skip, 0, 100)
             .await;
+
+        abort_handle.abort();
+        let _ = server_task.await;
 
         assert!(result.is_ok());
         let result = result.unwrap();

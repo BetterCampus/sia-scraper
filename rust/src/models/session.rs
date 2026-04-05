@@ -158,6 +158,8 @@ impl CourseListEntryModel {
     }
 }
 
+/// Convenience wrapper that automatically extracts Python context from dict.
+#[inline(always)]
 fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
     normalize_course_dict(dict, dict.py())
 }

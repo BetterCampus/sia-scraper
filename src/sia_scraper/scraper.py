@@ -250,9 +250,8 @@ class SiaScraper:
             [0, 2]
 
             >>> # Raises when both are empty
-            >>> self._prepare_scrape_indices(None, None)
+            >>> self._prepare_scrape_indices(None, None)  # doctest: +IGNORE_EXCEPTION_DETAIL
             Traceback (most recent call last):
-                ...
             ValueError: At least one of courses_indices or courses_codes must be provided
         """
         courses_indices = courses_indices or []
@@ -336,26 +335,21 @@ class SiaScraper:
         """
         code_map = {idx: code for idx, code in paired if code}
         if code_map:
+            # Determine which indices correspond to successes
             if failed_indices is None:
-                expected = indices
+                success_indices = indices
             else:
-                expected = [idx for idx in indices if idx not in failed_indices]
+                success_indices = [idx for idx in indices if idx not in failed_indices]
 
-            if len(successes) != len(expected):
+            if len(successes) != len(success_indices):
                 logger.warning(
                     f"Success count mismatch: got {len(successes)} successes, "
-                    f"expected {len(expected)} from indices"
+                    f"expected {len(success_indices)} from indices"
                 )
 
-            if failed_indices is None:
-                for idx, course in enumerate(successes):
-                    if idx < len(indices) and indices[idx] in code_map:
-                        course.code = code_map[indices[idx]]
-            else:
-                successful_indices = [idx for idx in indices if idx not in failed_indices]
-                for i, course in enumerate(successes):
-                    if i < len(successful_indices) and successful_indices[i] in code_map:
-                        course.code = code_map[successful_indices[i]]
+            for i, course in enumerate(successes):
+                if i < len(success_indices) and success_indices[i] in code_map:
+                    course.code = code_map[success_indices[i]]
 
     async def get_course_info(
         self, course_index: int = 0, course_code: str = ""
@@ -375,12 +369,7 @@ class SiaScraper:
             raise SiaSessionException.InvalidStatus from None
 
         for i, course in enumerate(self.course_list):
-            raw = course.get("code")
-            # Defensive fallback: _course_list may be manipulated externally with
-            # legacy single-key dicts (e.g., {"CODE1": "Course Name"}). Normalized
-            # entries always have "code" key, so this branch is dead in normal usage.
-            code = raw if raw is not None else next(iter(course), None)
-            if code == course_code:
+            if course.get("code") == course_code:
                 return i
         raise ValueError(f"Course code '{course_code}' not found")
 
@@ -435,6 +424,14 @@ class SiaScraper:
                 delay=0,
             )
             self._apply_course_codes(result.successes, paired, indices)
+            if progress_callback:
+                completed = len(result.successes) + len(result.failures)
+                progress_callback(
+                    completed,
+                    result.total(),
+                    len(result.successes),
+                    len(result.failures),
+                )
             return result.successes
 
         delay_ms = int(retry_delay * 1000)
