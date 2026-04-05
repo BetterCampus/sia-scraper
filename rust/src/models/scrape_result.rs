@@ -127,7 +127,9 @@ impl ScrapeResult {
     /// Return a human-readable summary of the scraping result.
     ///
     /// # Returns
-    /// String in the format "ScrapeResult: X successes, Y failures".
+    /// String in format "ScrapeResult: X successes, Y failures".
+    /// Uses singular form when count is 1 (e.g., "1 success, 2 failures"),
+    /// plural otherwise (e.g., "2 successes, 1 failure").
     ///
     /// # Errors
     /// This function does not return errors.
