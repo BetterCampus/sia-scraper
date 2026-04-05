@@ -1,5 +1,7 @@
 //! Types for batch scraping operations.
 
+// Allow non-local definitions for PyO3's #[pymethods] macro which generates
+// trait implementations inside the impl block.
 #![allow(non_local_definitions)]
 
 use pyo3::prelude::*;
@@ -68,9 +70,6 @@ impl ScrapeResult {
     /// # Returns
     /// An empty `ScrapeResult` with no successes or failures.
     ///
-    /// # Errors
-    /// This function does not return errors.
-    ///
     /// # Examples
     /// ```python
     /// result = sia_scraper_rust.ScrapeResult()
@@ -90,9 +89,6 @@ impl ScrapeResult {
     /// # Returns
     /// The sum of `successes.len()` and `failures.len()`.
     ///
-    /// # Errors
-    /// This function does not return errors.
-    ///
     /// # Examples
     /// ```python
     /// result = await session.scrape_courses([0, 1], mode="skip")
@@ -107,9 +103,6 @@ impl ScrapeResult {
     /// # Returns
     /// Ratio of successful courses to total courses.
     /// Returns 1.0 if no courses were processed.
-    ///
-    /// # Errors
-    /// This function does not return errors.
     ///
     /// # Examples
     /// ```python
@@ -130,9 +123,6 @@ impl ScrapeResult {
     /// String in format "ScrapeResult: X successes, Y failures".
     /// Uses singular form when count is 1 (e.g., "1 success, 2 failures"),
     /// plural otherwise (e.g., "2 successes, 1 failure").
-    ///
-    /// # Errors
-    /// This function does not return errors.
     ///
     /// # Examples
     /// ```python
