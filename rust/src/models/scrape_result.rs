@@ -1,9 +1,5 @@
 //! Types for batch scraping operations.
 
-// Allow non-local definitions for PyO3's #[pymethods] macro which generates
-// trait implementations inside the impl block.
-#![allow(non_local_definitions)]
-
 use pyo3::prelude::*;
 use std::str::FromStr;
 
@@ -63,6 +59,7 @@ pub struct ScrapeResult {
     pub failures: Vec<(i32, String)>,
 }
 
+#[allow(non_local_definitions)]
 #[pymethods]
 impl ScrapeResult {
     /// Create a new empty ScrapeResult.
