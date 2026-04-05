@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
@@ -45,12 +45,13 @@ fn compute_backoff_ms(retry_config: &RetryConfig, retry_delay_ms: u64, attempt: 
 
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
-/// Result type for concurrent course scraping: `(position, index, data)`.
+/// Result type for concurrent course scraping: `(position, index, data, timestamp)`.
 ///
 /// The first element is the position in the original input batch,
-/// the second is the course index, and the third is either the
-/// parsed `CourseInfoModel` on success or an `HttpError` on failure.
-pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel), (usize, i32, HttpError)>;
+/// the second is the course index, the third is either the parsed
+/// `CourseInfoModel` on success or an `HttpError` on failure,
+/// and the fourth is the timestamp when the result was produced.
+pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel, Instant), (usize, i32, HttpError, Instant)>;
 
 #[derive(Clone)]
 pub struct SiaSession {
@@ -849,25 +850,28 @@ impl SiaSession {
                                 pos,
                                 index,
                                 HttpError::Aborted("Cancelled due to concurrent error".to_string()),
+                                Instant::now(),
                             ));
                         }
                         match session.scrape_course_info(index).await {
-                            Ok(info) => return Ok((pos, index, info)),
+                            Ok(info) => return Ok((pos, index, info, Instant::now())),
                             Err(e) => {
                                 if abort.load(Ordering::SeqCst) {
                                     return Err((
                                         pos,
                                         index,
                                         HttpError::Aborted("Cancelled due to concurrent error".to_string()),
+                                        Instant::now(),
                                     ));
                                 }
                                 if !should_retry(&e, &session.retry_config)
                                     || attempt == effective_retries
                                 {
+                                    let error_time = Instant::now();
                                     if mode == ErrorMode::Abort {
                                         abort.store(true, Ordering::SeqCst);
                                     }
-                                    return Err((pos, index, e));
+                                    return Err((pos, index, e, error_time));
                                 }
                                 let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
                                 sleep(Duration::from_millis(delay)).await;
@@ -886,25 +890,58 @@ impl SiaSession {
         let mut result = ScrapeResult::new();
 
         let mut ordered_results = results;
-        ordered_results.sort_by_key(|r| match r { Ok((pos, _, _)) => *pos, Err((pos, _, _)) => *pos });
+        ordered_results.sort_by_key(|r| match r { Ok((pos, _, _, _)) => *pos, Err((pos, _, _, _)) => *pos });
 
-        for res in ordered_results {
-            match res {
-                Ok((_, _index, info)) => {
-                    result.successes.push(info);
-                }
-                Err((_, index, e)) => match mode {
-                    ErrorMode::Abort => {
-                        if matches!(e, HttpError::Aborted(_)) {
-                            continue;
+        // In abort mode, find the earliest non-Aborted error to report as the trigger
+        if mode == ErrorMode::Abort {
+            let mut earliest_error: Option<(i32, HttpError, Instant)> = None;
+
+            for res in &ordered_results {
+                if let Err((_, index, e, timestamp)) = res {
+                    if !matches!(e, HttpError::Aborted(_)) {
+                        match &earliest_error {
+                            None => earliest_error = Some((*index, e.clone(), *timestamp)),
+                            Some((_, _, prev_time)) => {
+                                if timestamp < prev_time {
+                                    earliest_error = Some((*index, e.clone(), *timestamp));
+                                }
+                            }
                         }
-                        log::error!("Aborted at course index {}: {}", index, e);
-                        return Err(e);
                     }
-                    ErrorMode::Skip | ErrorMode::Retry => {
+                }
+            }
+
+            // Collect successes and return the earliest trigger error if found
+            for res in ordered_results {
+                match res {
+                    Ok((_, _, info, _)) => {
+                        result.successes.push(info);
+                    }
+                    Err((_, _, HttpError::Aborted(_), _)) => {
+                        // Skip Aborted errors
+                        continue;
+                    }
+                    Err(_) => {
+                        // Already collected in earliest_error
+                    }
+                }
+            }
+
+            if let Some((index, error, _)) = earliest_error {
+                log::error!("Aborted at course index {}: {}", index, error);
+                return Err(error);
+            }
+        } else {
+            // Skip/Retry mode: collect all results
+            for res in ordered_results {
+                match res {
+                    Ok((_, _index, info, _)) => {
+                        result.successes.push(info);
+                    }
+                    Err((_, index, e, _)) => {
                         result.failures.push((index, e.to_string()));
                     }
-                },
+                }
             }
         }
 
