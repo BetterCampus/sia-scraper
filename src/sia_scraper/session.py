@@ -97,11 +97,22 @@ class SiaSession:
     def course_list(self) -> list[dict[str, str]]:
         """Get loaded course list for the selected career."""
         for i, course in enumerate(self._course_list):
-            if "code" not in course:
+            if not isinstance(course, dict):
+                raise ValueError(
+                    f"Invalid course list format at index {i}: {type(course).__name__}. "
+                    "Expected dict with 'code' and 'name' string keys."
+                )
+            if "code" not in course or "name" not in course:
                 raise ValueError(
                     f"Invalid course list format at index {i}: {course}. "
-                    "Expected normalized format with 'code' and 'name' keys. "
-                    "Use Scraper.load_session_dict() to load properly normalized data."
+                    "Expected dict with 'code' and 'name' keys."
+                )
+            code_val = course["code"]
+            name_val = course["name"]
+            if not isinstance(code_val, str) or not isinstance(name_val, str):
+                raise ValueError(
+                    f"Invalid course list format at index {i}: code={code_val!r}, name={name_val!r}. "
+                    "Expected 'code' and 'name' values to be strings."
                 )
         return self._course_list
 

@@ -136,9 +136,13 @@ class SiaScraper:
                     )
 
                 # Extract code from current or legacy key
-                code_val = item.get("code") or item.get("course_code")
+                code_val = item.get("code")
+                if code_val is None:
+                    code_val = item.get("course_code")
                 # Extract name from current or legacy key
-                name_val = item.get("name") or item.get("course_name")
+                name_val = item.get("name")
+                if name_val is None:
+                    name_val = item.get("course_name")
                 # Check if any legacy keys were used
                 used_legacy = "course_code" in item or "course_name" in item
 
@@ -289,7 +293,15 @@ class SiaScraper:
         Raises:
             ValueError: If error_mode is not a valid mode.
         """
-        mode = error_mode.value.lower() if isinstance(error_mode, ErrorMode) else error_mode.lower()
+        if isinstance(error_mode, ErrorMode):
+            mode = error_mode.value.lower()
+        elif isinstance(error_mode, str):
+            mode = error_mode.lower()
+        else:
+            raise ValueError(
+                f"Invalid error_mode: {error_mode!r}. Must be an ErrorMode or one of: "
+                f"{', '.join(sorted({'abort', 'skip', 'retry'}))}"
+            )
         valid_modes = {"abort", "skip", "retry"}
         if mode not in valid_modes:
             raise ValueError(
