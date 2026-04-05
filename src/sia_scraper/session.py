@@ -96,6 +96,27 @@ class SiaSession:
     @property
     def course_list(self) -> list[dict[str, str]]:
         """Get loaded course list for the selected career."""
+        return self._course_list
+
+    @property
+    def career_indices(self) -> list[str]:
+        """Get parsed career code indices."""
+        return self._career_indices
+
+    def _sync_state_from_rust(self, state: sia_scraper_rust.SessionStateModel) -> None:
+        """Sync local cache from Rust state model."""
+        self._status = status.SiaSessionStatus[state.status]
+        self._career_code = state.career_code
+        self._career_name = state.career_name or DEFAULT_CAREER_NAME
+        self._is_electives = state.is_electives
+        self._career_indices = state.career_code.split("-") if state.career_code else []
+        self._course_list = [
+            {"code": entry.code, "name": entry.name} for entry in state.course_list
+        ]
+        self._validate_course_list()
+
+    def _validate_course_list(self) -> None:
+        """Validate course list format. Raises ValueError on invalid format."""
         for i, course in enumerate(self._course_list):
             if not isinstance(course, dict):
                 raise ValueError(
@@ -114,23 +135,6 @@ class SiaSession:
                     f"Invalid course list format at index {i}: code={code_val!r}, name={name_val!r}. "
                     "Expected 'code' and 'name' values to be strings."
                 )
-        return self._course_list
-
-    @property
-    def career_indices(self) -> list[str]:
-        """Get parsed career code indices."""
-        return self._career_indices
-
-    def _sync_state_from_rust(self, state: sia_scraper_rust.SessionStateModel) -> None:
-        """Sync local cache from Rust state model."""
-        self._status = status.SiaSessionStatus[state.status]
-        self._career_code = state.career_code
-        self._career_name = state.career_name or DEFAULT_CAREER_NAME
-        self._is_electives = state.is_electives
-        self._career_indices = state.career_code.split("-") if state.career_code else []
-        self._course_list = [
-            {"code": entry.code, "name": entry.name} for entry in state.course_list
-        ]
 
     async def init_session(self) -> None:
         """Initialize session by delegating to Rust PySiaSession.
