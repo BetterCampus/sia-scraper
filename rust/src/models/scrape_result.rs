@@ -126,9 +126,6 @@ impl ScrapeResult {
 
     /// Return a human-readable summary of the scraping result.
     ///
-    /// # Arguments
-    /// None
-    ///
     /// # Returns
     /// String in the format "ScrapeResult: X successes, Y failures".
     ///
@@ -377,5 +374,15 @@ mod tests {
         };
         let repr = result.__repr__();
         assert_eq!(repr, "ScrapeResult: 1 success, 0 failures");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_single_failure_only() {
+        let result = ScrapeResult {
+            successes: vec![],
+            failures: vec![(0, "err".to_string())],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 0 successes, 1 failure");
     }
 }
