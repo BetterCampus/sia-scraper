@@ -148,12 +148,16 @@ class SiaScraper:
                         DeprecationWarning,
                         stacklevel=2,
                     )
-                    if not isinstance(item["course_code"], str) or not isinstance(item["course_name"], str):
+                    if not isinstance(item["course_code"], str) or not isinstance(
+                        item["course_name"], str
+                    ):
                         raise SiaSessionException(
                             f"Invalid session_data: 'course_list[{index}]' "
                             "course_code and course_name must be strings"
                         )
-                    course_list_raw.append({"code": item["course_code"], "name": item["course_name"]})
+                    course_list_raw.append(
+                        {"code": item["course_code"], "name": item["course_name"]}
+                    )
                 elif len(item) == 1:
                     k, v = next(iter(item.items()))
                     # Reject reserved keys as single-key entries
@@ -167,6 +171,13 @@ class SiaScraper:
                             f"Invalid session_data: 'course_list[{index}]' "
                             "key and value must be strings"
                         )
+                    warnings.warn(
+                        f"session_data 'course_list[{index}]' uses deprecated single-key dict format. "
+                        "Use {{'code': ..., 'name': ...}} instead. "
+                        "Legacy format support will be removed in version 4.0.0.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
                     course_list_raw.append({"code": k, "name": v})
                 else:
                     raise SiaSessionException(
@@ -234,9 +245,7 @@ class SiaScraper:
         courses_codes = courses_codes or []
 
         if not courses_indices and not courses_codes:
-            raise ValueError(
-                "At least one of courses_indices or courses_codes must be provided"
-            )
+            raise ValueError("At least one of courses_indices or courses_codes must be provided")
 
         if not courses_indices:
             courses_indices = [self.get_course_index(code) for code in courses_codes]

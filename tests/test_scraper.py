@@ -1,5 +1,6 @@
 """Unit tests for sia_scraper.scraper."""
 
+import warnings
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -317,6 +318,29 @@ class TestSiaScraperSessionState:
         assert scraper.sia_session._career_name == "Test Career"
         assert scraper.sia_session._is_electives is True
         assert scraper.sia_session._status == SiaSessionStatus.ON_CAREER_PAGE
+
+    def test_load_session_with_single_key_dict_emits_deprecation_warning(
+        self, mock_async_session_class
+    ):
+        scraper = SiaScraper(init_session=False)
+        data = {
+            "session_headers": {},
+            "session_cookies": {},
+            "params": {"Adf-Page-Id": "0", "Adf-Window-Id": ""},
+            "javax_faces_ViewState": "vs1",
+            "career_code": "0-2-8-3",
+            "career_name": "Test Career",
+            "is_electives": False,
+            "status": "ON_CAREER_PAGE",
+            "course_list": [{"1000001": "Cálculo I"}],
+        }
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            scraper.load_session(data)
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "single-key dict format" in str(w[0].message)
+        assert scraper.sia_session._course_list == [{"code": "1000001", "name": "Cálculo I"}]
 
     def test_load_session_invalid_status_raises(self, mock_async_session_class):
         scraper = SiaScraper(init_session=False)
