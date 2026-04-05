@@ -45,6 +45,18 @@ impl CourseListEntryModel {
         Self { code, name }
     }
 
+    /// Deprecated: use `code` instead. Will be removed in v4.0.0.
+    #[getter]
+    fn course_code(&self) -> &str {
+        &self.code
+    }
+
+    /// Deprecated: use `name` instead. Will be removed in v4.0.0.
+    #[getter]
+    fn course_name(&self) -> &str {
+        &self.name
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "CourseListEntryModel(code='{}', name='{}')",
@@ -283,20 +295,7 @@ pub struct SessionStateModel {
 
 impl Default for SessionStateModel {
     fn default() -> Self {
-        Self {
-            session_headers: HashMap::new(),
-            session_cookies: HashMap::new(),
-            params: HashMap::from([
-                ("Adf-Page-Id".to_string(), "1".to_string()),
-                ("Adf-Window-Id".to_string(), String::new()),
-            ]),
-            javax_faces_view_state: None,
-            career_code: String::new(),
-            career_name: String::new(),
-            is_electives: false,
-            status: "NO_SESSION".to_string(),
-            course_list: Vec::new(),
-        }
+        Self::from_session_state(&SessionState::default())
     }
 }
 
@@ -615,6 +614,9 @@ impl SessionStateModel {
     /// This method performs denormalization of status values from Python representation:
     /// - "NO_SESSION" → "CREATED"
     /// - "CAREER_NOT_SET" → "SESSION_SET"
+    ///
+    /// # Arguments
+    /// * `self` — the `SessionStateModel` being converted/consumed (owned)
     ///
     /// # Returns
     /// Internal `SessionState` struct with denormalized status
