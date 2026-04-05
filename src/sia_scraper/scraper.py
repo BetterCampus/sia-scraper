@@ -1,6 +1,7 @@
 """Async SIA scraper facade backed by Rust session workflow."""
 
 import asyncio
+import warnings
 from collections.abc import Callable
 
 import sia_scraper_rust
@@ -139,6 +140,20 @@ class SiaScraper:
                         )
                     # Always create fresh dict to drop any extra keys
                     course_list_raw.append({"code": item["code"], "name": item["name"]})
+                elif "course_code" in item and "course_name" in item:
+                    warnings.warn(
+                        f"session_data 'course_list[{index}]' uses deprecated "
+                        "'course_code'/'course_name' keys; use 'code'/'name' instead. "
+                        "Support will be removed in version 4.0.0.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+                    if not isinstance(item["course_code"], str) or not isinstance(item["course_name"], str):
+                        raise SiaSessionException(
+                            f"Invalid session_data: 'course_list[{index}]' "
+                            "course_code and course_name must be strings"
+                        )
+                    course_list_raw.append({"code": item["course_code"], "name": item["course_name"]})
                 elif len(item) == 1:
                     k, v = next(iter(item.items()))
                     # Reject reserved keys as single-key entries
