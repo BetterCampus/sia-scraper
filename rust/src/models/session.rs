@@ -536,6 +536,8 @@ impl SessionStateModel {
     ///   deprecated, emits deprecation warning)
     /// - **Mixed formats**: Entries can use different formats within the same course_list
     ///
+    /// Also accepts legacy `javax_faces_ViewState` key for pickle compatibility.
+    ///
     /// # Arguments
     /// * `dict` - Python dictionary containing session state
     ///
@@ -618,7 +620,13 @@ impl SessionStateModel {
         let params = get_str_map("params")?;
 
         let javax_faces_view_state: Option<String> =
-            required_item(dict, "javax_faces_view_state")?.extract()?;
+            if let Some(val) = dict.get_item("javax_faces_view_state")? {
+                val.extract()?
+            } else if let Some(val) = dict.get_item("javax_faces_ViewState")? {
+                val.extract()?
+            } else {
+                return Err(PyKeyError::new_err("Missing key: 'javax_faces_view_state'"));
+            };
         let career_code: String = required_item(dict, "career_code")?.extract()?;
         let career_name: String = required_item(dict, "career_name")?.extract()?;
         let is_electives: bool = required_item(dict, "is_electives")?.extract()?;
