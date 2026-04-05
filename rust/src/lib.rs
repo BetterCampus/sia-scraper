@@ -6,7 +6,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyString};
+use pyo3::types::{PyBytes, PyList, PyString};
 use pyo3::PyTypeInfo;
 
 use pyo3_asyncio::tokio::future_into_py;
@@ -184,7 +184,7 @@ fn session_state_json(state: &http::session::SessionState) -> Result<String, err
 /// print(result)  # [{"code": "2015555", "name": "Algebra Lineal"}, ...]
 /// ```
 #[pyfunction]
-fn get_course_list(html: &PyAny) -> Result<Py<PyAny>, error::SiaScraperError> {
+fn get_course_list(html: &PyAny) -> Result<Py<PyList>, error::SiaScraperError> {
     let html_str: String = if let Ok(s) = html.downcast::<PyString>() {
         s.to_string()
     } else if let Ok(b) = html.downcast::<PyBytes>() {
@@ -205,7 +205,7 @@ fn get_course_list(html: &PyAny) -> Result<Py<PyAny>, error::SiaScraperError> {
             list.push(dict.into_py(py));
         }
 
-        Ok(pyo3::types::PyList::new(py, &list).into_py(py))
+        Ok(pyo3::types::PyList::new(py, &list).into())
     })
 }
 
