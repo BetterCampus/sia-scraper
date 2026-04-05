@@ -530,9 +530,14 @@ class SessionStateModel:
     def from_dict(cls, data: dict[str, Any]) -> SessionStateModel:
         """Create from dictionary (supports legacy course keys).
 
+        Supports three course entry formats:
+        1. Current format: {"code": "1000001", "name": "Cálculo"}
+        2. Legacy named keys: {"course_code": "1000001", "course_name": "Cálculo"}
+        3. Legacy single-key: {"1000001": "Cálculo"} (key=code, value=name)
+
         Args:
             data: Dictionary with session state. Course entries can use
-                either new keys ("code", "name") or legacy keys ("course_code", "course_name").
+                any of the supported formats above.
 
         Returns:
             SessionStateModel instance.
