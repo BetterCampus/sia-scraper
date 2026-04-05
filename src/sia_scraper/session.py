@@ -119,25 +119,22 @@ class SiaSession:
         self._validate_course_list()
 
     def _validate_course_list(self) -> None:
-        """Validate course list format. Raises ValueError on invalid format."""
+        """Validate course list format using assertions (defense-in-depth)."""
         for i, course in enumerate(self._course_list):
-            if not isinstance(course, dict):
-                raise ValueError(
-                    f"Invalid course list format at index {i}: {type(course).__name__}. "
-                    "Expected dict with 'code' and 'name' string keys."
-                )
-            if "code" not in course or "name" not in course:
-                raise ValueError(
-                    f"Invalid course list format at index {i}: {course}. "
-                    "Expected dict with 'code' and 'name' keys."
-                )
+            assert isinstance(course, dict), (
+                f"Invalid course list format at index {i}: {type(course).__name__}. "
+                "Expected dict with 'code' and 'name' string keys."
+            )
+            assert "code" in course and "name" in course, (
+                f"Invalid course list format at index {i}: {course}. "
+                "Expected dict with 'code' and 'name' keys."
+            )
             code_val = course["code"]
             name_val = course["name"]
-            if not isinstance(code_val, str) or not isinstance(name_val, str):
-                raise ValueError(
-                    f"Invalid course list format at index {i}: code={code_val!r}, name={name_val!r}. "
-                    "Expected 'code' and 'name' values to be strings."
-                )
+            assert isinstance(code_val, str) and isinstance(name_val, str), (
+                f"Invalid course list format at index {i}: code={code_val!r}, name={name_val!r}. "
+                "Expected 'code' and 'name' values to be strings."
+            )
 
     def _raise_if_session_not_set(self, exc: Exception) -> None:
         """Raise SessionNotSet when Rust reports an uninitialized session."""
