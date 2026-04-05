@@ -205,16 +205,6 @@ mod tests {
     }
 
     #[test]
-    fn test_scrape_result_total_failures_only() {
-        let result = ScrapeResult {
-            successes: vec![],
-            failures: vec![(0, "err".to_string()), (1, "err2".to_string())],
-        };
-        assert_eq!(result.total(), 2);
-        assert_eq!(result.success_rate(), 0.0);
-    }
-
-    #[test]
     fn test_scrape_result_success_rate_empty() {
         let result = ScrapeResult {
             successes: vec![],

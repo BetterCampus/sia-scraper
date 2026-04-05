@@ -361,7 +361,7 @@ class SiaScraper:
 
         if progress_callback:
             progress_callback(
-                len(rust_result.successes) + len(rust_result.failures),
+                rust_result.total(),
                 rust_result.total(),
                 len(rust_result.successes),
                 len(rust_result.failures),
