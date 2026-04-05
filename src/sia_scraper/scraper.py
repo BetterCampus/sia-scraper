@@ -233,6 +233,11 @@ class SiaScraper:
         courses_indices = courses_indices or []
         courses_codes = courses_codes or []
 
+        if not courses_indices and not courses_codes:
+            raise ValueError(
+                "At least one of courses_indices or courses_codes must be provided"
+            )
+
         if not courses_indices:
             courses_indices = [self.get_course_index(code) for code in courses_codes]
 
