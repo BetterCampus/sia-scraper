@@ -413,11 +413,11 @@ class CourseListEntryModel:
             >>> entry = CourseListEntryModel("1000001", "Cálculo I")
         """
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> CourseListEntry:
         """Convert to dictionary with "code" and "name" keys.
 
         Returns:
-            Dictionary with "code" and "name" string keys.
+            CourseListEntry with "code" and "name" string keys.
         """
 
     @classmethod

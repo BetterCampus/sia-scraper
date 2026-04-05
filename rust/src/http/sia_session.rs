@@ -898,22 +898,7 @@ impl SiaSession {
                                     return Err((pos, index, e, error_time));
                                 }
                                 let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
-                                let mut remaining = delay;
-                                while remaining > 0 {
-                                    let sleep_time = std::cmp::min(remaining, 50);
-                                    sleep(Duration::from_millis(sleep_time)).await;
-
-                                    if abort.load(Ordering::SeqCst) {
-                                        return Err((
-                                            pos,
-                                            index,
-                                            HttpError::Aborted("Cancelled during retry backoff".to_string()),
-                                            Instant::now(),
-                                        ));
-                                    }
-
-                                    remaining = remaining.saturating_sub(sleep_time);
-                                }
+                                sleep(Duration::from_millis(delay)).await;
                             }
                         }
                     }
