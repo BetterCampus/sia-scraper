@@ -292,6 +292,7 @@ impl PySiaSession {
     /// for course in result.successes:
     ///     print(course.course_name)
     /// ```
+    #[pyo3(signature = (indices, mode, retries=None, delay=None))]
     fn scrape_courses<'py>(
         &self,
         py: Python<'py>,
