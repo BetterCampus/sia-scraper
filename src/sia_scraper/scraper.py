@@ -4,6 +4,8 @@ import asyncio
 import warnings
 from collections.abc import Callable
 
+from loguru import logger
+
 import sia_scraper_rust
 
 from .constants import http, status
@@ -240,6 +242,12 @@ class SiaScraper:
             [(0, 'CODE1'), (2, 'CODE2')]
             >>> indices
             [0, 2]
+
+            >>> # Raises when both are empty
+            >>> self._prepare_scrape_indices(None, None)
+            Traceback (most recent call last):
+                ...
+            ValueError: At least one of courses_indices or courses_codes must be provided
         """
         courses_indices = courses_indices or []
         courses_codes = courses_codes or []
@@ -293,6 +301,10 @@ class SiaScraper:
     ) -> None:
         """Apply course codes to success models.
 
+        Note: This method assumes successes are ordered consistently with
+        indices (both sorted by course index). This contract is maintained
+        by _prepare_scrape_indices sorting and Rust's result ordering.
+
         Args:
             successes: List of scraped course models to update in-place.
             paired: Sorted list of (index, code) tuples.
@@ -318,6 +330,17 @@ class SiaScraper:
         """
         code_map = {idx: code for idx, code in paired if code}
         if code_map:
+            if failed_indices is None:
+                expected = indices
+            else:
+                expected = [idx for idx in indices if idx not in failed_indices]
+
+            if len(successes) != len(expected):
+                logger.warning(
+                    f"Success count mismatch: got {len(successes)} successes, "
+                    f"expected {len(expected)} from indices"
+                )
+
             if failed_indices is None:
                 for idx, course in enumerate(successes):
                     if idx < len(indices) and indices[idx] in code_map:
@@ -418,8 +441,9 @@ class SiaScraper:
         self._apply_course_codes(rust_result.successes, paired, indices, failed_indices)
 
         if progress_callback:
+            completed = len(rust_result.successes) + len(rust_result.failures)
             progress_callback(
-                rust_result.total(),
+                completed,
                 rust_result.total(),
                 len(rust_result.successes),
                 len(rust_result.failures),

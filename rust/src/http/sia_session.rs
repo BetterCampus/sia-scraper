@@ -874,6 +874,8 @@ impl SiaSession {
                             }
                         }
                     }
+                    // Safety: loop runs at least once (0..=effective_retries) and always
+                    // returns Ok or Err before reaching here.
                     unreachable!("retry loop must return before this point")
                 }
             })

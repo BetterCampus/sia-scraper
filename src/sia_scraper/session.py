@@ -217,7 +217,7 @@ class SiaSession:
         self,
         indices: list[int],
         mode: str = "abort",
-        max_concurrent: int = 5,
+        max_concurrent: int | None = None,
         retries: int | None = None,
         delay: int | None = None,
     ) -> sia_scraper_rust.ScrapeResult:
@@ -227,6 +227,7 @@ class SiaSession:
             indices: List of course indices to scrape.
             mode: Error handling mode - "abort", "skip", or "retry".
             max_concurrent: Maximum number of concurrent scraping operations.
+                None delegates to the Rust default (5).
             retries: Maximum retry attempts per course (retry mode only). None uses Rust default (3).
             delay: Base delay between retries in milliseconds. None uses Rust default (800ms).
 

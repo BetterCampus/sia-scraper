@@ -48,14 +48,14 @@ impl CourseListEntryModel {
     /// Deprecated: use `code` instead. Will be removed in v4.0.0.
     #[getter]
     fn course_code(&self, py: Python<'_>) -> PyResult<String> {
-        emit_legacy_warning(py, "course_code getter")?;
+        emit_legacy_warning(py, "course_code getter", 2)?;
         Ok(self.code.clone())
     }
 
     /// Deprecated: use `name` instead. Will be removed in v4.0.0.
     #[getter]
     fn course_name(&self, py: Python<'_>) -> PyResult<String> {
-        emit_legacy_warning(py, "course_name getter")?;
+        emit_legacy_warning(py, "course_name getter", 2)?;
         Ok(self.name.clone())
     }
 
@@ -215,7 +215,7 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
         (code_result, name_result)
     {
         if code_is_legacy || name_is_legacy {
-            emit_legacy_warning(py, "course_code/course_name")?;
+            emit_legacy_warning(py, "course_code/course_name", 3)?;
         }
         return Ok(CourseListEntryModel {
             code: code_val.extract()?,
@@ -228,7 +228,7 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
         if let Some((key, value)) = dict.iter().next() {
             let key_str: String = key.extract()?;
             if !["code", "name", "course_code", "course_name"].contains(&key_str.as_str()) {
-                emit_legacy_warning(py, "single-key dict")?;
+                emit_legacy_warning(py, "single-key dict", 3)?;
                 return Ok(CourseListEntryModel {
                     code: key_str,
                     name: value.extract()?,
@@ -262,13 +262,15 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
 ///   - `"course_name getter"` - Deprecated getter property
 ///   - `"course_code/course_name"` - Legacy named key format
 ///   - `"single-key dict"` - Legacy single-entry dict format
+/// * `stacklevel` - Warning stack depth (default: 2 for direct Python calls).
+///   Use 3 when called through `normalize_course_dict` from `from_dict`/`__setstate__`.
 ///
 /// # Returns
 /// `Ok(())` if warning was successfully emitted
 ///
 /// # Errors
 /// Returns `PyErr` if Python warning module import or method call fails
-fn emit_legacy_warning(py: Python<'_>, format_type: &str) -> PyResult<()> {
+fn emit_legacy_warning(py: Python<'_>, format_type: &str, stacklevel: u32) -> PyResult<()> {
     let warnings = py.import("warnings")?;
 
     let message = match format_type {
@@ -295,7 +297,7 @@ fn emit_legacy_warning(py: Python<'_>, format_type: &str) -> PyResult<()> {
         (
             message,
             py.get_type::<pyo3::exceptions::PyDeprecationWarning>(),
-            2,
+            stacklevel,
         ),
     )?;
     Ok(())

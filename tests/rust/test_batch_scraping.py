@@ -11,7 +11,11 @@ sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 
 @pytest.fixture
 async def initialized_session():
-    """Provide an initialized PySiaSession with cleanup."""
+    """Provide an initialized PySiaSession with cleanup.
+
+    Warning: This fixture makes real network requests to SIA.
+    Tests using it should be marked with @pytest.mark.network.
+    """
     session = sia_scraper_rust.PySiaSession()
     await session.init_session()
     yield session
