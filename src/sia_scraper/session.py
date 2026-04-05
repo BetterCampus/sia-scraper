@@ -243,10 +243,6 @@ class SiaSession:
             except sia_scraper_rust.SessionError as exc:
                 self._raise_if_session_not_set(exc)
                 raise
-            except SiaSessionException:
-                raise
-            except sia_scraper_rust.SiaScraperException:
-                raise
 
     async def scrape_courses_parallel(
         self,
@@ -284,10 +280,6 @@ class SiaSession:
                 )
             except sia_scraper_rust.SessionError as exc:
                 self._raise_if_session_not_set(exc)
-                raise
-            except SiaSessionException:
-                raise
-            except sia_scraper_rust.SiaScraperException:
                 raise
 
     async def close(self) -> None:

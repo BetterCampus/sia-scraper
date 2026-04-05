@@ -36,6 +36,29 @@ macro_rules! define_regex {
 ///
 /// Uses the formula: `max(1, retry_delay_ms) * 2^attempt`, capped at
 /// `max_delay_ms` from the retry configuration.
+///
+/// # Arguments
+///
+/// * `retry_config` - Retry configuration containing the `max_delay_ms` cap.
+/// * `retry_delay_ms` - Base delay in milliseconds. Values below 1 are clamped to 1.
+/// * `attempt` - Zero-based retry attempt index.
+///
+/// # Returns
+///
+/// Backoff delay in milliseconds (`u64`), capped at `retry_config.max_delay_ms`.
+///
+/// # Notes
+///
+/// Uses `saturating_mul` to avoid overflow and caps the left-shift exponent at
+/// 31 to avoid undefined shift behavior.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let cfg = RetryConfig::default();
+/// let delay = compute_backoff_ms(&cfg, 500, 2);
+/// assert_eq!(delay, 2_000);
+/// ```
 fn compute_backoff_ms(retry_config: &RetryConfig, retry_delay_ms: u64, attempt: u32) -> u64 {
     let base = retry_delay_ms.max(1);
     let shift = attempt.min(31);

@@ -2,6 +2,7 @@
 name = "sia-scraper"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87"
 description = "Rust extensions for sia-scraper"
 
 [lib]
