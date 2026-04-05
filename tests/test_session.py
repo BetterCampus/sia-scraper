@@ -1,5 +1,6 @@
 """Unit tests for Rust-backed async session wrapper."""
 
+import warnings
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -281,8 +282,6 @@ class TestSessionStateSerialization:
 
     def test_course_entry_from_dict_legacy_named_keys(self):
         """CourseListEntryModel.from_dict() handles legacy course_code/course_name."""
-        import warnings
-
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             entry = sia_scraper_rust.CourseListEntryModel.from_dict(
@@ -300,8 +299,6 @@ class TestSessionStateSerialization:
 
     def test_course_entry_from_dict_legacy_single_key(self):
         """CourseListEntryModel.from_dict() handles legacy single-key dict."""
-        import warnings
-
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             entry = sia_scraper_rust.CourseListEntryModel.from_dict({"1000003-B": "Álgebra Lineal"})
@@ -327,8 +324,6 @@ class TestSessionStateSerialization:
 
     def test_session_state_pickle_legacy_course_list_single_key(self):
         """CourseListEntryModel.from_dict() handles legacy format in session context."""
-        import warnings
-
         # Verify that from_dict works correctly for legacy single-key format
         # This is the format that would be in a pickled SessionStateModel from before Issue #54
         with warnings.catch_warnings(record=True) as w:

@@ -189,16 +189,16 @@ class SiaSession:
         self,
         indices: list[int],
         mode: str = "abort",
-        retries: int = 0,
-        delay: int = 0,
+        retries: int | None = None,
+        delay: int | None = None,
     ) -> sia_scraper_rust.ScrapeResult:
         """Scrape multiple courses sequentially using Rust batch scraping.
 
         Args:
             indices: List of course indices to scrape.
             mode: Error handling mode - "abort", "skip", or "retry".
-            retries: Maximum retry attempts per course (retry mode only).
-            delay: Base delay between retries in milliseconds.
+            retries: Maximum retry attempts per course (retry mode only). None uses Rust default (3).
+            delay: Base delay between retries in milliseconds. None uses Rust default (800ms).
 
         Returns:
             ScrapeResult with successes and failures.
@@ -218,8 +218,8 @@ class SiaSession:
         indices: list[int],
         mode: str = "abort",
         max_concurrent: int = 5,
-        retries: int = 0,
-        delay: int = 0,
+        retries: int | None = None,
+        delay: int | None = None,
     ) -> sia_scraper_rust.ScrapeResult:
         """Scrape multiple courses concurrently using Rust parallel scraping.
 
@@ -227,8 +227,8 @@ class SiaSession:
             indices: List of course indices to scrape.
             mode: Error handling mode - "abort", "skip", or "retry".
             max_concurrent: Maximum number of concurrent scraping operations.
-            retries: Maximum retry attempts per course (retry mode only).
-            delay: Base delay between retries in milliseconds.
+            retries: Maximum retry attempts per course (retry mode only). None uses Rust default (3).
+            delay: Base delay between retries in milliseconds. None uses Rust default (800ms).
 
         Returns:
             ScrapeResult with successes and failures.
