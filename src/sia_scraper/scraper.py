@@ -419,7 +419,7 @@ class SiaScraper:
             max_retries: Maximum retry attempts per course (retry mode only).
             retry_delay: Base delay between retries in seconds (retry mode only).
             progress_callback: Optional callback called exactly once after batch
-                completion with (total, total, successes, failures).
+                completion with (completed, total, successes, failures).
                 This is batch-only, not incremental progress updates.
                 Migration: For per-item progress, process each item in the
                 returned ScrapeResult after completion.
