@@ -59,7 +59,6 @@ pub struct ScrapeResult {
     pub failures: Vec<(i32, String)>,
 }
 
-#[allow(non_local_definitions)]
 #[pymethods]
 impl ScrapeResult {
     /// Create a new empty ScrapeResult.
