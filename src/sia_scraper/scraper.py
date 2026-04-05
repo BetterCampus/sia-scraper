@@ -258,7 +258,7 @@ class SiaScraper:
         if not courses_indices:
             courses_indices = [self.get_course_index(code) for code in courses_codes]
 
-        if not courses_codes and courses_indices:
+        if not courses_codes:
             courses_codes = [""] * len(courses_indices)
 
         if courses_indices and courses_codes and len(courses_indices) != len(courses_codes):
@@ -370,7 +370,9 @@ class SiaScraper:
 
         for i, course in enumerate(self.course_list):
             raw = course.get("code")
-            # Fallback handles legacy single-key dicts where key=code, value=name
+            # Defensive fallback: _course_list may be manipulated externally with
+            # legacy single-key dicts (e.g., {"CODE1": "Course Name"}). Normalized
+            # entries always have "code" key, so this branch is dead in normal usage.
             code = raw if raw is not None else next(iter(course), None)
             if code == course_code:
                 return i
