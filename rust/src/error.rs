@@ -34,7 +34,7 @@ create_exception!(sia_scraper_rust, ParseError, SiaScraperException);
 
 create_exception!(sia_scraper_rust, SessionError, SiaScraperException);
 
-create_exception!(sia_scraper_rust, AbortError, SiaScraperException);
+create_exception!(sia_scraper_rust, AbortError, SessionError);
 
 /// Custom error types for SIA Scraper operations.
 ///

@@ -123,6 +123,25 @@ class SessionError(SiaScraperException):
         >>> asyncio.run(main())
     """
 
+class AbortError(SessionError):
+    """Exception raised when batch operation is aborted.
+
+    This exception is a subclass of SessionError and is raised when
+    a batch scraping operation is aborted (e.g., in abort mode when
+    any course fetch fails). Catching SessionError will also catch
+    AbortError.
+
+    Example:
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.scrape_courses([0, 1], mode="abort")
+        ...     except sia_scraper_rust.AbortError as e:
+        ...         print(f"Operation aborted: {e}")
+        >>> asyncio.run(main())
+    """
+
 class ScheduleModel:
     """Represents a single class schedule entry with day, time, and location.
 
