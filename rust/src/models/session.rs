@@ -538,6 +538,10 @@ impl SessionStateModel {
     ///
     /// Also accepts legacy `javax_faces_ViewState` key for pickle compatibility.
     ///
+    /// **Note:** The `javax_faces_view_state` key is optional. If neither the current
+    /// `javax_faces_view_state` nor the legacy `javax_faces_ViewState` key is present,
+    /// the field defaults to `None`.
+    ///
     /// # Arguments
     /// * `dict` - Python dictionary containing session state
     ///
@@ -625,7 +629,7 @@ impl SessionStateModel {
             } else if let Some(val) = dict.get_item("javax_faces_ViewState")? {
                 val.extract()?
             } else {
-                return Err(PyKeyError::new_err("Missing key: 'javax_faces_view_state'"));
+                None
             };
         let career_code: String = required_item(dict, "career_code")?.extract()?;
         let career_name: String = required_item(dict, "career_name")?.extract()?;
@@ -1376,6 +1380,139 @@ mod tests {
 
             let result = SessionStateModel::from_dict(dict);
             assert!(result.is_err());
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_viewstate_missing_defaults_none() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            // Intentionally omit javax_faces_view_state key entirely
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+
+            let courses = PyList::empty(py);
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("code", "1000001").unwrap();
+            course_dict.set_item("name", "Calculo").unwrap();
+            courses.append(course_dict).unwrap();
+            dict.set_item("course_list", courses).unwrap();
+
+            // Should not raise an error when ViewState key is completely absent
+            let model = SessionStateModel::from_dict(dict).unwrap();
+
+            // ViewState should default to None
+            assert_eq!(model.javax_faces_view_state, None);
+            assert_eq!(model.career_code, "0-2-8-3");
+            assert_eq!(model.course_list.len(), 1);
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_viewstate_explicit_none() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            // Key is present but explicitly set to None
+            dict.set_item("javax_faces_view_state", py.None()).unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+
+            let courses = PyList::empty(py);
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("code", "1000001").unwrap();
+            course_dict.set_item("name", "Calculo").unwrap();
+            courses.append(course_dict).unwrap();
+            dict.set_item("course_list", courses).unwrap();
+
+            let model = SessionStateModel::from_dict(dict).unwrap();
+
+            // Should handle explicit None value
+            assert_eq!(model.javax_faces_view_state, None);
+            assert_eq!(model.career_code, "0-2-8-3");
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_legacy_viewstate_explicit_none() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            // Legacy key is present with explicit None
+            dict.set_item("javax_faces_ViewState", py.None()).unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+
+            let courses = PyList::empty(py);
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("code", "1000001").unwrap();
+            course_dict.set_item("name", "Calculo").unwrap();
+            courses.append(course_dict).unwrap();
+            dict.set_item("course_list", courses).unwrap();
+
+            let model = SessionStateModel::from_dict(dict).unwrap();
+
+            // Should handle legacy key with explicit None
+            assert_eq!(model.javax_faces_view_state, None);
+            assert_eq!(model.career_code, "0-2-8-3");
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_viewstate_with_value() {
+        use pyo3::types::{PyDict, PyList};
+
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            // Key present with actual value
+            dict.set_item("javax_faces_view_state", "vs-test-123")
+                .unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+
+            let courses = PyList::empty(py);
+            let course_dict = PyDict::new(py);
+            course_dict.set_item("code", "1000001").unwrap();
+            course_dict.set_item("name", "Calculo").unwrap();
+            courses.append(course_dict).unwrap();
+            dict.set_item("course_list", courses).unwrap();
+
+            let model = SessionStateModel::from_dict(dict).unwrap();
+
+            // Should extract the actual value
+            assert_eq!(
+                model.javax_faces_view_state,
+                Some("vs-test-123".to_string())
+            );
+            assert_eq!(model.career_code, "0-2-8-3");
         });
     }
 }
