@@ -253,4 +253,5 @@ def get_course_list(content: bytes | str) -> list[dict[str, str]]:
 
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="ignore")
+    # Rust FFI returns list[dict[str, str]]; static analysis can't verify cross-language boundary
     return rust_get_course_list(content)  # type: ignore[return-value]

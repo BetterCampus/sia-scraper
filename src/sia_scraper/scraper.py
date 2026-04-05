@@ -134,19 +134,22 @@ class SiaScraper:
                 if "code" in item and "name" in item:
                     if not isinstance(item["code"], str) or not isinstance(item["name"], str):
                         raise SiaSessionException(
-                            f"Invalid session_data: 'course_list[{index}]' code and name must be strings"
+                            f"Invalid session_data: 'course_list[{index}]' "
+                            "code and name must be strings"
                         )
                     course_list_raw.append(item)
                 elif len(item) == 1:
                     k, v = next(iter(item.items()))
                     if not isinstance(k, str) or not isinstance(v, str):
                         raise SiaSessionException(
-                            f"Invalid session_data: 'course_list[{index}]' key and value must be strings"
+                            f"Invalid session_data: 'course_list[{index}]' "
+                            "key and value must be strings"
                         )
                     course_list_raw.append({"code": k, "name": v})
                 else:
                     raise SiaSessionException(
-                        f"Invalid session_data: 'course_list[{index}]' must have 'code'/'name' keys or be a single-key dict"
+                        f"Invalid session_data: 'course_list[{index}]' "
+                        "must have 'code'/'name' keys or be a single-key dict"
                     )
 
         self._sia_session._course_list = course_list_raw

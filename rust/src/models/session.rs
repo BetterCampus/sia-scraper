@@ -47,12 +47,20 @@ impl CourseListEntryModel {
 
     /// Deprecated: use `code` instead. Will be removed in v4.0.0.
     #[getter]
+    #[deprecated(
+        since = "3.0.0",
+        note = "Use `code` instead; will be removed in v4.0.0"
+    )]
     fn course_code(&self) -> &str {
         &self.code
     }
 
     /// Deprecated: use `name` instead. Will be removed in v4.0.0.
     #[getter]
+    #[deprecated(
+        since = "3.0.0",
+        note = "Use `name` instead; will be removed in v4.0.0"
+    )]
     fn course_name(&self) -> &str {
         &self.name
     }
