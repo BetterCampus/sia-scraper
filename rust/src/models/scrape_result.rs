@@ -126,6 +126,9 @@ impl ScrapeResult {
 
     /// Return a human-readable summary of the scraping result.
     ///
+    /// # Arguments
+    /// None
+    ///
     /// # Returns
     /// String in the format "ScrapeResult: X successes, Y failures".
     ///
@@ -135,13 +138,25 @@ impl ScrapeResult {
     /// # Examples
     /// ```python
     /// result = await session.scrape_courses([0, 1], mode="skip")
-    /// print(result)  # ScrapeResult: 1 successes, 1 failures
+    /// print(result)  # ScrapeResult: 1 success, 1 failure
     /// ```
     pub fn __repr__(&self) -> String {
+        let success_word = if self.successes.len() == 1 {
+            "success"
+        } else {
+            "successes"
+        };
+        let failure_word = if self.failures.len() == 1 {
+            "failure"
+        } else {
+            "failures"
+        };
         format!(
-            "ScrapeResult: {} successes, {} failures",
+            "ScrapeResult: {} {}, {} {}",
             self.successes.len(),
-            self.failures.len()
+            success_word,
+            self.failures.len(),
+            failure_word
         )
     }
 }
@@ -296,5 +311,71 @@ mod tests {
         };
         let repr = result.__repr__();
         assert_eq!(repr, "ScrapeResult: 0 successes, 2 failures");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_singular_both() {
+        let course = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000001".to_string()),
+        };
+        let result = ScrapeResult {
+            successes: vec![course],
+            failures: vec![(0, "err".to_string())],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 1 success, 1 failure");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_only_successes() {
+        let course1 = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000001".to_string()),
+        };
+        let course2 = CourseInfoModel {
+            course_name: "Álgebra".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 15,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000002".to_string()),
+        };
+        let result = ScrapeResult {
+            successes: vec![course1, course2],
+            failures: vec![],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 2 successes, 0 failures");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_single_success_only() {
+        let course = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000001".to_string()),
+        };
+        let result = ScrapeResult {
+            successes: vec![course],
+            failures: vec![],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 1 success, 0 failures");
     }
 }

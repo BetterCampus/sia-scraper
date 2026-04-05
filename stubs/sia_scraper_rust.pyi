@@ -372,6 +372,15 @@ class CourseListEntryModel:
     code: str
     name: str
 
+    @property
+    def course_code(self) -> str:
+        """Deprecated: use code instead. Will be removed in v4.0.0."""
+        ...
+    @property
+    def course_name(self) -> str:
+        """Deprecated: use name instead. Will be removed in v4.0.0."""
+        ...
+
     def __init__(self, code: str, name: str) -> None:
         """Initialize a CourseListEntryModel instance.
 

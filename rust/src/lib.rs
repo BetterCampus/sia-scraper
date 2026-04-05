@@ -622,6 +622,7 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add("SiaTimeoutError", error::SiaTimeoutError::type_object(py))?;
     m.add("ParseError", error::ParseError::type_object(py))?;
     m.add("SessionError", error::SessionError::type_object(py))?;
+    m.add("AbortError", error::AbortError::type_object(py))?;
     
     // Register model classes
     m.add_class::<models::course::ScheduleModel>()?;

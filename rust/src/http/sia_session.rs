@@ -945,6 +945,10 @@ mod tests {
     use super::*;
     use crate::constants::SIA_BASE_URL;
     use crate::models::session::CourseListEntryModel;
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::io::AsyncWriteExt;
 
     #[tokio::test]
     async fn test_session_creation() {
@@ -1446,11 +1450,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_abort_stops_on_first_failure() {
-        use std::collections::HashMap;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-        use tokio::io::AsyncWriteExt;
-
         let request_count = Arc::new(AtomicUsize::new(0));
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1476,7 +1475,7 @@ mod tests {
             loop {
                 let (mut stream, _) = listener.accept().await.unwrap();
                 let count = request_count.fetch_add(1, Ordering::SeqCst);
-                let body = if count.is_multiple_of(2) {
+                let body = if count % 2 == 0 {
                     success_body.clone()
                 } else {
                     error_body.clone()
@@ -1536,10 +1535,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_multiple_indices_ordering() {
-        use std::collections::HashMap;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-
         let mut server = mockito::Server::new_async().await;
         let mock_url = server.url();
 
@@ -1567,7 +1562,7 @@ mod tests {
             .with_status(200)
             .with_body_from_request(move |_req| {
                 let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
-                if count.is_multiple_of(3) {
+                if count % 3 == 0 {
                     success_body.clone().into_bytes()
                 } else {
                     noop_body.clone().into_bytes()
@@ -1632,10 +1627,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_handles_concurrent_execution() {
-        use std::collections::HashMap;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-        use tokio::io::AsyncWriteExt;
         use tokio::time::sleep;
 
         let active_requests = Arc::new(AtomicUsize::new(0));

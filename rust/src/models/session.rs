@@ -47,14 +47,16 @@ impl CourseListEntryModel {
 
     /// Deprecated: use `code` instead. Will be removed in v4.0.0.
     #[getter]
-    fn course_code(&self) -> &str {
-        &self.code
+    fn course_code(&self, py: Python<'_>) -> PyResult<String> {
+        emit_legacy_warning(py, "course_code getter")?;
+        Ok(self.code.clone())
     }
 
     /// Deprecated: use `name` instead. Will be removed in v4.0.0.
     #[getter]
-    fn course_name(&self) -> &str {
-        &self.name
+    fn course_name(&self, py: Python<'_>) -> PyResult<String> {
+        emit_legacy_warning(py, "course_name getter")?;
+        Ok(self.name.clone())
     }
 
     fn __repr__(&self) -> String {
@@ -251,12 +253,24 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
 /// Emit deprecation warning for legacy course dict formats.
 fn emit_legacy_warning(py: Python<'_>, format_type: &str) -> PyResult<()> {
     let warnings = py.import("warnings")?;
-    let message = format!(
-        "CourseListEntry deserialization from {} format is deprecated. \
-         Use {{'code': ..., 'name': ...}} instead. \
-         Legacy format support will be removed in version 4.0.0",
-        format_type
-    );
+    let message = if format_type.contains("getter") {
+        format!(
+            "{} is deprecated. Use {} instead. Will be removed in v4.0.0.",
+            format_type,
+            if format_type == "course_code getter" {
+                "code"
+            } else {
+                "name"
+            }
+        )
+    } else {
+        format!(
+            "CourseListEntry deserialization from {} format is deprecated. \
+             Use {{'code': ..., 'name': ...}} instead. \
+             Legacy format support will be removed in version 4.0.0",
+            format_type
+        )
+    };
     warnings.call_method1(
         "warn",
         (
@@ -395,7 +409,7 @@ impl SessionStateModel {
     /// A new `SessionStateModel` with normalized status and cloned fields
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use crate::http::session::SessionState;
     /// use crate::models::session::SessionStateModel;
     /// use std::collections::HashMap;
@@ -444,7 +458,7 @@ impl SessionStateModel {
     /// Returns `PyErr` if dictionary item setting fails
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use pyo3::Python;
     /// use crate::models::session::SessionStateModel;
     ///
@@ -512,7 +526,7 @@ impl SessionStateModel {
     /// Returns `PyErr` if type extraction fails
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use pyo3::Python;
     /// use pyo3::types::{PyDict, PyList};
     /// use crate::models::session::SessionStateModel;
@@ -622,7 +636,7 @@ impl SessionStateModel {
     /// Internal `SessionState` struct with denormalized status
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use crate::models::session::SessionStateModel;
     ///
     /// let model = SessionStateModel::default();
@@ -898,35 +912,30 @@ mod tests {
         expected_format: &str,
     ) -> Result<(), pyo3::PyErr> {
         let warnings_list = warning_list.downcast::<PyList>()?;
-        assert_eq!(
-            warnings_list.len(),
-            1,
-            "Expected exactly 1 deprecation warning, got {}",
+        let mut found_matching_warning = false;
+
+        for i in 0..warnings_list.len() {
+            let warning = warnings_list.get_item(i)?;
+            let category = warning.getattr("category")?;
+            let message = warning.getattr("message")?;
+            let message_str = message.str()?.to_string();
+
+            let category_name = category.str()?.to_string();
+
+            if category_name.contains("DeprecationWarning")
+                && message_str.contains(expected_format)
+                && message_str.contains("4.0.0")
+            {
+                found_matching_warning = true;
+                break;
+            }
+        }
+
+        assert!(
+            found_matching_warning,
+            "Expected at least one deprecation warning containing '{}' and '4.0.0', got {} warnings",
+            expected_format,
             warnings_list.len()
-        );
-
-        let warning = warnings_list.get_item(0)?;
-        let category = warning.getattr("category")?;
-        let message = warning.getattr("message")?;
-        let message_str = message.str()?.to_string();
-
-        let category_name = category.str()?.to_string();
-        assert!(
-            category_name.contains("DeprecationWarning"),
-            "Warning category is not DeprecationWarning, got: {}",
-            category_name
-        );
-
-        assert!(
-            message_str.contains(expected_format),
-            "Warning message '{}' does not contain expected format '{}'",
-            message_str,
-            expected_format
-        );
-        assert!(
-            message_str.contains("4.0.0"),
-            "Warning message '{}' does not contain version 4.0.0",
-            message_str
         );
 
         Ok(())

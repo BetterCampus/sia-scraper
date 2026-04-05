@@ -298,6 +298,7 @@ class SiaScraper:
 
         for i, course in enumerate(self.course_list):
             raw = course.get("code")
+            # Fallback handles legacy single-key dicts where key=code, value=name
             code = raw if raw is not None else next(iter(course), None)
             if code == course_code:
                 return i
@@ -314,7 +315,7 @@ class SiaScraper:
         self,
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
-        error_mode: str = ErrorMode.ABORT,
+        error_mode: ErrorMode | str = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
         progress_callback: Callable[[int, int, int, int], None] | None = None,
@@ -343,7 +344,7 @@ class SiaScraper:
                 but their lengths differ.
         """
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = error_mode.lower()
+        mode = error_mode.value.lower() if isinstance(error_mode, ErrorMode) else error_mode.lower()
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses(
@@ -384,7 +385,7 @@ class SiaScraper:
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
         max_concurrent: int = 5,
-        error_mode: str = ErrorMode.ABORT,
+        error_mode: ErrorMode | str = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
     ) -> ScrapeResult | list[sia_scraper_rust.CourseInfoModel]:
@@ -428,7 +429,7 @@ class SiaScraper:
             1.0
         """
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = error_mode.lower()
+        mode = error_mode.value.lower() if isinstance(error_mode, ErrorMode) else error_mode.lower()
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses_parallel(
