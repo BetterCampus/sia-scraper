@@ -45,12 +45,13 @@ fn compute_backoff_ms(retry_config: &RetryConfig, retry_delay_ms: u64, attempt: 
 
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
-/// Result type for concurrent course scraping: `(position, index, data, timestamp)`.
+/// Result type for concurrent course scraping.
 ///
-/// The first element is the position in the original input batch,
-/// the second is the course index, the third is either the parsed
-/// `CourseInfoModel` on success or an `HttpError` on failure,
-/// and the fourth is the timestamp when the result was produced.
+/// - `Ok((position, index, CourseInfoModel, timestamp))` on success
+/// - `Err((position, index, HttpError, timestamp))` on failure
+///
+/// The `position` field is the item's index in the original input batch,
+/// useful for restoring deterministic ordering after concurrent execution.
 pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel, Instant), (usize, i32, HttpError, Instant)>;
 
 #[derive(Clone)]
@@ -893,6 +894,12 @@ impl SiaSession {
                             }
                         }
                     }
+                    #[cfg(debug_assertions)]
+                    unreachable!(
+                        "Retry loop must return: Ok on success or Err when attempt == effective_retries"
+                    );
+
+                    #[cfg(not(debug_assertions))]
                     Err((
                         pos,
                         index,
