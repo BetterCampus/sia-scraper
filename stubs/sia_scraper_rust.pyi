@@ -16,7 +16,9 @@ Example:
 """
 
 from collections.abc import Awaitable
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
+
+ErrorModeStr = Literal["abort", "skip", "retry"]
 
 class SiaScraperException(Exception):
     """Custom exception raised by sia_scraper_rust for parsing and validation errors.
@@ -1121,7 +1123,7 @@ class PySiaSession:
     def scrape_courses(
         self,
         indices: list[int],
-        mode: str,
+        mode: ErrorModeStr,
         retries: int | None = None,
         delay: int | None = None,
     ) -> Awaitable[ScrapeResult]:
@@ -1164,7 +1166,7 @@ class PySiaSession:
     def scrape_courses_parallel(
         self,
         indices: list[int],
-        mode: str,
+        mode: ErrorModeStr,
         max_concurrent: int | None = None,
         retries: int | None = None,
         delay: int | None = None,

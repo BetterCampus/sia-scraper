@@ -1,6 +1,7 @@
 """Thin Python wrapper around Rust PySiaSession."""
 
 from contextlib import asynccontextmanager
+from typing import Literal
 
 import sia_scraper_rust
 
@@ -12,6 +13,8 @@ from .core.exceptions import (
     SessionNotSet,
     SiaSessionException,
 )
+
+ErrorModeStr = Literal["abort", "skip", "retry"]
 
 
 class SiaSession:
@@ -214,7 +217,7 @@ class SiaSession:
     async def scrape_courses(
         self,
         indices: list[int],
-        mode: str = "abort",
+        mode: ErrorModeStr = "abort",
         retries: int | None = None,
         delay: int | None = None,
     ) -> sia_scraper_rust.ScrapeResult:
@@ -247,7 +250,7 @@ class SiaSession:
     async def scrape_courses_parallel(
         self,
         indices: list[int],
-        mode: str = "abort",
+        mode: ErrorModeStr = "abort",
         max_concurrent: int | None = None,
         retries: int | None = None,
         delay: int | None = None,

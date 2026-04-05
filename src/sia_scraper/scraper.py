@@ -3,6 +3,7 @@
 import asyncio
 import warnings
 from collections.abc import Callable
+from typing import Literal, cast
 
 from loguru import logger
 
@@ -13,6 +14,8 @@ from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
 from .parsers.models import ErrorMode, ScrapeResult
 from .session import SiaSession
+
+ErrorModeStr = Literal["abort", "skip", "retry"]
 
 
 class SiaScraper:
@@ -283,7 +286,7 @@ class SiaScraper:
         indices = [idx for idx, _ in paired]
         return paired, indices
 
-    def _resolve_error_mode(self, error_mode: ErrorMode | str) -> str:
+    def _resolve_error_mode(self, error_mode: ErrorMode | ErrorModeStr) -> ErrorModeStr:
         """Resolve and validate error_mode to a normalized string.
 
         Args:
@@ -309,7 +312,7 @@ class SiaScraper:
             raise ValueError(
                 f"Invalid error_mode: {error_mode!r}. Must be one of: {', '.join(sorted(valid_modes))}"
             )
-        return mode
+        return mode  # type: ignore[return-value]
 
     def _apply_course_codes(
         self,
@@ -399,7 +402,7 @@ class SiaScraper:
         self,
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
-        error_mode: ErrorMode | str = ErrorMode.ABORT,
+        error_mode: ErrorMode | ErrorModeStr = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
         progress_callback: Callable[[int, int, int, int], None] | None = None,
@@ -431,7 +434,7 @@ class SiaScraper:
             ValueError: If error_mode is not a valid mode.
         """
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = self._resolve_error_mode(error_mode)
+        mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses(
@@ -481,7 +484,7 @@ class SiaScraper:
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
         max_concurrent: int = 5,
-        error_mode: ErrorMode | str = ErrorMode.ABORT,
+        error_mode: ErrorMode | ErrorModeStr = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
     ) -> ScrapeResult | list[sia_scraper_rust.CourseInfoModel]:
@@ -526,7 +529,7 @@ class SiaScraper:
             1.0
         """
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = self._resolve_error_mode(error_mode)
+        mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses_parallel(
