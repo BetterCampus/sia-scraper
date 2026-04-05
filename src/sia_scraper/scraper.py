@@ -235,6 +235,26 @@ class SiaScraper:
         indices = [idx for idx, _ in paired]
         return paired, indices
 
+    def _resolve_error_mode(self, error_mode: ErrorMode | str) -> str:
+        """Resolve and validate error_mode to a normalized string.
+
+        Args:
+            error_mode: ErrorMode enum or string ("abort", "skip", "retry").
+
+        Returns:
+            Normalized lowercase mode string.
+
+        Raises:
+            ValueError: If error_mode is not a valid mode.
+        """
+        mode = error_mode.value.lower() if isinstance(error_mode, ErrorMode) else error_mode.lower()
+        valid_modes = {"abort", "skip", "retry"}
+        if mode not in valid_modes:
+            raise ValueError(
+                f"Invalid error_mode: {error_mode!r}. Must be one of: {', '.join(sorted(valid_modes))}"
+            )
+        return mode
+
     def _apply_course_codes(
         self,
         successes: list[sia_scraper_rust.CourseInfoModel],
@@ -342,9 +362,10 @@ class SiaScraper:
         Raises:
             ValueError: If both courses_indices and courses_codes are provided
                 but their lengths differ.
+            ValueError: If error_mode is not a valid mode.
         """
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = error_mode.value.lower() if isinstance(error_mode, ErrorMode) else error_mode.lower()
+        mode = self._resolve_error_mode(error_mode)
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses(
@@ -408,6 +429,7 @@ class SiaScraper:
         Raises:
             ValueError: If both courses_indices and courses_codes are provided
                 but their lengths differ.
+            ValueError: If error_mode is not a valid mode.
 
         Example:
             >>> # Abort mode - returns list of CourseInfoModel
@@ -429,7 +451,7 @@ class SiaScraper:
             1.0
         """
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = error_mode.value.lower() if isinstance(error_mode, ErrorMode) else error_mode.lower()
+        mode = self._resolve_error_mode(error_mode)
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses_parallel(
