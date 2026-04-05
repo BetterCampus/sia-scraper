@@ -244,7 +244,9 @@ class SiaScraper:
             Tuple of (paired list sorted by index, sorted indices list).
 
         Raises:
+            ValueError: If both courses_indices and courses_codes are None or empty.
             ValueError: If both provided but lengths differ.
+            ValueError: If any provided course code is not found in the course list.
 
         Example:
             >>> paired, indices = self._prepare_scrape_indices([0, 2], ["CODE1", "CODE2"])

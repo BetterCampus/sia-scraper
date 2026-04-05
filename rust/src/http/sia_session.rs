@@ -981,7 +981,8 @@ impl SiaSession {
         max_retries: u32,
         retry_delay_ms: u64,
     ) -> Result<CourseInfoModel, HttpError> {
-        for attempt in 0..=max_retries {
+        let mut attempt: u32 = 0;
+        loop {
             match self.scrape_course_info(index).await {
                 Ok(info) => return Ok(info),
                 Err(e) => {
@@ -990,10 +991,10 @@ impl SiaSession {
                     }
                     let delay = compute_backoff_ms(&self.retry_config, retry_delay_ms, attempt);
                     sleep(Duration::from_millis(delay)).await;
+                    attempt = attempt.saturating_add(1);
                 }
             }
         }
-        unreachable!("retry loop must return before this point");
     }
 }
 
@@ -1006,7 +1007,6 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use tokio::io::AsyncWriteExt;
-    use tokio::sync::Barrier;
     use tokio::task::JoinHandle;
 
     #[tokio::test]

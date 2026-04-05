@@ -1069,8 +1069,7 @@ class PySiaSession:
             SessionStateModel with career info and course list.
 
         Raises:
-            SessionError: If session not initialized or in Abort mode on first failure.
-            SiaScraperException: If mode is not one of "abort", "skip", "retry".
+            SessionError: If session not initialized.
             NetworkError: If connection fails.
             HttpStatusError: If server returns error status.
             SiaTimeoutError: If request times out.

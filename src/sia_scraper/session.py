@@ -136,6 +136,11 @@ class SiaSession:
                     "Expected 'code' and 'name' values to be strings."
                 )
 
+    def _raise_if_session_not_set(self, exc: Exception) -> None:
+        """Raise SessionNotSet when Rust reports an uninitialized session."""
+        if "not initialized" in str(exc).lower():
+            raise SessionNotSet from exc
+
     async def init_session(self) -> None:
         """Initialize session by delegating to Rust PySiaSession.
 
@@ -165,8 +170,7 @@ class SiaSession:
             try:
                 state = await self._rust_session.set_career(search_code, is_electives)
             except sia_scraper_rust.SessionError as exc:
-                if "not initialized" in str(exc).lower():
-                    raise SessionNotSet from exc
+                self._raise_if_session_not_set(exc)
                 raise CareerNotSet from exc
             except SiaSessionException:
                 raise
@@ -233,8 +237,7 @@ class SiaSession:
             try:
                 return await self._rust_session.scrape_courses(indices, mode, retries, delay)
             except sia_scraper_rust.SessionError as exc:
-                if "not initialized" in str(exc).lower():
-                    raise SessionNotSet from exc
+                self._raise_if_session_not_set(exc)
                 raise SiaSessionException(f"Scrape failed: {exc}") from exc
             except SiaSessionException:
                 raise
@@ -272,8 +275,7 @@ class SiaSession:
                     indices, mode, max_concurrent, retries, delay
                 )
             except sia_scraper_rust.SessionError as exc:
-                if "not initialized" in str(exc).lower():
-                    raise SessionNotSet from exc
+                self._raise_if_session_not_set(exc)
                 raise SiaSessionException(f"Parallel scrape failed: {exc}") from exc
             except SiaSessionException:
                 raise
