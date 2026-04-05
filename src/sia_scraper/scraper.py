@@ -226,12 +226,17 @@ class SiaScraper:
     ) -> tuple[list[tuple[int, str]], list[int]]:
         """Prepare and validate scrape indices from indices and/or codes.
 
+        Note: Indices are sorted in ascending order. Results will be returned
+        in sorted index order, not the order provided by the caller. If the
+        same index appears multiple times with different codes, the last code
+        wins when applied via _apply_course_codes.
+
         Args:
             courses_indices: List of course indices to scrape.
             courses_codes: List of course codes to scrape (resolved to indices).
 
         Returns:
-            Tuple of (paired list, sorted indices list).
+            Tuple of (paired list sorted by index, sorted indices list).
 
         Raises:
             ValueError: If both provided but lengths differ.
