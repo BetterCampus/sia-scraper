@@ -253,24 +253,26 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
 /// Emit deprecation warning for legacy course dict formats.
 fn emit_legacy_warning(py: Python<'_>, format_type: &str) -> PyResult<()> {
     let warnings = py.import("warnings")?;
-    let message = if format_type.contains("getter") {
-        format!(
-            "{} is deprecated. Use {} instead. Will be removed in v4.0.0.",
-            format_type,
-            if format_type == "course_code getter" {
-                "code"
-            } else {
-                "name"
-            }
-        )
-    } else {
-        format!(
-            "CourseListEntry deserialization from {} format is deprecated. \
+
+    let message = match format_type {
+        "course_code getter" => {
+            "course_code getter is deprecated. Use code instead. Will be removed in v4.0.0."
+                .to_string()
+        }
+        "course_name getter" => {
+            "course_name getter is deprecated. Use name instead. Will be removed in v4.0.0."
+                .to_string()
+        }
+        _ => {
+            format!(
+                "CourseListEntry deserialization from {} format is deprecated. \
              Use {{'code': ..., 'name': ...}} instead. \
              Legacy format support will be removed in version 4.0.0",
-            format_type
-        )
+                format_type
+            )
+        }
     };
+
     warnings.call_method1(
         "warn",
         (
