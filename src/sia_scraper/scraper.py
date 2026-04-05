@@ -267,7 +267,7 @@ class SiaScraper:
         if not courses_codes:
             courses_codes = [""] * len(courses_indices)
 
-        if courses_indices and courses_codes and len(courses_indices) != len(courses_codes):
+        if len(courses_indices) != len(courses_codes):
             raise ValueError(
                 f"Length mismatch: courses_indices has {len(courses_indices)} items, "
                 f"but courses_codes has {len(courses_codes)} items"
