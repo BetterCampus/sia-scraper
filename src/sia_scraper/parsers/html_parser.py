@@ -11,10 +11,13 @@ performance benefits.
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from lxml import etree, html
 from lxml.cssselect import CSSSelector
+
+if TYPE_CHECKING:
+    from sia_scraper_rust import CourseListEntry
 
 
 @lru_cache(maxsize=128)
@@ -238,7 +241,7 @@ class HtmlParser(BaseHtmlElement):
         return self._root
 
 
-def get_course_list(content: bytes | str) -> list[dict[str, str]]:
+def get_course_list(content: bytes | str) -> list["CourseListEntry"]:
     """Extract course list from Oracle ADF table HTML.
 
     ## Args
@@ -253,5 +256,4 @@ def get_course_list(content: bytes | str) -> list[dict[str, str]]:
 
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="ignore")
-    # Rust FFI returns list[dict[str, str]]; static analysis can't verify cross-language boundary
-    return rust_get_course_list(content)  # type: ignore[return-value]
+    return cast(list["CourseListEntry"], rust_get_course_list(content))

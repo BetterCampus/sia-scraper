@@ -137,9 +137,16 @@ class SiaScraper:
                             f"Invalid session_data: 'course_list[{index}]' "
                             "code and name must be strings"
                         )
-                    course_list_raw.append(item)
+                    # Always create fresh dict to drop any extra keys
+                    course_list_raw.append({"code": item["code"], "name": item["name"]})
                 elif len(item) == 1:
                     k, v = next(iter(item.items()))
+                    # Reject reserved keys as single-key entries
+                    if k in {"code", "name", "course_code", "course_name"}:
+                        raise SiaSessionException(
+                            f"Invalid session_data: 'course_list[{index}]' "
+                            f"key '{k}' is reserved; use code/name keys instead"
+                        )
                     if not isinstance(k, str) or not isinstance(v, str):
                         raise SiaSessionException(
                             f"Invalid session_data: 'course_list[{index}]' "

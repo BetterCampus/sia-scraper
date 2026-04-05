@@ -47,20 +47,12 @@ impl CourseListEntryModel {
 
     /// Deprecated: use `code` instead. Will be removed in v4.0.0.
     #[getter]
-    #[deprecated(
-        since = "3.0.0",
-        note = "Use `code` instead; will be removed in v4.0.0"
-    )]
     fn course_code(&self) -> &str {
         &self.code
     }
 
     /// Deprecated: use `name` instead. Will be removed in v4.0.0.
     #[getter]
-    #[deprecated(
-        since = "3.0.0",
-        note = "Use `name` instead; will be removed in v4.0.0"
-    )]
     fn course_name(&self) -> &str {
         &self.name
     }
@@ -1253,10 +1245,26 @@ mod tests {
             courses.append(course_dict).unwrap();
             dict.set_item("course_list", courses).unwrap();
 
+            let warnings = py.import("warnings").unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
+
             let model = SessionStateModel::from_dict(dict).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
             assert_eq!(model.course_list.len(), 1);
             assert_eq!(model.course_list[0].code, "1000001");
             assert_eq!(model.course_list[0].name, "Calculo");
+
+            assert_deprecation_warning(warning_list, "course_code/course_name").unwrap();
         });
     }
 
