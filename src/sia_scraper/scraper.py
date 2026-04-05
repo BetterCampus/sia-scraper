@@ -134,33 +134,34 @@ class SiaScraper:
                     raise SiaSessionException(
                         f"Invalid session_data: 'course_list[{index}]' must be a dict"
                     )
-                if "code" in item and "name" in item:
-                    if not isinstance(item["code"], str) or not isinstance(item["name"], str):
+
+                # Extract code from current or legacy key
+                code_val = item.get("code") or item.get("course_code")
+                # Extract name from current or legacy key
+                name_val = item.get("name") or item.get("course_name")
+                # Check if any legacy keys were used
+                used_legacy = "course_code" in item or "course_name" in item
+
+                if code_val is not None and name_val is not None:
+                    # Validate types
+                    if not isinstance(code_val, str) or not isinstance(name_val, str):
                         raise SiaSessionException(
                             f"Invalid session_data: 'course_list[{index}]' "
                             "code and name must be strings"
                         )
-                    # Always create fresh dict to drop any extra keys
-                    course_list_raw.append({"code": item["code"], "name": item["name"]})
-                elif "course_code" in item and "course_name" in item:
-                    warnings.warn(
-                        f"session_data 'course_list[{index}]' uses deprecated "
-                        "'course_code'/'course_name' keys; use 'code'/'name' instead. "
-                        "Support will be removed in version 4.0.0.",
-                        DeprecationWarning,
-                        stacklevel=2,
-                    )
-                    if not isinstance(item["course_code"], str) or not isinstance(
-                        item["course_name"], str
-                    ):
-                        raise SiaSessionException(
-                            f"Invalid session_data: 'course_list[{index}]' "
-                            "course_code and course_name must be strings"
+                    # Emit warning if legacy keys detected
+                    if used_legacy:
+                        warnings.warn(
+                            f"session_data 'course_list[{index}]' uses deprecated "
+                            "'course_code'/'course_name' keys; use 'code'/'name' instead. "
+                            "Support will be removed in version 4.0.0.",
+                            DeprecationWarning,
+                            stacklevel=2,
                         )
-                    course_list_raw.append(
-                        {"code": item["course_code"], "name": item["course_name"]}
-                    )
+                    # Always create fresh dict to drop any extra keys
+                    course_list_raw.append({"code": code_val, "name": name_val})
                 elif len(item) == 1:
+                    # Single-key legacy format
                     k, v = next(iter(item.items()))
                     # Reject reserved keys as single-key entries
                     if k in {"code", "name", "course_code", "course_name"}:
