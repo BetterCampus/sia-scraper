@@ -17,8 +17,10 @@ sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 async def initialized_session():
     """Provide an initialized PySiaSession with cleanup.
 
-    Warning: This fixture makes real network requests to SIA.
-    Tests using it should be marked with @pytest.mark.network.
+    Warning: This fixture makes live network requests to SIA via
+    PySiaSession.init_session() and PySiaSession.reset().
+    Tests using it are integration tests and must be marked with
+    @pytest.mark.network so they can be excluded from hermetic unit runs.
 
     Scope: function - Each test gets a fresh session for maximum isolation.
     This is intentionally kept as an integration test fixture rather than mocked

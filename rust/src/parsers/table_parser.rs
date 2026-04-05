@@ -322,7 +322,7 @@ mod tests {
         let result = get_course_list(html).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].code, "2027309");
-        assert_eq!(result[0].name, "Análisis forense digital &amp; más");
+        assert_eq!(result[0].name, "Análisis forense digital & más");
     }
 
     #[test]

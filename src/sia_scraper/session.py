@@ -231,18 +231,22 @@ class SiaSession:
 
         Raises:
             SessionNotSet: If session not initialized.
-            SiaSessionException: If scraping fails or in Abort mode on first failure.
+            sia_scraper_rust.AbortError: In abort mode on first failure.
+            sia_scraper_rust.NetworkError: If connection fails.
+            sia_scraper_rust.HttpStatusError: If server returns error status.
+            sia_scraper_rust.SiaTimeoutError: If request times out.
+            sia_scraper_rust.ParseError: If response cannot be parsed.
         """
         async with self._operation("scrape_courses"):
             try:
                 return await self._rust_session.scrape_courses(indices, mode, retries, delay)
             except sia_scraper_rust.SessionError as exc:
                 self._raise_if_session_not_set(exc)
-                raise SiaSessionException(f"Scrape failed: {exc}") from exc
+                raise
             except SiaSessionException:
                 raise
-            except sia_scraper_rust.SiaScraperException as exc:
-                raise SiaSessionException(f"Scrape failed: {exc}") from exc
+            except sia_scraper_rust.SiaScraperException:
+                raise
 
     async def scrape_courses_parallel(
         self,
@@ -267,7 +271,11 @@ class SiaSession:
 
         Raises:
             SessionNotSet: If session not initialized.
-            SiaSessionException: If scraping fails or in Abort mode on first failure.
+            sia_scraper_rust.AbortError: In abort mode on first failure.
+            sia_scraper_rust.NetworkError: If connection fails.
+            sia_scraper_rust.HttpStatusError: If server returns error status.
+            sia_scraper_rust.SiaTimeoutError: If request times out.
+            sia_scraper_rust.ParseError: If response cannot be parsed.
         """
         async with self._operation("scrape_courses_parallel"):
             try:
@@ -276,11 +284,11 @@ class SiaSession:
                 )
             except sia_scraper_rust.SessionError as exc:
                 self._raise_if_session_not_set(exc)
-                raise SiaSessionException(f"Parallel scrape failed: {exc}") from exc
+                raise
             except SiaSessionException:
                 raise
-            except sia_scraper_rust.SiaScraperException as exc:
-                raise SiaSessionException(f"Parallel scrape failed: {exc}") from exc
+            except sia_scraper_rust.SiaScraperException:
+                raise
 
     async def close(self) -> None:
         """Reset session state and clear Rust session."""

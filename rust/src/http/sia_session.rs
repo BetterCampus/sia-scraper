@@ -947,7 +947,9 @@ impl SiaSession {
                         continue;
                     }
                     Err(_) => {
-                        // Already collected in earliest_error
+                        // Non-Aborted failures are intentionally dropped in abort mode.
+                        // We return only earliest_error (triggering failure) to preserve
+                        // deterministic abort semantics for callers.
                     }
                 }
             }
