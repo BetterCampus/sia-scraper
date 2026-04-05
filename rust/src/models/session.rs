@@ -109,7 +109,7 @@ impl CourseListEntryModel {
     /// course_dict = entry.to_dict()
     /// assert course_dict == {"code": "1000001", "name": "Calculo Diferencial"}
     ///
-    /// # This format is compatible with SessionState.from_dict()
+    /// # This format is compatible with SessionStateModel.from_dict()
     /// # and can be used for serialization/pickling
     /// ```
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
