@@ -401,13 +401,26 @@ class CourseListEntryModel:
 
     @classmethod
     def from_dict(cls, data: dict[str, str]) -> CourseListEntryModel:
-        """Create from dictionary with code/name or legacy course_code/course_name keys.
+        """Create from dictionary supporting three formats.
+
+        Supports three input formats:
+        1. Current format: {"code": "1000001", "name": "Cálculo"}
+        2. Legacy named keys: {"course_code": "1000001", "course_name": "Cálculo"}
+        3. Legacy single-key: {"1000001": "Cálculo"} (key=code, value=name)
 
         Args:
-            data: Dictionary with either new keys ("code", "name") or legacy keys.
+            data: Dictionary in one of the supported formats above.
 
         Returns:
             CourseListEntryModel instance.
+
+        Example:
+            >>> # Current format
+            >>> CourseListEntryModel.from_dict({"code": "1000001", "name": "Cálculo"})
+            >>> # Legacy named keys
+            >>> CourseListEntryModel.from_dict({"course_code": "1000001", "course_name": "Cálculo"})
+            >>> # Legacy single-key
+            >>> CourseListEntryModel.from_dict({"1000001": "Cálculo"})
         """
 
 class SessionStateModel:
