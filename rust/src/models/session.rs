@@ -250,7 +250,24 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
     }
 }
 
-/// Emit deprecation warning for legacy course dict formats.
+/// Emit a Python DeprecationWarning for legacy course dict formats.
+///
+/// Warns users about deprecated course entry formats that will be removed in v4.0.0.
+/// The standard format is `{'code': ..., 'name': ...}`.
+///
+/// # Arguments
+/// * `py` - Python GIL token for calling Python APIs
+/// * `format_type` - Description of the deprecated format. Supported values:
+///   - `"course_code getter"` - Deprecated getter property
+///   - `"course_name getter"` - Deprecated getter property
+///   - `"course_code/course_name"` - Legacy named key format
+///   - `"single-key dict"` - Legacy single-entry dict format
+///
+/// # Returns
+/// `Ok(())` if warning was successfully emitted
+///
+/// # Errors
+/// Returns `PyErr` if Python warning module import or method call fails
 fn emit_legacy_warning(py: Python<'_>, format_type: &str) -> PyResult<()> {
     let warnings = py.import("warnings")?;
 
