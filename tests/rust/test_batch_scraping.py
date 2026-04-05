@@ -149,6 +149,8 @@ class TestBatchScrapingWithInvalidIndices:
         # Index 999 is always out of range, so it should always be in failures
         failure_indices = [idx for idx, _ in result.failures]
         assert 999 in failure_indices
+        # Verify at least one failure was recorded (999 is definitely invalid)
+        assert len(result.failures) >= 1
 
     @pytest.mark.asyncio
     @pytest.mark.network

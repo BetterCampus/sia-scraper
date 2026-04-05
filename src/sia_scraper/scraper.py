@@ -286,7 +286,7 @@ class SiaScraper:
         indices = [idx for idx, _ in paired]
         return paired, indices
 
-    def _resolve_error_mode(self, error_mode: ErrorMode | ErrorModeStr) -> ErrorModeStr:
+    def _resolve_error_mode(self, error_mode: ErrorMode | ErrorModeStr) -> str:
         """Resolve and validate error_mode to a normalized string.
 
         Args:
@@ -312,7 +312,7 @@ class SiaScraper:
             raise ValueError(
                 f"Invalid error_mode: {error_mode!r}. Must be one of: {', '.join(sorted(valid_modes))}"
             )
-        return mode  # type: ignore[return-value]
+        return mode
 
     def _apply_course_codes(
         self,
