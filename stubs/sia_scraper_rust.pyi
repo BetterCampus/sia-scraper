@@ -1148,6 +1148,7 @@ class PySiaSession:
             ScrapeResult with successes and failures lists.
 
         Raises:
+            AbortError: If operation is aborted (when mode='abort').
             SessionError: If session not initialized or in Abort mode on first failure.
             ValueError: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.
@@ -1197,6 +1198,7 @@ class PySiaSession:
             ScrapeResult with successes and failures lists.
 
         Raises:
+            AbortError: If operation is aborted (when mode='abort').
             SessionError: If session not initialized or in Abort mode on first failure.
             ValueError: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.

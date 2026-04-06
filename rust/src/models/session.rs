@@ -284,6 +284,11 @@ fn emit_legacy_warning(py: Python<'_>, format_type: &str, stacklevel: u32) -> Py
             "course_name getter is deprecated. Use name instead. Will be removed in v4.0.0."
                 .to_string()
         }
+        "javax_faces_ViewState key" => {
+            "javax_faces_ViewState key is deprecated. Use javax_faces_view_state instead. \
+             Will be removed in v4.0.0."
+                .to_string()
+        }
         _ => {
             format!(
                 "CourseListEntry deserialization from {} format is deprecated. \
