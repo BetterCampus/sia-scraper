@@ -144,8 +144,26 @@ class SiaSession:
     def _raise_if_session_not_set(self, exc: Exception) -> None:
         """Raise SessionNotSet when Rust reports an uninitialized session.
 
-        Uses structured exception type checking when available, with fallback
-        to string matching for compatibility.
+        This method provides a fallback mechanism for detecting uninitialized
+        session errors from the Rust layer. It uses structured exception type
+        checking when available, with string-based fallback to the
+        _SESSION_NOT_INIT_MARKER for compatibility.
+
+        Note:
+            This string-based detection is fragile if the Rust error message
+            changes. Consider adding a stable error constant or structured
+            error code on the Rust side for future improvement.
+
+        Args:
+            exc: The exception raised by the Rust session.
+
+        Raises:
+            SessionNotSet: If the exception indicates an uninitialized session.
+
+        Todo:
+            Replace string matching with a dedicated error type or constant
+            on the Rust side (e.g., SiaSessionException::SessionNotSet) to
+            avoid relying on message content.
         """
         exc_type_name = type(exc).__name__
         if exc_type_name == "SessionError" and _SESSION_NOT_INIT_MARKER in str(exc).lower():
