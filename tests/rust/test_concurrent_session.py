@@ -109,10 +109,15 @@ class TestConcurrentSessionState:
 class TestGenerationConcept:
     """Tests demonstrating the generation concept for race condition prevention.
 
-    Note: These tests verify the generation field exists and works at the
-    SessionStateModel level. Full integration tests verifying that actual
-    PySiaSession mutations increment generation would require mocking the
-    network layer. See GitHub issue for architectural improvements needed.
+    Note: The first two tests (test_stale_update_detection_concept and
+    test_current_update_detection_concept) are algorithmic demonstrations
+    of the generation-check logic rather than direct exercises of Rust
+    behavior. They verify the integer comparison logic used by the Rust
+    implementation in update_state().
+
+    The later tests (test_generation_initially_zero,
+    test_generation_in_state_with_career) exercise the actual
+    SessionStateModel and provide meaningful coverage of the model.
     """
 
     def test_stale_update_detection_concept(self):
