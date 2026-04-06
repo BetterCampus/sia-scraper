@@ -232,10 +232,9 @@ class SiaScraper:
     ) -> tuple[list[tuple[int, str]], list[int]]:
         """Prepare and validate scrape indices from indices and/or codes.
 
-        Note: Indices are sorted in ascending order. Results will be returned
-        in sorted index order, not the order provided by the caller. If the
-        same index appears multiple times with different codes, the last code
-        wins when applied via _apply_course_codes.
+        Note: Duplicate indices are not allowed. Each index must appear at most once
+        in the input. This ensures unambiguous mapping between request positions
+        and course results.
 
         Args:
             courses_indices: List of course indices to scrape.
@@ -248,6 +247,7 @@ class SiaScraper:
             ValueError: If both courses_indices and courses_codes are None or empty.
             ValueError: If both provided but lengths differ.
             ValueError: If any provided course code is not found in the course list.
+            ValueError: If courses_indices contains duplicate values.
 
         Example:
             >>> paired, indices = self._prepare_scrape_indices([0, 2], ["CODE1", "CODE2"])
@@ -260,6 +260,11 @@ class SiaScraper:
             >>> self._prepare_scrape_indices(None, None)  # doctest: +IGNORE_EXCEPTION_DETAIL
             Traceback (most recent call last):
             ValueError: At least one of courses_indices or courses_codes must be provided
+
+            >>> # Raises on duplicate indices
+            >>> self._prepare_scrape_indices([0, 0], ["CODE1", "CODE2"])  # doctest: +IGNORE_EXCEPTION_DETAIL
+            Traceback (most recent call last):
+            ValueError: Duplicate course index: 0
         """
         courses_indices = courses_indices or []
         courses_codes = courses_codes or []
@@ -278,6 +283,12 @@ class SiaScraper:
                 f"Length mismatch: courses_indices has {len(courses_indices)} items, "
                 f"but courses_codes has {len(courses_codes)} items"
             )
+
+        seen: set[int] = set()
+        for idx in courses_indices:
+            if idx in seen:
+                raise ValueError(f"Duplicate course index: {idx}")
+            seen.add(idx)
 
         paired = list(zip(courses_indices, courses_codes, strict=True))
         paired.sort(key=lambda x: x[0])
