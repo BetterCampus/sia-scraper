@@ -325,7 +325,7 @@ class CourseInfoModel:
         typology: str,
         available_spots: int,
         scrape_timestamp: str,
-        groups: list[GroupModel] = [],
+        groups: list[GroupModel] | None = None,
         code: str | None = None,
     ) -> None:
         """Initialize a CourseInfoModel instance.
@@ -641,7 +641,7 @@ class PrereqConditionModel:
         prereq_type: str,
         all_required: bool,
         number_of_courses: int,
-        prerequisites: list[PrerequisiteModel] = [],
+        prerequisites: list[PrerequisiteModel] | None = None,
     ) -> None:
         """Initialize a PrereqConditionModel instance.
 
@@ -699,7 +699,7 @@ class CoursePrereqsModel:
         course_name: str,
         credits: int,
         typology: str,
-        conditions: list[PrereqConditionModel] = [],
+        conditions: list[PrereqConditionModel] | None = None,
         code: str | None = None,
     ) -> None:
         """Initialize a CoursePrereqsModel instance.
@@ -1195,8 +1195,7 @@ class PySiaSession:
             ScrapeResult with successes and failures lists.
 
         Raises:
-            AbortError: If operation is aborted (when mode='abort').
-            SessionError: If session not initialized or in Abort mode on first failure.
+            SessionError: If session is not initialized.
             SiaScraperException: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.
             HttpStatusError: If server returns error status.
@@ -1245,8 +1244,7 @@ class PySiaSession:
             ScrapeResult with successes and failures lists.
 
         Raises:
-            AbortError: If operation is aborted (when mode='abort').
-            SessionError: If session not initialized or in Abort mode on first failure.
+            SessionError: If session is not initialized.
             SiaScraperException: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.
             HttpStatusError: If server returns error status.
