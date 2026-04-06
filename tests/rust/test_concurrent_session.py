@@ -107,41 +107,11 @@ class TestConcurrentSessionState:
 
 
 class TestGenerationConcept:
-    """Tests demonstrating the generation concept for race condition prevention.
+    """Tests for generation-based race condition prevention.
 
-    Note: The first two tests (test_stale_update_detection_concept and
-    test_current_update_detection_concept) are algorithmic demonstrations
-    of the generation-check logic rather than direct exercises of Rust
-    behavior. They verify the integer comparison logic used by the Rust
-    implementation in update_state().
-
-    The later tests (test_generation_initially_zero,
-    test_generation_in_state_with_career) exercise the actual
-    SessionStateModel and provide meaningful coverage of the model.
+    These tests verify the SessionStateModel generation field behavior.
+    The actual generation-check logic is tested via integration tests.
     """
-
-    def test_stale_update_detection_concept(self):
-        """Demonstrate how generation check prevents stale updates.
-
-        This test shows the concept: if a cloned state has generation 0
-        but the parent has generation 1, the clone is stale and should
-        not overwrite the parent.
-        """
-        parent_generation = 1
-        cloned_generation = 0
-
-        is_stale = cloned_generation != parent_generation
-
-        assert is_stale, "Clone with older generation should be detected as stale"
-
-    def test_current_update_detection_concept(self):
-        """Demonstrate how generation check allows current updates."""
-        parent_generation = 1
-        cloned_generation = 1
-
-        is_current = cloned_generation == parent_generation
-
-        assert is_current, "Clone with matching generation should be current"
 
     def test_generation_initially_zero(self):
         """Test that new session state starts with generation 0."""
