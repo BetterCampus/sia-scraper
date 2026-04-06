@@ -33,8 +33,14 @@ jobs:
       - name: Cache Cargo build artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Setup dependencies and build
-        run: make setup
+      - name: Build wheel and install
+        run: |
+          pip install maturin
+          maturin build --release --interpreter python${{ matrix.python-version }}
+          pip install target/wheels/sia_scraper-*.whl
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
 
       - name: Python lint
         run: make lint-python
