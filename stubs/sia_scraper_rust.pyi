@@ -481,6 +481,7 @@ class SessionStateModel:
         is_electives: Whether viewing electives (True) or required courses (False).
         status: Current session status (e.g., "ON_CAREER_PAGE").
         course_list: List of CourseListEntryModel for available courses.
+        generation: Counter for detecting stale state updates (for concurrency safety).
 
     Example:
         >>> import asyncio
@@ -519,6 +520,7 @@ class SessionStateModel:
         status: str,
         course_list: list[CourseListEntryModel],
         javax_faces_view_state: str | None = None,
+        generation: int = 0,
     ) -> None:
         """Initialize a SessionStateModel instance.
 
@@ -534,6 +536,7 @@ class SessionStateModel:
             status: Session status string.
             course_list: List of available courses.
             javax_faces_view_state: Oracle ADF ViewState (optional).
+            generation: Counter for concurrency safety (optional).
 
         Example:
             >>> state = SessionStateModel(
@@ -545,7 +548,8 @@ class SessionStateModel:
             ...     is_electives=False,
             ...     status="ON_CAREER_PAGE",
             ...     course_list=[],
-            ...     javax_faces_view_state="viewstate"
+            ...     javax_faces_view_state="viewstate",
+            ...     generation=0
             ... )
         """
 

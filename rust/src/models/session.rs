@@ -26,6 +26,7 @@ type SessionStateModelPickleState = (
     String,
     Vec<CourseListEntryModel>,
     Option<String>,
+    u64,
 );
 
 /// One course entry from the course list table.
@@ -332,6 +333,8 @@ pub struct SessionStateModel {
     pub status: String,
     #[pyo3(get)]
     pub course_list: Vec<CourseListEntryModel>,
+    #[pyo3(get)]
+    pub generation: u64,
 }
 
 impl Default for SessionStateModel {
@@ -343,7 +346,7 @@ impl Default for SessionStateModel {
 #[pymethods]
 impl SessionStateModel {
     #[new]
-    #[pyo3(signature = (session_headers, session_cookies, params, career_code, career_name, is_electives, status, course_list, javax_faces_view_state=None))]
+    #[pyo3(signature = (session_headers, session_cookies, params, career_code, career_name, is_electives, status, course_list, javax_faces_view_state=None, generation=0))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         session_headers: HashMap<String, String>,
@@ -355,6 +358,7 @@ impl SessionStateModel {
         status: String,
         course_list: Vec<CourseListEntryModel>,
         javax_faces_view_state: Option<String>,
+        generation: u64,
     ) -> Self {
         Self {
             session_headers,
@@ -366,6 +370,7 @@ impl SessionStateModel {
             is_electives,
             status,
             course_list,
+            generation,
         }
     }
 
@@ -398,6 +403,7 @@ impl SessionStateModel {
             String::new(),
             Vec::new(),
             None,
+            0,
         )
     }
 
@@ -457,6 +463,7 @@ impl SessionStateModel {
             is_electives: state.is_electives,
             status: normalize_status(&state.status),
             course_list: state.course_list.clone(),
+            generation: state.generation,
         }
     }
 
@@ -640,6 +647,12 @@ impl SessionStateModel {
             course_list.push(parse_course_dict(course_dict)?);
         }
 
+        let generation: u64 = if let Some(val) = dict.get_item("generation")? {
+            val.extract()?
+        } else {
+            0
+        };
+
         Ok(Self {
             session_headers,
             session_cookies,
@@ -650,6 +663,7 @@ impl SessionStateModel {
             is_electives,
             status,
             course_list,
+            generation,
         })
     }
 
@@ -685,6 +699,7 @@ impl SessionStateModel {
             is_electives: self.is_electives,
             status: denormalize_status(&self.status),
             course_list: self.course_list,
+            generation: self.generation,
         }
     }
 }
@@ -804,6 +819,7 @@ mod tests {
                     name: "Estructuras".to_string(),
                 },
             ],
+            generation: 0,
         };
 
         let state = model.into_session_state();
@@ -828,6 +844,7 @@ mod tests {
             career_code: String::new(),
             career_name: String::new(),
             is_electives: false,
+            generation: 0,
         };
 
         let state = model.into_session_state();
@@ -857,6 +874,7 @@ mod tests {
                 career_name: String::new(),
                 is_electives: false,
                 course_list: vec![],
+                generation: 0,
             };
             let state = model.into_session_state();
             assert_eq!(
@@ -888,6 +906,7 @@ mod tests {
             is_electives: true,
             status: "CAREER_NOT_SET".to_string(),
             course_list: vec![],
+            generation: 42,
         };
 
         let state = model.into_session_state();
