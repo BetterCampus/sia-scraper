@@ -443,6 +443,8 @@ class SiaScraper:
                 DeprecationWarning,
                 stacklevel=2,
             )
+        if retry_delay < 0:
+            raise ValueError(f"retry_delay must be non-negative, got {retry_delay}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
         mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
@@ -538,6 +540,8 @@ class SiaScraper:
             >>> result.success_rate()
             1.0
         """
+        if retry_delay < 0:
+            raise ValueError(f"retry_delay must be non-negative, got {retry_delay}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
         mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
