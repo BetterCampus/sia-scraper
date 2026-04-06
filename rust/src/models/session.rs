@@ -240,6 +240,7 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
     }
 
     // Specific error messages for missing fields
+    // Note: (Some(_), Some(_)) case is handled earlier via early return
     match (code_result, name_result) {
         (None, None) => Err(PyKeyError::new_err(
             "Dict must contain 'code'/'name' keys (current), \
@@ -248,7 +249,9 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
         )),
         (None, Some(_)) => Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'")),
         (Some(_), None) => Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'")),
-        _ => unreachable!(),
+        (Some(_), Some(_)) => {
+            unreachable!("Both code and name found - should have returned earlier")
+        }
     }
 }
 
