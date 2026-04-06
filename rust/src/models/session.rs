@@ -1501,27 +1501,7 @@ mod tests {
             assert_eq!(model.career_code, "0-2-8-3");
 
             // Verify deprecation warning was emitted for legacy key
-            let len = warning_list.len().unwrap();
-            assert!(
-                len > 0,
-                "Expected at least one deprecation warning for legacy javax_faces_ViewState key"
-            );
-            // Check that at least one warning mentions the legacy key or deprecation
-            let warnings: Vec<&pyo3::PyAny> = warning_list.extract().unwrap();
-            let mut found_warning = false;
-            for warning in warnings {
-                let warning_str = warning.str().unwrap().to_string();
-                if warning_str.contains("javax_faces_ViewState")
-                    || warning_str.contains("deprecated")
-                {
-                    found_warning = true;
-                    break;
-                }
-            }
-            assert!(
-                found_warning,
-                "Expected deprecation warning for legacy javax_faces_ViewState key"
-            );
+            assert_deprecation_warning(warning_list, "javax_faces_ViewState").unwrap();
         });
     }
 
