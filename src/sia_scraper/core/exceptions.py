@@ -75,22 +75,31 @@ class InvalidSessionDataError(SiaSessionException):
         index: Optional index in a list (e.g., course_list[index]).
     """
 
-    def __init__(self, field: str | None = None, index: int | None = None) -> None:
-        """Initialize with optional field and index context.
+    def __init__(
+        self,
+        field: str | None = None,
+        index: int | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Initialize with optional field, index, and message context.
 
         Args:
             field: Optional name of the field that failed validation.
             index: Optional index in a list where validation failed.
+            message: Optional custom error message override.
         """
-        msg = "Invalid session_data"
-        if field:
-            msg += f" '{field}'"
-            if index is not None:
-                msg += f"[{index}]"
-        elif index is not None:
-            msg += f" at index [{index}]"
-        msg += ": validation failed"
-        super().__init__(msg)
+        if message:
+            super().__init__(message)
+        else:
+            msg = "Invalid session_data"
+            if field:
+                msg += f" '{field}'"
+                if index is not None:
+                    msg += f"[{index}]"
+            elif index is not None:
+                msg += f" at index [{index}]"
+            msg += ": validation failed"
+            super().__init__(msg)
         self.field = field
         self.index = index
 

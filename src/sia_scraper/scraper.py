@@ -122,7 +122,7 @@ class SiaScraper:
             message = (
                 f"Invalid session status '{status_str}'. Allowed statuses are: {allowed_statuses}"
             )
-            raise SiaSessionException.InvalidSessionDataError() from exc
+            raise SiaSessionException.InvalidSessionDataError(message=message) from exc
 
         course_list_raw: list[dict[str, str]] = []
         raw_course_list = session_data.get("course_list")
