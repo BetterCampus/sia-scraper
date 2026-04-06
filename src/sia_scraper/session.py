@@ -14,6 +14,8 @@ from .core.exceptions import (
     SiaSessionException,
 )
 
+_SESSION_NOT_INIT_MARKER = "not initialized"
+
 ErrorModeStr = Literal["abort", "skip", "retry"]
 
 
@@ -143,9 +145,9 @@ class SiaSession:
         """Raise SessionNotSet when Rust reports an uninitialized session.
 
         Note: Depends on Rust error message containing 'not initialized'.
-        If Rust changes this message, update the check here.
+        If Rust changes this message, update _SESSION_NOT_INIT_MARKER.
         """
-        if "not initialized" in str(exc).lower():
+        if _SESSION_NOT_INIT_MARKER in str(exc).lower():
             raise SessionNotSet from exc
 
     async def init_session(self) -> None:

@@ -5,8 +5,6 @@ import warnings
 from collections.abc import Callable
 from typing import Literal, cast
 
-from loguru import logger
-
 import sia_scraper_rust
 
 from .constants import http, status
@@ -336,8 +334,9 @@ class SiaScraper:
         Returns:
             None. The function mutates the CourseInfoModel objects in-place.
 
-        Raises:
-            No exceptions are raised by this method.
+        Note:
+            This method does not intentionally raise exceptions. Any exceptions
+            would indicate a contract violation between Python and Rust models.
 
         Example:
             >>> # Abort mode - use indices order
@@ -360,9 +359,10 @@ class SiaScraper:
                 success_indices = [idx for idx in indices if idx not in failed_indices]
 
             if len(successes) != len(success_indices):
-                logger.warning(
+                raise ValueError(
                     f"Success count mismatch: got {len(successes)} successes, "
-                    f"expected {len(success_indices)} from indices"
+                    f"expected {len(success_indices)} from indices. "
+                    f"This indicates a data integrity issue between Python and Rust."
                 )
 
             for i, course in enumerate(successes):
@@ -435,6 +435,14 @@ class SiaScraper:
                 but their lengths differ.
             ValueError: If error_mode is not a valid mode.
         """
+        if progress_callback is not None:
+            warnings.warn(
+                "progress_callback now fires once after batch completion, not incrementally. "
+                "Process ScrapeResult.successes/failures for per-item handling. "
+                "This parameter will be removed in version 4.0.0.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
         mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 

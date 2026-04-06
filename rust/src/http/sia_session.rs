@@ -889,16 +889,16 @@ impl SiaSession {
                                         Instant::now(),
                                     ));
                                 }
-                                last_error = Some(e);
-                                if !should_retry(&last_error.as_ref().unwrap(), &session.retry_config)
+                                if !should_retry(&e, &session.retry_config)
                                     || attempt == effective_retries
                                 {
                                     let error_time = Instant::now();
                                     if mode == ErrorMode::Abort {
                                         abort.store(true, Ordering::SeqCst);
                                     }
-                                    return Err((pos, index, last_error.unwrap(), error_time));
+                                    return Err((pos, index, e, error_time));
                                 }
+                                last_error = Some(e);
                                 let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
                                 sleep(Duration::from_millis(delay)).await;
                             }
