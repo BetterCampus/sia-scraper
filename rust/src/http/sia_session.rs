@@ -1462,6 +1462,631 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_scrape_courses_batch_skip_mode_all_success() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let vs = r#"<input type="hidden" name="javax.faces.ViewState" value="vs123" />"#;
+
+        let noop_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><noop/>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_list_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:t1::db"><![CDATA[
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C001</span></td>
+                <td><span class="af_column_data-container">Course 1</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C002</span></td>
+                <td><span class="af_column_data-container">Course 2</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C003</span></td>
+                <td><span class="af_column_data-container">Course 3</span></td>
+            </tr>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_detail_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos"><span>4</span></span>
+            </div>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let _mock = server
+            .mock("POST", mockito::Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                let pos_in_course = count % 9;
+                if pos_in_course < 5 {
+                    noop_body.as_bytes().to_vec()
+                } else if pos_in_course == 5 {
+                    course_list_body.clone().into_bytes()
+                } else if pos_in_course == 7 {
+                    course_detail_body.clone().into_bytes()
+                } else {
+                    noop_body.as_bytes().to_vec()
+                }
+            })
+            .create();
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: vec![
+                CourseListEntryModel {
+                    code: "C001".to_string(),
+                    name: "Course 1".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C002".to_string(),
+                    name: "Course 2".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C003".to_string(),
+                    name: "Course 3".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let result = session
+            .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Skip, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 3);
+        assert_eq!(result.failures.len(), 0);
+        assert_eq!(result.total(), 3);
+        assert_eq!(result.success_rate(), 1.0);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_mode_all_success() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let vs = r#"<input type="hidden" name="javax.faces.ViewState" value="vs123" />"#;
+
+        let noop_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><noop/>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_list_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:t1::db"><![CDATA[
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C001</span></td>
+                <td><span class="af_column_data-container">Course 1</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C002</span></td>
+                <td><span class="af_column_data-container">Course 2</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C003</span></td>
+                <td><span class="af_column_data-container">Course 3</span></td>
+            </tr>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_detail_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos"><span>4</span></span>
+            </div>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let _mock = server
+            .mock("POST", mockito::Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                let pos_in_course = count % 9;
+                if pos_in_course < 5 {
+                    noop_body.as_bytes().to_vec()
+                } else if pos_in_course == 5 {
+                    course_list_body.clone().into_bytes()
+                } else if pos_in_course == 7 {
+                    course_detail_body.clone().into_bytes()
+                } else {
+                    noop_body.as_bytes().to_vec()
+                }
+            })
+            .create();
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: vec![
+                CourseListEntryModel {
+                    code: "C001".to_string(),
+                    name: "Course 1".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C002".to_string(),
+                    name: "Course 2".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C003".to_string(),
+                    name: "Course 3".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let result = session
+            .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Abort, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 3);
+        assert_eq!(result.failures.len(), 0);
+        assert_eq!(result.total(), 3);
+        assert_eq!(result.success_rate(), 1.0);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_retry_mode_all_success() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let vs = r#"<input type="hidden" name="javax.faces.ViewState" value="vs123" />"#;
+
+        let noop_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><noop/>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_list_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:t1::db"><![CDATA[
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C001</span></td>
+                <td><span class="af_column_data-container">Course 1</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C002</span></td>
+                <td><span class="af_column_data-container">Course 2</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C003</span></td>
+                <td><span class="af_column_data-container">Course 3</span></td>
+            </tr>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_detail_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos"><span>4</span></span>
+            </div>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let _mock = server
+            .mock("POST", mockito::Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                let pos_in_course = count % 9;
+                if pos_in_course < 5 {
+                    noop_body.as_bytes().to_vec()
+                } else if pos_in_course == 5 {
+                    course_list_body.clone().into_bytes()
+                } else if pos_in_course == 7 {
+                    course_detail_body.clone().into_bytes()
+                } else {
+                    noop_body.as_bytes().to_vec()
+                }
+            })
+            .create();
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: vec![
+                CourseListEntryModel {
+                    code: "C001".to_string(),
+                    name: "Course 1".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C002".to_string(),
+                    name: "Course 2".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C003".to_string(),
+                    name: "Course 3".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let result = session
+            .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Retry, 3, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 3);
+        assert_eq!(result.failures.len(), 0);
+        assert_eq!(result.total(), 3);
+        assert_eq!(result.success_rate(), 1.0);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_skip_mode_partial_failure() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let vs = r#"<input type="hidden" name="javax.faces.ViewState" value="vs123" />"#;
+
+        let noop_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><noop/>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_list_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:t1::db"><![CDATA[
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C001</span></td>
+                <td><span class="af_column_data-container">Course 1</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C002</span></td>
+                <td><span class="af_column_data-container">Course 2</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C003</span></td>
+                <td><span class="af_column_data-container">Course 3</span></td>
+            </tr>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_detail_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos"><span>4</span></span>
+            </div>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let _mock = server
+            .mock("POST", mockito::Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                let pos_in_course = count % 9;
+                if pos_in_course < 5 {
+                    noop_body.as_bytes().to_vec()
+                } else if pos_in_course == 5 {
+                    course_list_body.clone().into_bytes()
+                } else if pos_in_course == 7 {
+                    if (18..27).contains(&count) {
+                        noop_body.as_bytes().to_vec()
+                    } else {
+                        course_detail_body.clone().into_bytes()
+                    }
+                } else {
+                    noop_body.as_bytes().to_vec()
+                }
+            })
+            .create();
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: vec![
+                CourseListEntryModel {
+                    code: "C001".to_string(),
+                    name: "Course 1".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C002".to_string(),
+                    name: "Course 2".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C003".to_string(),
+                    name: "Course 3".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let result = session
+            .scrape_courses_batch(vec![0, 1, 2], ErrorMode::Skip, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 2);
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.total(), 3);
+        assert!((result.success_rate() - 2.0 / 3.0).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_abort_mode_first_fails() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let course_list_body = r#"<?xml version="1.0"?>
+<partial-response>
+    <changes>
+        <change id="pt1:r1:0:t1::db"><![CDATA[
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C001</span></td>
+                <td><span class="af_column_data-container">Course 1</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C002</span></td>
+                <td><span class="af_column_data-container">Course 2</span></td>
+            </tr>
+        ]]></change>
+    </changes>
+</partial-response>"#
+        .to_string();
+
+        let noop_body = r#"<?xml version="1.0"?><partial-response><noop/></partial-response>"#;
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let _mock = server
+            .mock("POST", mockito::Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                if count < 5 {
+                    course_list_body.clone().into_bytes()
+                } else {
+                    noop_body.as_bytes().to_vec()
+                }
+            })
+            .expect(7)
+            .create();
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: vec![
+                CourseListEntryModel {
+                    code: "C001".to_string(),
+                    name: "Course 1".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C002".to_string(),
+                    name: "Course 2".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let result = session
+            .scrape_courses_batch(vec![0, 1], ErrorMode::Abort, 0, 100)
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_scrape_courses_batch_order_preserved() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_url = server.url();
+
+        let vs = r#"<input type="hidden" name="javax.faces.ViewState" value="vs123" />"#;
+
+        let noop_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><noop/>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_list_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:t1::db"><![CDATA[
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C000</span></td>
+                <td><span class="af_column_data-container">Course 0</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C001</span></td>
+                <td><span class="af_column_data-container">Course 1</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C002</span></td>
+                <td><span class="af_column_data-container">Course 2</span></td>
+            </tr>
+            <tr class="af_table_data-row">
+                <td><span class="af_column_data-container">C003</span></td>
+                <td><span class="af_column_data-container">Course 3</span></td>
+            </tr>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let course_detail_body = format!(
+            r#"<?xml version="1.0"?>
+<partial-response>
+    <changes><change id="pt1:r1:0:id1"><![CDATA[
+            <div class="af_panelGroupLayout">
+                <h2>Test Course</h2>
+                <span class="detass-creditos"><span>4</span></span>
+            </div>
+        ]]></change>{vs}</changes>
+</partial-response>"#
+        );
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        let _mock = server
+            .mock("POST", mockito::Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_req| {
+                let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
+                let pos_in_course = count % 9;
+                if pos_in_course < 5 {
+                    noop_body.as_bytes().to_vec()
+                } else if pos_in_course == 5 {
+                    course_list_body.clone().into_bytes()
+                } else if pos_in_course == 7 {
+                    course_detail_body.clone().into_bytes()
+                } else {
+                    noop_body.as_bytes().to_vec()
+                }
+            })
+            .create();
+
+        let state = SessionState {
+            status: "ON_CAREER_PAGE".to_string(),
+            career_code: "0-2-8-3".to_string(),
+            javax_faces_ViewState: Some("mock_viewstate".to_string()),
+            params: {
+                let mut m = HashMap::new();
+                m.insert("Adf-Window-Id".to_string(), "w1".to_string());
+                m.insert("Adf-Page-Id".to_string(), "p1".to_string());
+                m
+            },
+            course_list: vec![
+                CourseListEntryModel {
+                    code: "C000".to_string(),
+                    name: "Course 0".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C001".to_string(),
+                    name: "Course 1".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C002".to_string(),
+                    name: "Course 2".to_string(),
+                },
+                CourseListEntryModel {
+                    code: "C003".to_string(),
+                    name: "Course 3".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let session = SiaSession::from_state(15, mock_url, state).unwrap();
+
+        let indices = vec![3, 1, 0];
+        let result = session
+            .scrape_courses_batch(indices, ErrorMode::Skip, 0, 100)
+            .await;
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.successes.len(), 3);
+        assert_eq!(result.failures.len(), 0);
+        assert_eq!(result.total(), 3);
+    }
+
+    #[tokio::test]
     async fn test_scrape_courses_concurrent_empty_indices() {
         let session = SiaSession::new(15, "https://httpbin.org".to_string()).unwrap();
         for mode in [ErrorMode::Abort, ErrorMode::Skip, ErrorMode::Retry] {
