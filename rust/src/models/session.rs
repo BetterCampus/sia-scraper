@@ -1503,8 +1503,9 @@ mod tests {
                 "Expected at least one deprecation warning for legacy javax_faces_ViewState key"
             );
             // Check that at least one warning mentions the legacy key or deprecation
+            let warnings: Vec<&pyo3::PyAny> = warning_list.extract().unwrap();
             let mut found_warning = false;
-            for warning in warning_list.iter().unwrap() {
+            for warning in warnings {
                 let warning_str = warning.str().unwrap().to_string().unwrap();
                 if warning_str.contains("javax_faces_ViewState")
                     || warning_str.contains("deprecated")
