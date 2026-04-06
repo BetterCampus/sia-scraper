@@ -17,8 +17,9 @@ extension-module = ["pyo3/extension-module"]
 full-error-collection = []
 fail-fast = []
 
-# For running cargo test without linking to Python
-# Use: cargo test --lib --no-default-features
+# For running cargo test without linking to Python:
+# 1. Ensure .cargo/config.toml is set up with your Python lib path (see .cargo/config.toml.example)
+# 2. Run: cargo test --no-default-features --lib
 
 [dependencies]
 pyo3 = { version = "0.20", features = ["auto-initialize"] }

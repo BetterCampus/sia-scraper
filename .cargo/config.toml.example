@@ -1,3 +1,13 @@
 [env]
-# Copy this file to .cargo/config.toml and update the path to your Python interpreter
+# Python interpreter for PyO3 (used by maturin and cargo test)
+# Copy this file to .cargo/config.toml and update the path
 # PYO3_PYTHON = "/path/to/your/python"
+
+# For cargo test: use --no-default-features to disable extension-module
+# which prevents Python linking. The rpath below ensures the test binary
+# finds libpython at runtime.
+#
+# Example: cargo test --no-default-features --lib
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-args=-Wl,-rpath,/path/to/your/python/lib"]
