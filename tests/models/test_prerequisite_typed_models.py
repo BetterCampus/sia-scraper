@@ -78,6 +78,8 @@ class TestPrereqConditionModel:
         )
         assert cond.condition == 1
         assert cond.prereq_type == "M"
+        assert cond.all_required is True
+        assert cond.number_of_courses == 0
         assert len(cond.prerequisites) == 0
 
 
