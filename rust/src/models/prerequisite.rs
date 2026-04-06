@@ -78,7 +78,6 @@ pub struct PrereqConditionModel {
 impl PrereqConditionModel {
     #[new]
     #[pyo3(signature = (*, condition, prereq_type, all_required, number_of_courses, prerequisites=None))]
-    #[allow(clippy::too_many_arguments)]
     fn new(
         condition: i32,
         prereq_type: String,
