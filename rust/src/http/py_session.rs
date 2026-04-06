@@ -285,6 +285,15 @@ impl PySiaSession {
     /// SiaTimeoutError: If request times out
     /// ParseError: If response cannot be parsed
     ///
+    /// # Concurrency Safety
+    ///
+    /// This method uses a generation-based conflict detection to prevent
+    /// stale state overwrites when multiple concurrent operations modify
+    /// the session state. If another method (e.g., `set_career()`) mutates
+    /// the session state during the batch operation, the state update is
+    /// skipped and logged at debug level. This ensures concurrent operations
+    /// do not overwrite each other's changes.
+    ///
     /// # Example
     /// ```python
     /// result = await session.scrape_courses([0, 1, 2], mode="skip")

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Concurrent Session State Safety (Issue #94)**: Generation-based race condition prevention
+  - Added `generation: u64` counter to `SessionState` and `SessionStateModel`
+  - Generation increments on each `update_state()` call
+  - `scrape_courses()` now checks generation before updating session state
+  - Stale state updates are skipped with debug-level logging when generation mismatch detected
+  - Prevents concurrent `scrape_courses()` calls from overwriting each other's state changes
+  - Comprehensive test suite covering generation field, edge cases, and concurrency scenarios
+
 - **Typed Error Hierarchy (Phase 8)**: Complete Rust-to-Python exception mapping
   - 5 granular Rust exception types: `NetworkError`, `HttpStatusError`, `SiaTimeoutError`, `ParseError`, `SessionError`
   - All inherit from `SiaScraperException` base class
