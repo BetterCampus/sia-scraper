@@ -4,7 +4,7 @@
 
 use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyTuple};
 use serde::{Deserialize, Serialize};
 
 use super::helpers::require_field;
@@ -13,23 +13,6 @@ fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
     dict.get_item(key)?
         .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
 }
-
-type PrereqConditionModelPickleArgs = (i32, String, bool, i32, Vec<PrerequisiteModel>);
-type PrereqConditionModelPickleKwargs = ();
-type PrereqConditionModelPickleState = (
-    PrereqConditionModelPickleArgs,
-    PrereqConditionModelPickleKwargs,
-);
-
-type CoursePrereqsModelPickleArgs = (
-    String,
-    i32,
-    String,
-    Vec<PrereqConditionModel>,
-    Option<String>,
-);
-type CoursePrereqsModelPickleKwargs = ();
-type CoursePrereqsModelPickleState = (CoursePrereqsModelPickleArgs, CoursePrereqsModelPickleKwargs);
 
 /// One prerequisite course reference.
 #[pyclass(module = "sia_scraper_rust")]
@@ -134,8 +117,21 @@ impl PrereqConditionModel {
         )
     }
 
-    fn __getnewargs_ex__(&self) -> PrereqConditionModelPickleState {
-        ((0, String::new(), false, 0, Vec::new()), ())
+    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("condition", self.condition)?;
+        kwargs.set_item("prereq_type", self.prereq_type.clone())?;
+        kwargs.set_item("all_required", self.all_required)?;
+        kwargs.set_item("number_of_courses", self.number_of_courses)?;
+        if !self.prerequisites.is_empty() {
+            let prereqs_list = PyList::empty(py);
+            for p in self.prerequisites.iter() {
+                prereqs_list.append(p.clone().into_py(py))?;
+            }
+            kwargs.set_item("prerequisites", prereqs_list)?;
+        }
+        let empty_tuple = PyTuple::new(py, std::iter::empty::<&PyAny>());
+        Ok((empty_tuple.into_py(py), kwargs.into_py(py)))
     }
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
@@ -230,8 +226,23 @@ impl CoursePrereqsModel {
         )
     }
 
-    fn __getnewargs_ex__(&self) -> CoursePrereqsModelPickleState {
-        ((String::new(), 0, String::new(), Vec::new(), None), ())
+    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("course_name", self.course_name.clone())?;
+        kwargs.set_item("credits", self.credits)?;
+        kwargs.set_item("typology", self.typology.clone())?;
+        if !self.conditions.is_empty() {
+            let conditions_list = PyList::empty(py);
+            for c in self.conditions.iter() {
+                conditions_list.append(c.clone().into_py(py))?;
+            }
+            kwargs.set_item("conditions", conditions_list)?;
+        }
+        if let Some(code) = &self.code {
+            kwargs.set_item("code", code)?;
+        }
+        let empty_tuple = PyTuple::new(py, std::iter::empty::<&PyAny>());
+        Ok((empty_tuple.into_py(py), kwargs.into_py(py)))
     }
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
