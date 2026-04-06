@@ -15,7 +15,7 @@ use pyo3::Python;
 use pyo3_asyncio::tokio::future_into_py;
 
 use crate::constants::SIA_BASE_URL;
-use crate::error::SessionError;
+use crate::error::{AbortError, SessionError};
 use crate::http::sia_session::SiaSession;
 use crate::models::scrape_result::ErrorMode;
 use crate::models::session::SessionStateModel;
@@ -347,7 +347,13 @@ impl PySiaSession {
                 }
             }
 
-            result.map_err(pyo3::PyErr::from)
+            result.map_err(|e| {
+                if error_mode == ErrorMode::Abort {
+                    AbortError::new_err(e.to_string())
+                } else {
+                    pyo3::PyErr::from(e)
+                }
+            })
         })
     }
 
@@ -424,7 +430,13 @@ impl PySiaSession {
             session
                 .scrape_courses_concurrent(indices, concurrency, error_mode, max_retries, retry_delay_ms)
                 .await
-                .map_err(pyo3::PyErr::from)
+                .map_err(|e| {
+                    if error_mode == ErrorMode::Abort {
+                        AbortError::new_err(e.to_string())
+                    } else {
+                        pyo3::PyErr::from(e)
+                    }
+                })
         })
     }
 
