@@ -122,18 +122,18 @@ class SiaScraper:
             message = (
                 f"Invalid session status '{status_str}'. Allowed statuses are: {allowed_statuses}"
             )
-            raise SiaSessionException(message) from exc
+            raise SiaSessionException.InvalidSessionDataError() from exc
 
         course_list_raw: list[dict[str, str]] = []
         raw_course_list = session_data.get("course_list")
         if raw_course_list is not None and not isinstance(raw_course_list, list):
-            raise SiaSessionException("Invalid session_data: 'course_list' must be a list")
+            raise SiaSessionException.InvalidSessionDataError(field="course_list")
 
         if isinstance(raw_course_list, list):
             for index, item in enumerate(raw_course_list):
                 if not isinstance(item, dict):
-                    raise SiaSessionException(
-                        f"Invalid session_data: 'course_list[{index}]' must be a dict"
+                    raise SiaSessionException.InvalidSessionDataError(
+                        field="course_list", index=index
                     )
 
                 # Extract code from current or legacy key
@@ -150,9 +150,8 @@ class SiaScraper:
                 if code_val is not None and name_val is not None:
                     # Validate types
                     if not isinstance(code_val, str) or not isinstance(name_val, str):
-                        raise SiaSessionException(
-                            f"Invalid session_data: 'course_list[{index}]' "
-                            "code and name must be strings"
+                        raise SiaSessionException.InvalidSessionDataError(
+                            field="course_list", index=index
                         )
                     # Emit warning if legacy keys detected
                     if used_legacy:
@@ -170,14 +169,12 @@ class SiaScraper:
                     k, v = next(iter(item.items()))
                     # Reject reserved keys as single-key entries
                     if k in {"code", "name", "course_code", "course_name"}:
-                        raise SiaSessionException(
-                            f"Invalid session_data: 'course_list[{index}]' "
-                            f"key '{k}' is reserved; use code/name keys instead"
+                        raise SiaSessionException.InvalidSessionDataError(
+                            field="course_list", index=index
                         )
                     if not isinstance(k, str) or not isinstance(v, str):
-                        raise SiaSessionException(
-                            f"Invalid session_data: 'course_list[{index}]' "
-                            "key and value must be strings"
+                        raise SiaSessionException.InvalidSessionDataError(
+                            field="course_list", index=index
                         )
                     warnings.warn(
                         f"session_data 'course_list[{index}]' uses deprecated single-key dict format. "
@@ -188,9 +185,8 @@ class SiaScraper:
                     )
                     course_list_raw.append({"code": k, "name": v})
                 else:
-                    raise SiaSessionException(
-                        f"Invalid session_data: 'course_list[{index}]' "
-                        "must have 'code'/'name' keys or be a single-key dict"
+                    raise SiaSessionException.InvalidSessionDataError(
+                        field="course_list", index=index
                     )
 
         self._sia_session._course_list = course_list_raw

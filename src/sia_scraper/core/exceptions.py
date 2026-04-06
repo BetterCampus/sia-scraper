@@ -39,6 +39,8 @@ class SiaSessionException(Exception):
         - TimeoutError: Request timeout (legacy, prefer SiaTimeoutError)
         - InvalidStatus: Operation incompatible with current session state
         - ConcurrentAccessError: Concurrent operation detected
+        - InvalidSessionDataError: Session data validation failed
+        - MissingSessionFieldError: Required field missing from session data
     """
 
     SessionNotSet: type["SessionNotSet"]
@@ -46,6 +48,8 @@ class SiaSessionException(Exception):
     TimeoutError: type["TimeoutError"]
     InvalidStatus: type["InvalidStatus"]
     ConcurrentAccessError: type["ConcurrentAccessError"]
+    InvalidSessionDataError: type["InvalidSessionDataError"]
+    MissingSessionFieldError: type["MissingSessionFieldError"]
 
 
 class SessionNotSet(SiaSessionException):
@@ -57,6 +61,56 @@ class SessionNotSet(SiaSessionException):
     def __init__(self) -> None:
         """Initialize with instruction to start session."""
         super().__init__("Must set session by create_session() or load_session(session_data)")
+
+
+class InvalidSessionDataError(SiaSessionException):
+    """Raised when session_data validation fails.
+
+    This exception is raised when loading session data from a dict or
+    SessionStateModel and the data fails validation checks (e.g., wrong
+    types, missing required fields, invalid format).
+
+    Attributes:
+        field: Optional field name where validation failed.
+        index: Optional index in a list (e.g., course_list[index]).
+    """
+
+    def __init__(self, field: str | None = None, index: int | None = None) -> None:
+        """Initialize with optional field and index context.
+
+        Args:
+            field: Optional name of the field that failed validation.
+            index: Optional index in a list where validation failed.
+        """
+        parts = ["Invalid session_data"]
+        if field:
+            parts.append(f"'{field}'")
+        if index is not None:
+            parts.append(f"[{index}]")
+        parts.append("validation failed")
+        super().__init__(": ".join(parts))
+        self.field = field
+        self.index = index
+
+
+class MissingSessionFieldError(SiaSessionException):
+    """Raised when a required field is missing from session data.
+
+    This exception is raised during session data loading when required
+    fields are missing from the input dictionary or model.
+
+    Attributes:
+        field: Name of the missing required field.
+    """
+
+    def __init__(self, field: str) -> None:
+        """Initialize with missing field name.
+
+        Args:
+            field: Name of the missing required field.
+        """
+        super().__init__(f"Missing required session field: '{field}'")
+        self.field = field
 
 
 class CareerNotSet(SiaSessionException):
@@ -144,6 +198,8 @@ SiaSessionException.CareerNotSet = CareerNotSet  # type: ignore[attr-defined]
 SiaSessionException.TimeoutError = TimeoutError  # type: ignore[attr-defined]
 SiaSessionException.InvalidStatus = InvalidStatus  # type: ignore[attr-defined]
 SiaSessionException.ConcurrentAccessError = ConcurrentAccessError  # type: ignore[attr-defined]
+SiaSessionException.InvalidSessionDataError = InvalidSessionDataError  # type: ignore[attr-defined]
+SiaSessionException.MissingSessionFieldError = MissingSessionFieldError  # type: ignore[attr-defined]
 
 __all__ = [
     "SiaSessionException",
@@ -152,6 +208,8 @@ __all__ = [
     "TimeoutError",
     "InvalidStatus",
     "ConcurrentAccessError",
+    "InvalidSessionDataError",
+    "MissingSessionFieldError",
     "SiaScraperException",
     "NetworkError",
     "HttpStatusError",
