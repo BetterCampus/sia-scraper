@@ -269,7 +269,10 @@ class SiaScraper:
             raise ValueError("At least one of courses_indices or courses_codes must be provided")
 
         if not courses_indices:
-            courses_indices = [self.get_course_index(code) for code in courses_codes]
+            try:
+                courses_indices = [self.get_course_index(code) for code in courses_codes]
+            except ValueError as e:
+                raise ValueError(f"Invalid course code in courses_codes: {e}") from e
 
         if not courses_codes:
             courses_codes = [""] * len(courses_indices)
