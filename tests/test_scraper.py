@@ -244,7 +244,7 @@ class TestSiaScraperBatchScraping:
         mock_session.scrape_courses.assert_awaited_once()
         call_args = mock_session.scrape_courses.call_args
         assert call_args is not None
-        assert call_args[0][0] == [1, 2, 3]  # Sorted indices
+        assert call_args[0][0] == [3, 1, 2]  # Input order preserved
 
     @pytest.mark.asyncio
     async def test_scrape_courses_skip_mode_returns_result(self, mock_async_session_class):

@@ -83,7 +83,7 @@ pub struct PrereqConditionModel {
 #[pymethods]
 impl PrereqConditionModel {
     #[new]
-    #[pyo3(signature = (condition, prereq_type, all_required, number_of_courses, prerequisites=None))]
+    #[pyo3(signature = (*, condition, prereq_type, all_required, number_of_courses, prerequisites=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         condition: i32,
@@ -177,7 +177,7 @@ pub struct CoursePrereqsModel {
 #[pymethods]
 impl CoursePrereqsModel {
     #[new]
-    #[pyo3(signature = (course_name, credits, typology, conditions=None, code=None))]
+    #[pyo3(signature = (*, course_name, credits, typology, conditions=None, code=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         course_name: String,

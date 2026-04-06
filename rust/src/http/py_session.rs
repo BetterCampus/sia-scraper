@@ -321,12 +321,10 @@ impl PySiaSession {
                 (cloned, result)
             };
 
-            if result.is_ok() {
-                let mutated_state = cloned_session.get_state().await;
-                let mut session_guard = inner.write().await;
-                if let Some(ref mut session) = *session_guard {
-                    session.update_state(mutated_state).await;
-                }
+            let mutated_state = cloned_session.get_state().await;
+            let mut session_guard = inner.write().await;
+            if let Some(ref mut session) = *session_guard {
+                session.update_state(mutated_state).await;
             }
 
             result.map_err(pyo3::PyErr::from)

@@ -291,7 +291,6 @@ class SiaScraper:
             seen.add(idx)
 
         paired = list(zip(courses_indices, courses_codes, strict=True))
-        paired.sort(key=lambda x: x[0])
         indices = [idx for idx, _ in paired]
         return paired, indices
 
@@ -333,8 +332,8 @@ class SiaScraper:
         """Apply course codes to success models.
 
         Note: This method assumes successes are ordered consistently with
-        indices (both sorted by course index). This contract is maintained
-        by _prepare_scrape_indices sorting and Rust's result ordering.
+        indices (both in input order). This contract is maintained
+        by _prepare_scrape_indices and Rust's result ordering.
 
         Args:
             successes: List of scraped course models to update in-place.

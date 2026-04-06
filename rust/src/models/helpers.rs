@@ -22,7 +22,8 @@ pub(crate) fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py 
 /// The extracted value, or `PyErr` if missing
 ///
 /// # Errors
-/// Returns `KeyError` if the key is not present in the dictionary
+/// Returns `KeyError` if the key is not present in the dictionary.
+/// Returns `TypeError` if the value cannot be converted to the target type.
 ///
 /// # Examples
 /// ```rust,ignore

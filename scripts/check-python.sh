@@ -20,12 +20,14 @@ total=0
 run_check() {
     local name="$1"; shift
     local cmd="$*"
+    local output
     ((total++))
     echo -e "${RESET}━━━ $name ━━━"
-    if eval "$cmd" > /dev/null 2>&1; then
+    if output=$(eval "$cmd" 2>&1); then
         echo -e "${GREEN}✓ $name passed${RESET}"
     else
         echo -e "${RED}✗ $name failed${RESET}"
+        echo "$output"
         ((failures++))
     fi
     echo

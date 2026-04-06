@@ -159,7 +159,6 @@ impl CourseListEntryModel {
 }
 
 /// Convenience wrapper that automatically extracts Python context from dict.
-#[inline(always)]
 fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
     normalize_course_dict(dict, dict.py())
 }
@@ -1032,6 +1031,66 @@ mod tests {
             assert_eq!(entry.name, "Calculo");
 
             assert_deprecation_warning(warning_list, "course_code/course_name").unwrap();
+        });
+    }
+
+    #[test]
+    fn test_course_entry_deprecated_course_code_getter() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let entry = CourseListEntryModel {
+                code: "1000001".to_string(),
+                name: "Calculo".to_string(),
+            };
+
+            let warnings = py.import("warnings").unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
+
+            let result = entry.course_code(py).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
+            assert_eq!(result, "1000001");
+            assert_deprecation_warning(warning_list, "course_code getter").unwrap();
+        });
+    }
+
+    #[test]
+    fn test_course_entry_deprecated_course_name_getter() {
+        use pyo3::types::PyDict;
+
+        Python::with_gil(|py| {
+            let entry = CourseListEntryModel {
+                code: "1000001".to_string(),
+                name: "Calculo".to_string(),
+            };
+
+            let warnings = py.import("warnings").unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
+
+            let result = entry.course_name(py).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
+            assert_eq!(result, "Calculo");
+            assert_deprecation_warning(warning_list, "course_name getter").unwrap();
         });
     }
 

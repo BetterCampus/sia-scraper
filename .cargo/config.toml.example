@@ -10,4 +10,4 @@
 # Example: cargo test --no-default-features --lib
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-args=-Wl,-rpath,/path/to/your/python/lib"]
+# rustflags = ["-C", "link-args=-Wl,-rpath,/path/to/your/python/lib"]

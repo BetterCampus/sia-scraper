@@ -379,7 +379,8 @@ cargo clippy --all-targets --all-features -- -D warnings
 # Auto-fix clippy warnings
 cargo clippy --fix
 
-# Run Rust tests (requires --no-default-features)
+# Run Rust tests (requires --no-default-features to disable extension-module feature
+# which prevents Python linking during pure Rust unit tests)
 cargo test --no-default-features --lib
 
 # Build optimized release
