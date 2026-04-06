@@ -1480,11 +1480,44 @@ mod tests {
             courses.append(course_dict).unwrap();
             dict.set_item("course_list", courses).unwrap();
 
+            // Capture deprecation warnings
+            let warnings = py.import("warnings").unwrap();
+            let catch_warnings = warnings.call_method("catch_warnings", (), None).unwrap();
+            let warning_list = catch_warnings.call_method0("__enter__").unwrap();
+            warnings.call_method1("simplefilter", ("always",)).unwrap();
+
             let model = SessionStateModel::from_dict(dict).unwrap();
+
+            catch_warnings
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
 
             // Should handle legacy key with explicit None
             assert_eq!(model.javax_faces_view_state, None);
             assert_eq!(model.career_code, "0-2-8-3");
+
+            // Verify deprecation warning was emitted for legacy key
+            let len = warning_list.len().unwrap();
+            assert!(
+                len > 0,
+                "Expected at least one deprecation warning for legacy javax_faces_ViewState key"
+            );
+            // Check that at least one warning mentions the legacy key or deprecation
+            let mut found_warning = false;
+            for i in 0..len {
+                let warning = warning_list.get_item(i).unwrap().unwrap();
+                let warning_str = warning.str().unwrap().to_string().unwrap();
+                if warning_str.contains("javax_faces_ViewState")
+                    || warning_str.contains("deprecated")
+                {
+                    found_warning = true;
+                    break;
+                }
+            }
+            assert!(
+                found_warning,
+                "Expected deprecation warning for legacy javax_faces_ViewState key"
+            );
         });
     }
 
