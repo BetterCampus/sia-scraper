@@ -16,9 +16,9 @@ Example:
 """
 
 from collections.abc import Awaitable
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
-ErrorModeStr = str
+ErrorModeStr = Literal["abort", "skip", "retry"]
 
 class SiaScraperException(Exception):
     """Custom exception raised by sia_scraper_rust for parsing and validation errors.
