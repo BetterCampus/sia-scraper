@@ -486,7 +486,7 @@ class SiaScraper:
                 )
             return result.successes
 
-        delay_ms = int(retry_delay * 1000)
+        delay_ms = int(round(retry_delay * 1000))
         rust_result = await self._sia_session.scrape_courses(
             indices,
             mode=mode,
@@ -580,7 +580,7 @@ class SiaScraper:
             self._apply_course_codes(result.successes, paired, indices)
             return result.successes
 
-        delay_ms = int(retry_delay * 1000)
+        delay_ms = int(round(retry_delay * 1000))
         rust_result = await self._sia_session.scrape_courses_parallel(
             indices,
             mode=mode,
