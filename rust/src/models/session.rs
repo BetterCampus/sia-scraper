@@ -1506,7 +1506,7 @@ mod tests {
             let warnings: Vec<&pyo3::PyAny> = warning_list.extract().unwrap();
             let mut found_warning = false;
             for warning in warnings {
-                let warning_str = warning.str().unwrap().to_string().unwrap();
+                let warning_str = warning.str().unwrap().to_string();
                 if warning_str.contains("javax_faces_ViewState")
                     || warning_str.contains("deprecated")
                 {
