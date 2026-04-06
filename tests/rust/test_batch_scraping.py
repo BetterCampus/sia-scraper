@@ -3,9 +3,20 @@
 Tests the Rust batch scraping implementation through the PyO3 boundary,
 verifying ErrorMode behavior, ScrapeResult structure, and exception propagation.
 
-Note: Some tests use the `initialized_session` fixture which makes real network
-requests to SIA. These are integration tests and should be skipped in environments
-without network access using @pytest.mark.network marker.
+Note on Test Hermeticity:
+The tests in this module include both unit tests (that don't require network)
+and integration tests (that make real HTTP requests to SIA). The integration
+tests are marked with `@pytest.mark.network` and are automatically skipped
+when SIA is unreachable (see conftest.py).
+
+This design choice allows the test suite to:
+- Run unit tests in CI without network dependencies
+- Run full integration tests when SIA is accessible
+- Catch regressions in the complete Python→Rust→Network stack
+
+Making all tests fully hermetic (mocking network) would require significant
+test infrastructure and is tracked as a future improvement. For now, the
+@pytest.mark.network markers provide a practical compromise.
 """
 
 import pytest
