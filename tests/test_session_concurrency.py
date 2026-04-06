@@ -24,9 +24,7 @@ def _make_state_model(
 ) -> sia_scraper_rust.SessionStateModel:
     """Create a typed SessionStateModel for testing."""
     entries = [
-        sia_scraper_rust.CourseListEntryModel(
-            course_code=item["course_code"], course_name=item["course_name"]
-        )
+        sia_scraper_rust.CourseListEntryModel(code=item["code"], name=item["name"])
         for item in course_list
     ]
     return sia_scraper_rust.SessionStateModel(
@@ -78,9 +76,9 @@ def mock_rust_session():
             is_electives=electives or False,
             status="ON_CAREER_PAGE",
             course_list=[
-                {"course_code": "1000001", "course_name": "Calculo"},
-                {"course_code": "2016489", "course_name": "Estructuras de Datos"},
-                {"course_code": "3000003", "course_name": "Fisica"},
+                {"code": "1000001", "name": "Calculo"},
+                {"code": "2016489", "name": "Estructuras de Datos"},
+                {"code": "3000003", "name": "Fisica"},
             ],
             view_state="vs-2",
         )

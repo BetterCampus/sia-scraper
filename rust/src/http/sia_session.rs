@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
@@ -36,6 +36,29 @@ macro_rules! define_regex {
 ///
 /// Uses the formula: `max(1, retry_delay_ms) * 2^attempt`, capped at
 /// `max_delay_ms` from the retry configuration.
+///
+/// # Arguments
+///
+/// * `retry_config` - Retry configuration containing the `max_delay_ms` cap.
+/// * `retry_delay_ms` - Base delay in milliseconds. Values below 1 are clamped to 1.
+/// * `attempt` - Zero-based retry attempt index.
+///
+/// # Returns
+///
+/// Backoff delay in milliseconds (`u64`), capped at `retry_config.max_delay_ms`.
+///
+/// # Notes
+///
+/// Uses `saturating_mul` to avoid overflow and caps the left-shift exponent at
+/// 31 to avoid undefined shift behavior.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let cfg = RetryConfig::default();
+/// let delay = compute_backoff_ms(&cfg, 500, 2);
+/// assert_eq!(delay, 2_000);
+/// ```
 fn compute_backoff_ms(retry_config: &RetryConfig, retry_delay_ms: u64, attempt: u32) -> u64 {
     let base = retry_delay_ms.max(1);
     let shift = attempt.min(31);
@@ -45,12 +68,14 @@ fn compute_backoff_ms(retry_config: &RetryConfig, retry_delay_ms: u64, attempt: 
 
 define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id["'][^>]*value\s*=\s*["']([^"']*)["'][^>]*>"#);
 
-/// Result type for concurrent course scraping: `(position, index, data)`.
+/// Result type for concurrent course scraping.
 ///
-/// The first element is the position in the original input batch,
-/// the second is the course index, and the third is either the
-/// parsed `CourseInfoModel` on success or an `HttpError` on failure.
-pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel), (usize, i32, HttpError)>;
+/// - `Ok((position, index, CourseInfoModel, timestamp))` on success
+/// - `Err((position, index, HttpError, timestamp))` on failure
+///
+/// The `position` field is the item's index in the original input batch,
+/// useful for restoring deterministic ordering after concurrent execution.
+pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel, Instant), (usize, i32, HttpError, Instant)>;
 
 #[derive(Clone)]
 pub struct SiaSession {
@@ -843,38 +868,49 @@ impl SiaSession {
                 let session = SiaSession::with_owned_state(session_ref, owned_state.clone());
                 let abort = Arc::clone(&abort_flag);
                 async move {
+                    let mut last_error: Option<HttpError> = None;
                     for attempt in 0..=effective_retries {
                         if abort.load(Ordering::SeqCst) {
                             return Err((
                                 pos,
                                 index,
                                 HttpError::Aborted("Cancelled due to concurrent error".to_string()),
+                                Instant::now(),
                             ));
                         }
                         match session.scrape_course_info(index).await {
-                            Ok(info) => return Ok((pos, index, info)),
+                            Ok(info) => return Ok((pos, index, info, Instant::now())),
                             Err(e) => {
                                 if abort.load(Ordering::SeqCst) {
                                     return Err((
                                         pos,
                                         index,
                                         HttpError::Aborted("Cancelled due to concurrent error".to_string()),
+                                        Instant::now(),
                                     ));
                                 }
                                 if !should_retry(&e, &session.retry_config)
                                     || attempt == effective_retries
                                 {
+                                    let error_time = Instant::now();
                                     if mode == ErrorMode::Abort {
                                         abort.store(true, Ordering::SeqCst);
                                     }
-                                    return Err((pos, index, e));
+                                    return Err((pos, index, e, error_time));
                                 }
+                                last_error = Some(e);
                                 let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
                                 sleep(Duration::from_millis(delay)).await;
                             }
                         }
                     }
-                    unreachable!("retry loop must return before this point")
+                    // Graceful fallback if loop exhausts (shouldn't happen with proper retry logic)
+                    Err((
+                        pos,
+                        index,
+                        last_error.unwrap_or_else(|| HttpError::NetworkError("Retry loop exhausted".into())),
+                        Instant::now(),
+                    ))
                 }
             })
             .buffer_unordered(max_concurrent)
@@ -884,25 +920,60 @@ impl SiaSession {
         let mut result = ScrapeResult::new();
 
         let mut ordered_results = results;
-        ordered_results.sort_by_key(|r| match r { Ok((pos, _, _)) => *pos, Err((pos, _, _)) => *pos });
+        ordered_results.sort_by_key(|r| match r { Ok((pos, _, _, _)) => *pos, Err((pos, _, _, _)) => *pos });
 
-        for res in ordered_results {
-            match res {
-                Ok((_, _index, info)) => {
-                    result.successes.push(info);
-                }
-                Err((_, index, e)) => match mode {
-                    ErrorMode::Abort => {
-                        if matches!(e, HttpError::Aborted(_)) {
-                            continue;
+        // In abort mode, find the earliest non-Aborted error to report as the trigger
+        if mode == ErrorMode::Abort {
+            let mut earliest_error: Option<(i32, HttpError, Instant)> = None;
+
+            for res in &ordered_results {
+                if let Err((_, index, e, timestamp)) = res {
+                    if !matches!(e, HttpError::Aborted(_)) {
+                        match &earliest_error {
+                            None => earliest_error = Some((*index, e.clone(), *timestamp)),
+                            Some((_, _, prev_time)) => {
+                                if timestamp < prev_time {
+                                    earliest_error = Some((*index, e.clone(), *timestamp));
+                                }
+                            }
                         }
-                        log::error!("Aborted at course index {}: {}", index, e);
-                        return Err(e);
                     }
-                    ErrorMode::Skip | ErrorMode::Retry => {
+                }
+            }
+
+            // Collect successes and return the earliest trigger error if found
+            for res in ordered_results {
+                match res {
+                    Ok((_, _, info, _)) => {
+                        result.successes.push(info);
+                    }
+                    Err((_, _, HttpError::Aborted(_), _)) => {
+                        // Skip Aborted errors
+                        continue;
+                    }
+                    Err(_) => {
+                        // Non-Aborted failures are intentionally dropped in abort mode.
+                        // We return only earliest_error (triggering failure) to preserve
+                        // deterministic abort semantics for callers.
+                    }
+                }
+            }
+
+            if let Some((index, error, _)) = earliest_error {
+                log::error!("Aborted at course index {}: {}", index, error);
+                return Err(error);
+            }
+        } else {
+            // Skip/Retry mode: collect all results
+            for res in ordered_results {
+                match res {
+                    Ok((_, _index, info, _)) => {
+                        result.successes.push(info);
+                    }
+                    Err((_, index, e, _)) => {
                         result.failures.push((index, e.to_string()));
                     }
-                },
+                }
             }
         }
 
@@ -924,7 +995,8 @@ impl SiaSession {
         max_retries: u32,
         retry_delay_ms: u64,
     ) -> Result<CourseInfoModel, HttpError> {
-        for attempt in 0..=max_retries {
+        let mut attempt: u32 = 0;
+        loop {
             match self.scrape_course_info(index).await {
                 Ok(info) => return Ok(info),
                 Err(e) => {
@@ -933,10 +1005,10 @@ impl SiaSession {
                     }
                     let delay = compute_backoff_ms(&self.retry_config, retry_delay_ms, attempt);
                     sleep(Duration::from_millis(delay)).await;
+                    attempt = attempt.saturating_add(1);
                 }
             }
         }
-        unreachable!("retry loop must return before this point");
     }
 }
 
@@ -944,6 +1016,12 @@ impl SiaSession {
 mod tests {
     use super::*;
     use crate::constants::SIA_BASE_URL;
+    use crate::models::session::CourseListEntryModel;
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::io::AsyncWriteExt;
+    use tokio::task::JoinHandle;
 
     #[tokio::test]
     async fn test_session_creation() {
@@ -990,9 +1068,10 @@ mod tests {
             let mut cloned_state = cloned.state.write().await;
             cloned_state.status = "CLONED_MODIFIED".to_string();
             cloned_state.params.insert("extra".to_string(), "value".to_string());
-            let mut course = std::collections::HashMap::new();
-            course.insert("test".to_string(), "Test Course".to_string());
-            cloned_state.course_list.push(course);
+            cloned_state.course_list.push(CourseListEntryModel {
+                code: "test".to_string(),
+                name: "Test Course".to_string(),
+            });
         }
 
         let original_after = session.get_state().await;
@@ -1173,9 +1252,18 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
-                std::collections::HashMap::from([("code".to_string(), "COUR-102".to_string())]),
-                std::collections::HashMap::from([("code".to_string(), "COUR-103".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
+                CourseListEntryModel {
+                    code: "COUR-102".to_string(),
+                    name: String::new(),
+                },
+                CourseListEntryModel {
+                    code: "COUR-103".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_info(10).await;
@@ -1201,7 +1289,10 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_prereqs(5).await;
@@ -1218,7 +1309,10 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_info(-1).await;
@@ -1250,7 +1344,10 @@ mod tests {
             state.status = "ON_CAREER_PAGE".to_string();
             state.career_code = "0-2-8-3".to_string();
             state.course_list = vec![
-                std::collections::HashMap::from([("code".to_string(), "COUR-101".to_string())]),
+                CourseListEntryModel {
+                    code: "COUR-101".to_string(),
+                    name: String::new(),
+                },
             ];
         }
         let result = session.scrape_course_prereqs(-1).await;
@@ -1426,11 +1523,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_abort_stops_on_first_failure() {
-        use std::collections::HashMap;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-        use tokio::io::AsyncWriteExt;
-
         let request_count = Arc::new(AtomicUsize::new(0));
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1447,14 +1539,22 @@ mod tests {
         ]]></change>
     </changes>
 </partial-response>"#
-        .to_string();
+            .to_string();
 
         let error_body = r#"<?xml version="1.0"?><partial-response><error/></partial-response>"#
             .to_string();
 
-        tokio::spawn(async move {
+        let server_task: JoinHandle<()> = tokio::spawn(async move {
             loop {
-                let (mut stream, _) = listener.accept().await.unwrap();
+                let (mut stream, _) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::ConnectionReset {
+                            break;
+                        }
+                        continue;
+                    }
+                };
                 let count = request_count.fetch_add(1, Ordering::SeqCst);
                 let body = if count.is_multiple_of(2) {
                     success_body.clone()
@@ -1482,9 +1582,10 @@ mod tests {
         let course_list = {
             let mut v = Vec::new();
             for i in 0..4 {
-                let mut course = HashMap::new();
-                course.insert(format!("code{i}"), format!("Course {i}"));
-                v.push(course);
+                v.push(CourseListEntryModel {
+                    code: format!("code{i}"),
+                    name: format!("Course {i}"),
+                });
             }
             v
         };
@@ -1504,6 +1605,9 @@ mod tests {
             .scrape_courses_concurrent(vec![0, 1, 2, 3], 2, ErrorMode::Abort, 0, 100)
             .await;
 
+        server_task.abort();
+        let _ = server_task.await;
+
         assert!(result.is_err(), "Abort mode should return Err on first failure");
         let err = result.unwrap_err();
         assert!(
@@ -1515,10 +1619,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_multiple_indices_ordering() {
-        use std::collections::HashMap;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-
         let mut server = mockito::Server::new_async().await;
         let mock_url = server.url();
 
@@ -1567,9 +1667,10 @@ mod tests {
             course_list: {
                 let mut v = Vec::new();
                 for i in 0..5 {
-                    let mut course = HashMap::new();
-                    course.insert(format!("code{i}"), format!("Course {i}"));
-                    v.push(course);
+                    v.push(CourseListEntryModel {
+                        code: format!("code{i}"),
+                        name: format!("Course {i}"),
+                    });
                 }
                 v
             },
@@ -1610,12 +1711,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_scrape_courses_concurrent_handles_concurrent_execution() {
-        use std::collections::HashMap;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-        use tokio::io::AsyncWriteExt;
-        use tokio::time::sleep;
-
         let active_requests = Arc::new(AtomicUsize::new(0));
         let max_concurrent_seen = Arc::new(AtomicUsize::new(0));
         let request_count = Arc::new(AtomicUsize::new(0));
@@ -1635,14 +1730,22 @@ mod tests {
         ]]></change>
     </changes>
 </partial-response>"#
-        .to_string();
+            .to_string();
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let mock_url = format!("http://{}", listener.local_addr().unwrap());
 
-        tokio::spawn(async move {
+        let server_task: JoinHandle<()> = tokio::spawn(async move {
             loop {
-                let (mut stream, _) = listener.accept().await.unwrap();
+                let (mut stream, _) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::ConnectionReset {
+                            break;
+                        }
+                        continue;
+                    }
+                };
                 let active = active_clone.clone();
                 let max_seen = max_clone.clone();
                 let count = count_clone.clone();
@@ -1664,7 +1767,7 @@ mod tests {
 
                     let _ = count.fetch_add(1, Ordering::SeqCst);
 
-                    sleep(Duration::from_millis(100)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
                     active.fetch_sub(1, Ordering::SeqCst);
 
@@ -1691,9 +1794,10 @@ mod tests {
             course_list: {
                 let mut v = Vec::new();
                 for i in 0..10 {
-                    let mut course = HashMap::new();
-                    course.insert(format!("code{i}"), format!("Course {i}"));
-                    v.push(course);
+                    v.push(CourseListEntryModel {
+                        code: format!("code{i}"),
+                        name: format!("Course {i}"),
+                    });
                 }
                 v
             },
@@ -1708,6 +1812,9 @@ mod tests {
         let result = session
             .scrape_courses_concurrent(indices, max_concurrent, ErrorMode::Skip, 0, 100)
             .await;
+
+        server_task.abort();
+        let _ = server_task.await;
 
         assert!(result.is_ok());
         let result = result.unwrap();

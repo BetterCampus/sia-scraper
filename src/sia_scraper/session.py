@@ -1,6 +1,7 @@
 """Thin Python wrapper around Rust PySiaSession."""
 
 from contextlib import asynccontextmanager
+from typing import Literal
 
 import sia_scraper_rust
 
@@ -12,6 +13,10 @@ from .core.exceptions import (
     SessionNotSet,
     SiaSessionException,
 )
+
+_SESSION_NOT_INIT_MARKER = "not initialized"
+
+ErrorModeStr = Literal["abort", "skip", "retry"]
 
 
 class SiaSession:
@@ -110,7 +115,40 @@ class SiaSession:
         self._career_name = state.career_name or DEFAULT_CAREER_NAME
         self._is_electives = state.is_electives
         self._career_indices = state.career_code.split("-") if state.career_code else []
-        self._course_list = [{entry.course_code: entry.course_name} for entry in state.course_list]
+        self._course_list = [
+            {"code": entry.code, "name": entry.name} for entry in state.course_list
+        ]
+        self._validate_course_list()
+
+    def _validate_course_list(self) -> None:
+        """Validate course list format (defense-in-depth)."""
+        for i, course in enumerate(self._course_list):
+            if not isinstance(course, dict):
+                raise ValueError(
+                    f"Invalid course list format at index {i}: {type(course).__name__}. "
+                    "Expected dict with 'code' and 'name' string keys."
+                )
+            if "code" not in course or "name" not in course:
+                raise ValueError(
+                    f"Invalid course list format at index {i}: {course}. "
+                    "Expected dict with 'code' and 'name' keys."
+                )
+            code_val = course["code"]
+            name_val = course["name"]
+            if not isinstance(code_val, str) or not isinstance(name_val, str):
+                raise ValueError(
+                    f"Invalid course list format at index {i}: code={code_val!r}, name={name_val!r}. "
+                    "Expected 'code' and 'name' values to be strings."
+                )
+
+    def _raise_if_session_not_set(self, exc: Exception) -> None:
+        """Raise SessionNotSet when Rust reports an uninitialized session.
+
+        Note: Depends on Rust error message containing 'not initialized'.
+        If Rust changes this message, update _SESSION_NOT_INIT_MARKER.
+        """
+        if _SESSION_NOT_INIT_MARKER in str(exc).lower():
+            raise SessionNotSet from exc
 
     async def init_session(self) -> None:
         """Initialize session by delegating to Rust PySiaSession.
@@ -141,8 +179,7 @@ class SiaSession:
             try:
                 state = await self._rust_session.set_career(search_code, is_electives)
             except sia_scraper_rust.SessionError as exc:
-                if "not initialized" in str(exc).lower():
-                    raise SessionNotSet from exc
+                self._raise_if_session_not_set(exc)
                 raise CareerNotSet from exc
             except SiaSessionException:
                 raise
@@ -186,38 +223,43 @@ class SiaSession:
     async def scrape_courses(
         self,
         indices: list[int],
-        mode: str = "abort",
-        retries: int = 0,
-        delay: int = 0,
+        mode: ErrorModeStr = "abort",
+        retries: int | None = None,
+        delay: int | None = None,
     ) -> sia_scraper_rust.ScrapeResult:
         """Scrape multiple courses sequentially using Rust batch scraping.
 
         Args:
             indices: List of course indices to scrape.
             mode: Error handling mode - "abort", "skip", or "retry".
-            retries: Maximum retry attempts per course (retry mode only).
-            delay: Base delay between retries in milliseconds.
+            retries: Maximum retry attempts per course (retry mode only). None uses Rust default (3).
+            delay: Base delay between retries in milliseconds. None uses Rust default (800ms).
 
         Returns:
             ScrapeResult with successes and failures.
 
         Raises:
-            SiaSessionException: If session not initialized or in Abort mode.
+            SessionNotSet: If session not initialized.
+            sia_scraper_rust.AbortError: In abort mode on first failure.
             sia_scraper_rust.NetworkError: If connection fails.
             sia_scraper_rust.HttpStatusError: If server returns error status.
             sia_scraper_rust.SiaTimeoutError: If request times out.
             sia_scraper_rust.ParseError: If response cannot be parsed.
         """
         async with self._operation("scrape_courses"):
-            return await self._rust_session.scrape_courses(indices, mode, retries, delay)
+            try:
+                return await self._rust_session.scrape_courses(indices, mode, retries, delay)
+            except sia_scraper_rust.SessionError as exc:
+                self._raise_if_session_not_set(exc)
+                raise
 
     async def scrape_courses_parallel(
         self,
         indices: list[int],
-        mode: str = "abort",
-        max_concurrent: int = 5,
-        retries: int = 0,
-        delay: int = 0,
+        mode: ErrorModeStr = "abort",
+        max_concurrent: int | None = None,
+        retries: int | None = None,
+        delay: int | None = None,
     ) -> sia_scraper_rust.ScrapeResult:
         """Scrape multiple courses concurrently using Rust parallel scraping.
 
@@ -225,23 +267,29 @@ class SiaSession:
             indices: List of course indices to scrape.
             mode: Error handling mode - "abort", "skip", or "retry".
             max_concurrent: Maximum number of concurrent scraping operations.
-            retries: Maximum retry attempts per course (retry mode only).
-            delay: Base delay between retries in milliseconds.
+                None delegates to the Rust default (5).
+            retries: Maximum retry attempts per course (retry mode only). None uses Rust default (3).
+            delay: Base delay between retries in milliseconds. None uses Rust default (800ms).
 
         Returns:
             ScrapeResult with successes and failures.
 
         Raises:
-            SiaSessionException: If session not initialized or in Abort mode.
+            SessionNotSet: If session not initialized.
+            sia_scraper_rust.AbortError: In abort mode on first failure.
             sia_scraper_rust.NetworkError: If connection fails.
             sia_scraper_rust.HttpStatusError: If server returns error status.
             sia_scraper_rust.SiaTimeoutError: If request times out.
             sia_scraper_rust.ParseError: If response cannot be parsed.
         """
         async with self._operation("scrape_courses_parallel"):
-            return await self._rust_session.scrape_courses_parallel(
-                indices, mode, max_concurrent, retries, delay
-            )
+            try:
+                return await self._rust_session.scrape_courses_parallel(
+                    indices, mode, max_concurrent, retries, delay
+                )
+            except sia_scraper_rust.SessionError as exc:
+                self._raise_if_session_not_set(exc)
+                raise
 
     async def close(self) -> None:
         """Reset session state and clear Rust session."""

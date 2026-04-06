@@ -113,7 +113,7 @@ class TestSessionModelIntegration:
         unpickled = pickle.loads(pickled)
 
         assert len(unpickled.course_list) == 1
-        assert unpickled.course_list[0].course_name == "Calculo"
+        assert unpickled.course_list[0].name == "Calculo"
         assert unpickled.session_headers["User-Agent"] == "sia-scraper"
 
     def test_session_state_empty_collections(self):

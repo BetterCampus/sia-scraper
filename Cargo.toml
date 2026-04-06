@@ -2,6 +2,8 @@
 name = "sia-scraper"
 version = "0.1.0"
 edition = "2021"
+# MSRV 1.87: required for is_multiple_of() on unsigned integers (stabilized in 1.87)
+rust-version = "1.87"
 description = "Rust extensions for sia-scraper"
 
 [lib]
@@ -34,7 +36,7 @@ serde_urlencoded = "0.7"
 pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "cookies"] }
-futures = "0.3"
+futures = "0.3.32"
 
 [dev-dependencies]
 proptest = "1.6"

@@ -1,5 +1,6 @@
 //! SIA Session state management.
 
+use crate::models::session::CourseListEntryModel;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -14,7 +15,7 @@ pub struct SessionState {
     pub career_name: String,
     pub is_electives: bool,
     pub status: String,
-    pub course_list: Vec<HashMap<String, String>>,
+    pub course_list: Vec<CourseListEntryModel>,
 }
 
 impl Default for SessionState {
@@ -126,17 +127,16 @@ mod tests {
     #[test]
     fn test_course_list_is_serializable() {
         let mut state = SessionState::default();
-        let mut course = HashMap::new();
-        course.insert("2019454".to_string(), "CALCULO DIFERENCIAL".to_string());
-        state.course_list.push(course);
+        state.course_list.push(CourseListEntryModel {
+            code: "2019454".to_string(),
+            name: "CALCULO DIFERENCIAL".to_string(),
+        });
 
         let serialized = serde_json::to_string(&state).unwrap();
         let deserialized: SessionState = serde_json::from_str(&serialized).unwrap();
 
         assert_eq!(deserialized.course_list.len(), 1);
-        assert_eq!(
-            deserialized.course_list[0].get("2019454"),
-            Some(&"CALCULO DIFERENCIAL".to_string())
-        );
+        assert_eq!(deserialized.course_list[0].code, "2019454");
+        assert_eq!(deserialized.course_list[0].name, "CALCULO DIFERENCIAL");
     }
 }

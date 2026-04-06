@@ -1,7 +1,9 @@
 """Async SIA scraper facade backed by Rust session workflow."""
 
 import asyncio
+import warnings
 from collections.abc import Callable
+from typing import Literal, cast
 
 import sia_scraper_rust
 
@@ -10,6 +12,8 @@ from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
 from .parsers.models import ErrorMode, ScrapeResult
 from .session import SiaSession
+
+ErrorModeStr = Literal["abort", "skip", "retry"]
 
 
 class SiaScraper:
@@ -98,7 +102,7 @@ class SiaScraper:
         )
         self._sia_session._status = status.SiaSessionStatus[state.status]
         self._sia_session._course_list = [
-            {entry.course_code: entry.course_name} for entry in state.course_list
+            {"code": entry.code, "name": entry.name} for entry in state.course_list
         ]
 
     def load_session_dict(self, session_data: dict[str, object]) -> "SiaScraper":
@@ -131,16 +135,63 @@ class SiaScraper:
                     raise SiaSessionException(
                         f"Invalid session_data: 'course_list[{index}]' must be a dict"
                     )
-                if len(item) != 1:
-                    raise SiaSessionException(
-                        f"Invalid session_data: 'course_list[{index}]' must contain exactly one entry"
-                    )
-                for k, v in item.items():
+
+                # Extract code from current or legacy key
+                code_val = item.get("code")
+                if code_val is None:
+                    code_val = item.get("course_code")
+                # Extract name from current or legacy key
+                name_val = item.get("name")
+                if name_val is None:
+                    name_val = item.get("course_name")
+                # Check if any legacy keys were used
+                used_legacy = "course_code" in item or "course_name" in item
+
+                if code_val is not None and name_val is not None:
+                    # Validate types
+                    if not isinstance(code_val, str) or not isinstance(name_val, str):
+                        raise SiaSessionException(
+                            f"Invalid session_data: 'course_list[{index}]' "
+                            "code and name must be strings"
+                        )
+                    # Emit warning if legacy keys detected
+                    if used_legacy:
+                        warnings.warn(
+                            f"session_data 'course_list[{index}]' uses deprecated "
+                            "'course_code'/'course_name' keys; use 'code'/'name' instead. "
+                            "Support will be removed in version 4.0.0.",
+                            DeprecationWarning,
+                            stacklevel=2,
+                        )
+                    # Always create fresh dict to drop any extra keys
+                    course_list_raw.append({"code": code_val, "name": name_val})
+                elif len(item) == 1:
+                    # Single-key legacy format
+                    k, v = next(iter(item.items()))
+                    # Reject reserved keys as single-key entries
+                    if k in {"code", "name", "course_code", "course_name"}:
+                        raise SiaSessionException(
+                            f"Invalid session_data: 'course_list[{index}]' "
+                            f"key '{k}' is reserved; use code/name keys instead"
+                        )
                     if not isinstance(k, str) or not isinstance(v, str):
                         raise SiaSessionException(
-                            f"Invalid session_data: 'course_list[{index}]' key and value must be strings"
+                            f"Invalid session_data: 'course_list[{index}]' "
+                            "key and value must be strings"
                         )
-                course_list_raw.append(item)
+                    warnings.warn(
+                        f"session_data 'course_list[{index}]' uses deprecated single-key dict format. "
+                        "Use {{'code': ..., 'name': ...}} instead. "
+                        "Legacy format support will be removed in version 4.0.0.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+                    course_list_raw.append({"code": k, "name": v})
+                else:
+                    raise SiaSessionException(
+                        f"Invalid session_data: 'course_list[{index}]' "
+                        "must have 'code'/'name' keys or be a single-key dict"
+                    )
 
         self._sia_session._course_list = course_list_raw
         return self
@@ -181,15 +232,22 @@ class SiaScraper:
     ) -> tuple[list[tuple[int, str]], list[int]]:
         """Prepare and validate scrape indices from indices and/or codes.
 
+        Note: Indices are sorted in ascending order. Results will be returned
+        in sorted index order, not the order provided by the caller. If the
+        same index appears multiple times with different codes, the last code
+        wins when applied via _apply_course_codes.
+
         Args:
             courses_indices: List of course indices to scrape.
             courses_codes: List of course codes to scrape (resolved to indices).
 
         Returns:
-            Tuple of (paired list, sorted indices list).
+            Tuple of (paired list sorted by index, sorted indices list).
 
         Raises:
+            ValueError: If both courses_indices and courses_codes are None or empty.
             ValueError: If both provided but lengths differ.
+            ValueError: If any provided course code is not found in the course list.
 
         Example:
             >>> paired, indices = self._prepare_scrape_indices([0, 2], ["CODE1", "CODE2"])
@@ -197,17 +255,25 @@ class SiaScraper:
             [(0, 'CODE1'), (2, 'CODE2')]
             >>> indices
             [0, 2]
+
+            >>> # Raises when both are empty
+            >>> self._prepare_scrape_indices(None, None)  # doctest: +IGNORE_EXCEPTION_DETAIL
+            Traceback (most recent call last):
+            ValueError: At least one of courses_indices or courses_codes must be provided
         """
         courses_indices = courses_indices or []
         courses_codes = courses_codes or []
 
+        if not courses_indices and not courses_codes:
+            raise ValueError("At least one of courses_indices or courses_codes must be provided")
+
         if not courses_indices:
             courses_indices = [self.get_course_index(code) for code in courses_codes]
 
-        if not courses_codes and courses_indices:
+        if not courses_codes:
             courses_codes = [""] * len(courses_indices)
 
-        if courses_indices and courses_codes and len(courses_indices) != len(courses_codes):
+        if len(courses_indices) != len(courses_codes):
             raise ValueError(
                 f"Length mismatch: courses_indices has {len(courses_indices)} items, "
                 f"but courses_codes has {len(courses_codes)} items"
@@ -218,6 +284,34 @@ class SiaScraper:
         indices = [idx for idx, _ in paired]
         return paired, indices
 
+    def _resolve_error_mode(self, error_mode: ErrorMode | ErrorModeStr) -> str:
+        """Resolve and validate error_mode to a normalized string.
+
+        Args:
+            error_mode: ErrorMode enum or string ("abort", "skip", "retry").
+
+        Returns:
+            Normalized lowercase mode string.
+
+        Raises:
+            ValueError: If error_mode is not a valid mode.
+        """
+        if isinstance(error_mode, ErrorMode):
+            mode = error_mode.value.lower()
+        elif isinstance(error_mode, str):
+            mode = error_mode.lower()
+        else:
+            raise ValueError(
+                f"Invalid error_mode: {error_mode!r}. Must be an ErrorMode or one of: "
+                f"{', '.join(sorted({'abort', 'skip', 'retry'}))}"
+            )
+        valid_modes = {"abort", "skip", "retry"}
+        if mode not in valid_modes:
+            raise ValueError(
+                f"Invalid error_mode: {error_mode!r}. Must be one of: {', '.join(sorted(valid_modes))}"
+            )
+        return mode
+
     def _apply_course_codes(
         self,
         successes: list[sia_scraper_rust.CourseInfoModel],
@@ -226,6 +320,10 @@ class SiaScraper:
         failed_indices: set[int] | None = None,
     ) -> None:
         """Apply course codes to success models.
+
+        Note: This method assumes successes are ordered consistently with
+        indices (both sorted by course index). This contract is maintained
+        by _prepare_scrape_indices sorting and Rust's result ordering.
 
         Args:
             successes: List of scraped course models to update in-place.
@@ -236,8 +334,9 @@ class SiaScraper:
         Returns:
             None. The function mutates the CourseInfoModel objects in-place.
 
-        Raises:
-            No exceptions are raised by this method.
+        Note:
+            This method does not intentionally raise exceptions. Any exceptions
+            would indicate a contract violation between Python and Rust models.
 
         Example:
             >>> # Abort mode - use indices order
@@ -250,17 +349,25 @@ class SiaScraper:
             >>> successes[0].code  # index 0 succeeded
             'CODE1'
         """
+        # If duplicate indices exist in paired, the last non-empty code wins.
         code_map = {idx: code for idx, code in paired if code}
         if code_map:
+            # Determine which indices correspond to successes
             if failed_indices is None:
-                for idx, course in enumerate(successes):
-                    if idx < len(indices) and indices[idx] in code_map:
-                        course.code = code_map[indices[idx]]
+                success_indices = indices
             else:
-                successful_indices = [idx for idx in indices if idx not in failed_indices]
-                for i, course in enumerate(successes):
-                    if i < len(successful_indices) and successful_indices[i] in code_map:
-                        course.code = code_map[successful_indices[i]]
+                success_indices = [idx for idx in indices if idx not in failed_indices]
+
+            if len(successes) != len(success_indices):
+                raise ValueError(
+                    f"Success count mismatch: got {len(successes)} successes, "
+                    f"expected {len(success_indices)} from indices. "
+                    f"This indicates a data integrity issue between Python and Rust."
+                )
+
+            for i, course in enumerate(successes):
+                if i < len(success_indices) and success_indices[i] in code_map:
+                    course.code = code_map[success_indices[i]]
 
     async def get_course_info(
         self, course_index: int = 0, course_code: str = ""
@@ -280,7 +387,7 @@ class SiaScraper:
             raise SiaSessionException.InvalidStatus from None
 
         for i, course in enumerate(self.course_list):
-            if course_code in course:
+            if course.get("code") == course_code:
                 return i
         raise ValueError(f"Course code '{course_code}' not found")
 
@@ -295,7 +402,7 @@ class SiaScraper:
         self,
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
-        error_mode: str = ErrorMode.ABORT,
+        error_mode: ErrorMode | ErrorModeStr = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
         progress_callback: Callable[[int, int, int, int], None] | None = None,
@@ -311,9 +418,13 @@ class SiaScraper:
             error_mode: Error handling strategy - "abort", "skip", or "retry".
             max_retries: Maximum retry attempts per course (retry mode only).
             retry_delay: Base delay between retries in seconds (retry mode only).
-            progress_callback: Optional callback called once after batch completes
-                with (total, total, successes, failures). Note: This is not
-                incremental progress; it receives final totals only.
+            progress_callback: Optional callback called once after successful batch
+                completion with (completed, total, successes, failures).
+                In abort mode, the callback is only called if the batch completes
+                successfully; it is NOT called if AbortError is raised.
+                This is batch-only, not incremental progress updates.
+                Migration: For per-item progress, process each item in the
+                returned ScrapeResult after completion.
                 Deprecated: Will be removed when real-time progress is exposed.
 
         Returns:
@@ -322,9 +433,20 @@ class SiaScraper:
         Raises:
             ValueError: If both courses_indices and courses_codes are provided
                 but their lengths differ.
+            ValueError: If error_mode is not a valid mode.
         """
+        if progress_callback is not None:
+            warnings.warn(
+                "progress_callback now fires once after batch completion, not incrementally. "
+                "Process ScrapeResult.successes/failures for per-item handling. "
+                "This parameter will be removed in version 4.0.0.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if retry_delay < 0:
+            raise ValueError(f"retry_delay must be non-negative, got {retry_delay}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = error_mode.lower()
+        mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses(
@@ -334,6 +456,14 @@ class SiaScraper:
                 delay=0,
             )
             self._apply_course_codes(result.successes, paired, indices)
+            if progress_callback:
+                completed = len(result.successes) + len(result.failures)
+                progress_callback(
+                    completed,
+                    result.total(),
+                    len(result.successes),
+                    len(result.failures),
+                )
             return result.successes
 
         delay_ms = int(retry_delay * 1000)
@@ -348,8 +478,9 @@ class SiaScraper:
         self._apply_course_codes(rust_result.successes, paired, indices, failed_indices)
 
         if progress_callback:
+            completed = len(rust_result.successes) + len(rust_result.failures)
             progress_callback(
-                rust_result.total(),
+                completed,
                 rust_result.total(),
                 len(rust_result.successes),
                 len(rust_result.failures),
@@ -365,7 +496,7 @@ class SiaScraper:
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
         max_concurrent: int = 5,
-        error_mode: str = ErrorMode.ABORT,
+        error_mode: ErrorMode | ErrorModeStr = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
     ) -> ScrapeResult | list[sia_scraper_rust.CourseInfoModel]:
@@ -388,6 +519,7 @@ class SiaScraper:
         Raises:
             ValueError: If both courses_indices and courses_codes are provided
                 but their lengths differ.
+            ValueError: If error_mode is not a valid mode.
 
         Example:
             >>> # Abort mode - returns list of CourseInfoModel
@@ -408,8 +540,10 @@ class SiaScraper:
             >>> result.success_rate()
             1.0
         """
+        if retry_delay < 0:
+            raise ValueError(f"retry_delay must be non-negative, got {retry_delay}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = error_mode.lower()
+        mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
         if mode == "abort":
             result = await self._sia_session.scrape_courses_parallel(

@@ -4,9 +4,10 @@
 //! functions for extracting academic information from SIA (Sistema de Información Académica).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+#![allow(non_local_definitions)]
 
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyString};
+use pyo3::types::{PyBytes, PyList, PyString};
 use pyo3::PyTypeInfo;
 
 use pyo3_asyncio::tokio::future_into_py;
@@ -172,7 +173,7 @@ fn session_state_json(state: &http::session::SessionState) -> Result<String, err
 /// * `html` - Raw HTML string from SIA career page
 ///
 /// # Returns
-/// Python list of dictionaries: [{course_code: course_name}, ...]
+/// Python list of dictionaries: [{"code": "...", "name": "..."}, ...]
 ///
 /// # Errors
 /// Returns `SiaScraperError` if table structure invalid
@@ -181,10 +182,10 @@ fn session_state_json(state: &http::session::SessionState) -> Result<String, err
 /// ```python
 /// import sia_scraper_rust
 /// result = sia_scraper_rust.get_course_list(html_string)
-/// print(len(result))  # Number of courses
+/// print(result)  # [{"code": "2015555", "name": "Algebra Lineal"}, ...]
 /// ```
 #[pyfunction]
-fn get_course_list(html: &PyAny) -> Result<Py<PyAny>, error::SiaScraperError> {
+fn get_course_list(html: &PyAny) -> Result<Py<PyList>, error::SiaScraperError> {
     let html_str: String = if let Ok(s) = html.downcast::<PyString>() {
         s.to_string()
     } else if let Ok(b) = html.downcast::<PyBytes>() {
@@ -198,15 +199,14 @@ fn get_course_list(html: &PyAny) -> Result<Py<PyAny>, error::SiaScraperError> {
         let courses = parsers::table_parser::get_course_list(&html_str)?;
         let mut list: Vec<pyo3::PyObject> = Vec::with_capacity(courses.len());
 
-        for course_map in courses {
+        for course in courses {
             let dict = pyo3::types::PyDict::new(py);
-            for (k, v) in course_map {
-                dict.set_item(k, v)?;
-            }
+            dict.set_item("code", course.code)?;
+            dict.set_item("name", course.name)?;
             list.push(dict.into_py(py));
         }
 
-        Ok(pyo3::types::PyList::new(py, &list).into_py(py))
+        Ok(pyo3::types::PyList::new(py, &list).into())
     })
 }
 
@@ -623,6 +623,7 @@ fn sia_scraper_rust(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add("SiaTimeoutError", error::SiaTimeoutError::type_object(py))?;
     m.add("ParseError", error::ParseError::type_object(py))?;
     m.add("SessionError", error::SessionError::type_object(py))?;
+    m.add("AbortError", error::AbortError::type_object(py))?;
     
     // Register model classes
     m.add_class::<models::course::ScheduleModel>()?;

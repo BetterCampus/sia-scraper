@@ -1,7 +1,5 @@
 //! Types for batch scraping operations.
 
-#![allow(non_local_definitions)]
-
 use pyo3::prelude::*;
 use std::str::FromStr;
 
@@ -68,9 +66,6 @@ impl ScrapeResult {
     /// # Returns
     /// An empty `ScrapeResult` with no successes or failures.
     ///
-    /// # Errors
-    /// This function does not return errors.
-    ///
     /// # Examples
     /// ```python
     /// result = sia_scraper_rust.ScrapeResult()
@@ -90,9 +85,6 @@ impl ScrapeResult {
     /// # Returns
     /// The sum of `successes.len()` and `failures.len()`.
     ///
-    /// # Errors
-    /// This function does not return errors.
-    ///
     /// # Examples
     /// ```python
     /// result = await session.scrape_courses([0, 1], mode="skip")
@@ -107,9 +99,6 @@ impl ScrapeResult {
     /// # Returns
     /// Ratio of successful courses to total courses.
     /// Returns 1.0 if no courses were processed.
-    ///
-    /// # Errors
-    /// This function does not return errors.
     ///
     /// # Examples
     /// ```python
@@ -127,21 +116,32 @@ impl ScrapeResult {
     /// Return a human-readable summary of the scraping result.
     ///
     /// # Returns
-    /// String in the format "ScrapeResult: X successes, Y failures".
-    ///
-    /// # Errors
-    /// This function does not return errors.
+    /// String in format "ScrapeResult: X successes, Y failures".
+    /// Uses singular form when count is 1 (e.g., "1 success, 2 failures"),
+    /// plural otherwise (e.g., "2 successes, 1 failure").
     ///
     /// # Examples
     /// ```python
     /// result = await session.scrape_courses([0, 1], mode="skip")
-    /// print(result)  # ScrapeResult: 1 successes, 1 failures
+    /// print(result)  # ScrapeResult: 1 success, 1 failure
     /// ```
     pub fn __repr__(&self) -> String {
+        let success_word = if self.successes.len() == 1 {
+            "success"
+        } else {
+            "successes"
+        };
+        let failure_word = if self.failures.len() == 1 {
+            "failure"
+        } else {
+            "failures"
+        };
         format!(
-            "ScrapeResult: {} successes, {} failures",
+            "ScrapeResult: {} {}, {} {}",
             self.successes.len(),
-            self.failures.len()
+            success_word,
+            self.failures.len(),
+            failure_word
         )
     }
 }
@@ -199,16 +199,6 @@ mod tests {
         let result = ScrapeResult {
             successes: vec![],
             failures: vec![(0, "error".to_string()), (1, "error2".to_string())],
-        };
-        assert_eq!(result.total(), 2);
-        assert_eq!(result.success_rate(), 0.0);
-    }
-
-    #[test]
-    fn test_scrape_result_total_failures_only() {
-        let result = ScrapeResult {
-            successes: vec![],
-            failures: vec![(0, "err".to_string()), (1, "err2".to_string())],
         };
         assert_eq!(result.total(), 2);
         assert_eq!(result.success_rate(), 0.0);
@@ -306,5 +296,81 @@ mod tests {
         };
         let repr = result.__repr__();
         assert_eq!(repr, "ScrapeResult: 0 successes, 2 failures");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_singular_both() {
+        let course = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000001".to_string()),
+        };
+        let result = ScrapeResult {
+            successes: vec![course],
+            failures: vec![(0, "err".to_string())],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 1 success, 1 failure");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_only_successes() {
+        let course1 = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000001".to_string()),
+        };
+        let course2 = CourseInfoModel {
+            course_name: "Álgebra".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 15,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000002".to_string()),
+        };
+        let result = ScrapeResult {
+            successes: vec![course1, course2],
+            failures: vec![],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 2 successes, 0 failures");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_single_success_only() {
+        let course = CourseInfoModel {
+            course_name: "Cálculo".to_string(),
+            credits: 3,
+            typology: "Obligatoria".to_string(),
+            available_spots: 20,
+            scrape_timestamp: "2026-01-01 00:00".to_string(),
+            groups: vec![],
+            code: Some("1000001".to_string()),
+        };
+        let result = ScrapeResult {
+            successes: vec![course],
+            failures: vec![],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 1 success, 0 failures");
+    }
+
+    #[test]
+    fn test_scrape_result_debug_repr_single_failure_only() {
+        let result = ScrapeResult {
+            successes: vec![],
+            failures: vec![(0, "err".to_string())],
+        };
+        let repr = result.__repr__();
+        assert_eq!(repr, "ScrapeResult: 0 successes, 1 failure");
     }
 }

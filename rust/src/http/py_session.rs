@@ -292,6 +292,7 @@ impl PySiaSession {
     /// for course in result.successes:
     ///     print(course.course_name)
     /// ```
+    #[pyo3(signature = (indices, mode, retries=None, delay=None))]
     fn scrape_courses<'py>(
         &self,
         py: Python<'py>,
@@ -308,12 +309,12 @@ impl PySiaSession {
         future_into_py(py, async move {
             let session = {
                 let session_guard = inner.read().await;
-                session_guard
+                let original = session_guard
                     .as_ref()
                     .ok_or_else(|| SessionError::new_err(
                         "Session not initialized. Call init_session() first."
-                    ))?
-                    .clone()
+                    ))?;
+                original.clone_with_owned_state().await
             };
 
             session
@@ -339,8 +340,8 @@ impl PySiaSession {
     ///
     /// # Arguments
     /// * `indices` - List of course indices to scrape
-    /// * `max_concurrent` - Maximum number of concurrent scraping operations (default: 5)
     /// * `mode` - Error handling mode: "abort", "skip", or "retry"
+    /// * `max_concurrent` - Maximum number of concurrent scraping operations (default: 5)
     /// * `retries` - Maximum retry attempts per course (default: 3, used only in retry mode)
     /// * `delay` - Base delay between retries in milliseconds (default: 800)
     ///
@@ -380,12 +381,12 @@ impl PySiaSession {
         future_into_py(py, async move {
             let session = {
                 let session_guard = inner.read().await;
-                session_guard
+                let original = session_guard
                     .as_ref()
                     .ok_or_else(|| SessionError::new_err(
                         "Session not initialized. Call init_session() first."
-                    ))?
-                    .clone()
+                    ))?;
+                original.clone_with_owned_state().await
             };
 
             session

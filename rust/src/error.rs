@@ -34,6 +34,8 @@ create_exception!(sia_scraper_rust, ParseError, SiaScraperException);
 
 create_exception!(sia_scraper_rust, SessionError, SiaScraperException);
 
+create_exception!(sia_scraper_rust, AbortError, SessionError);
+
 /// Custom error types for SIA Scraper operations.
 ///
 /// # Variants
@@ -103,7 +105,7 @@ impl From<crate::http::errors::HttpError> for pyo3::PyErr {
             HttpError::ParseError(_) => ParseError::new_err(message),
             HttpError::InvalidInput(_) => pyo3::exceptions::PyValueError::new_err(message),
             HttpError::SessionError(_) => SessionError::new_err(message),
-            HttpError::Aborted(_) => SessionError::new_err(message),
+            HttpError::Aborted(_) => AbortError::new_err(message),
         }
     }
 }

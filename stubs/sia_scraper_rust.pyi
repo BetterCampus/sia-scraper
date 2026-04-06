@@ -16,7 +16,9 @@ Example:
 """
 
 from collections.abc import Awaitable
-from typing import Any
+from typing import Any, Literal, TypedDict
+
+ErrorModeStr = Literal["abort", "skip", "retry"]
 
 class SiaScraperException(Exception):
     """Custom exception raised by sia_scraper_rust for parsing and validation errors.
@@ -120,6 +122,25 @@ class SessionError(SiaScraperException):
         ...         await session.set_career("0-2-8-3")
         ...     except sia_scraper_rust.SessionError as e:
         ...         print(f"Session error: {e}")
+        >>> asyncio.run(main())
+    """
+
+class AbortError(SessionError):
+    """Exception raised when batch operation is aborted.
+
+    This exception is a subclass of SessionError and is raised when
+    a batch scraping operation is aborted (e.g., in abort mode when
+    any course fetch fails). Catching SessionError will also catch
+    AbortError.
+
+    Example:
+        >>> import asyncio
+        >>> async def main():
+        ...     session = sia_scraper_rust.PySiaSession()
+        ...     try:
+        ...         await session.scrape_courses([0, 1], mode="abort")
+        ...     except sia_scraper_rust.AbortError as e:
+        ...         print(f"Operation aborted: {e}")
         >>> asyncio.run(main())
     """
 
@@ -360,27 +381,67 @@ class CourseListEntryModel:
     a career selection session.
 
     Attributes:
-        course_code: Course code identifier (e.g., "1000001").
-        course_name: Full course name (e.g., "Cálculo I").
+        code: Course code identifier (e.g., "1000001").
+        name: Full course name (e.g., "Cálculo I").
 
     Example:
         >>> entry = sia_scraper_rust.CourseListEntryModel("1000001", "Cálculo I")
-        >>> entry.course_code
+        >>> entry.code
         '1000001'
     """
 
-    course_code: str
-    course_name: str
+    code: str
+    name: str
 
-    def __init__(self, course_code: str, course_name: str) -> None:
+    @property
+    def course_code(self) -> str:
+        """Deprecated: use code instead. Will be removed in v4.0.0."""
+        ...
+    @property
+    def course_name(self) -> str:
+        """Deprecated: use name instead. Will be removed in v4.0.0."""
+        ...
+
+    def __init__(self, code: str, name: str) -> None:
         """Initialize a CourseListEntryModel instance.
 
         Args:
-            course_code: Course code identifier.
-            course_name: Full course name.
+            code: Course code identifier.
+            name: Full course name.
 
         Example:
             >>> entry = CourseListEntryModel("1000001", "Cálculo I")
+        """
+
+    def to_dict(self) -> CourseListEntry:
+        """Convert to dictionary with "code" and "name" keys.
+
+        Returns:
+            CourseListEntry with "code" and "name" string keys.
+        """
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> CourseListEntryModel:
+        """Create from dictionary supporting three formats.
+
+        Supports three input formats:
+        1. Current format: {"code": "1000001", "name": "Cálculo"}
+        2. Legacy named keys: {"course_code": "1000001", "course_name": "Cálculo"}
+        3. Legacy single-key: {"1000001": "Cálculo"} (key=code, value=name)
+
+        Args:
+            data: Dictionary in one of the supported formats above.
+
+        Returns:
+            CourseListEntryModel instance.
+
+        Example:
+            >>> # Current format
+            >>> CourseListEntryModel.from_dict({"code": "1000001", "name": "Cálculo"})
+            >>> # Legacy named keys
+            >>> CourseListEntryModel.from_dict({"course_code": "1000001", "course_name": "Cálculo"})
+            >>> # Legacy single-key
+            >>> CourseListEntryModel.from_dict({"1000001": "Cálculo"})
         """
 
 class SessionStateModel:
@@ -457,6 +518,31 @@ class SessionStateModel:
             ...     {"page": "1"}, "0-2-8-3", "Ingeniería",
             ...     False, "ON_CAREER_PAGE", [], "viewstate"
             ... )
+        """
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for transport/persistence.
+
+        Returns:
+            Dictionary containing all session state including course_list
+            with "code" and "name" keys.
+        """
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SessionStateModel:
+        """Create from dictionary (supports legacy course keys).
+
+        Supports three course entry formats:
+        1. Current format: {"code": "1000001", "name": "Cálculo"}
+        2. Legacy named keys: {"course_code": "1000001", "course_name": "Cálculo"}
+        3. Legacy single-key: {"1000001": "Cálculo"} (key=code, value=name)
+
+        Args:
+            data: Dictionary with session state. Course entries can use
+                any of the supported formats above.
+
+        Returns:
+            SessionStateModel instance.
         """
 
 class PrerequisiteModel:
@@ -708,23 +794,36 @@ def parse_prereqs_json(xml: str) -> str:
         JSON string with prerequisite data.
     """
 
-def get_course_list(html: str | bytes) -> list[dict[str, str]]:
+class CourseListEntry(TypedDict):
+    """A single course entry with code and name."""
+
+    code: str
+    name: str
+
+def get_course_list(html: str | bytes) -> list[CourseListEntry]:
     """Extract course list from Oracle ADF table HTML.
 
     Parses the course selection table from a career page and returns
-    a list of single-key dictionaries mapping course code to course name.
+    a list of dictionaries with "code" and "name" keys.
 
     Args:
         html: Raw HTML string or bytes from SIA course list page.
 
     Returns:
-        List of single-key dictionaries mapping course code to course name,
-        e.g. [{'1000001': 'Cálculo I'}, {'1000002': 'Álgebra'}].
+        List of CourseListEntry dicts with "code" and "name" keys,
+        e.g. [{"code": "1000001", "name": "Cálculo I"}].
 
     Example:
-        >>> html = '<table><tr><td>1000001</td><td>Cálculo I</td></tr></table>'
+        >>> html = '''
+        ... <tr class="af_table_data-row">
+        ...     <td><span class="af_column_data-container">1000001</span></td>
+        ...     <td><span class="af_column_data-container">Cálculo I</span></td>
+        ... </tr>
+        ... '''
         >>> courses = sia_scraper_rust.get_course_list(html)
-        >>> courses[0]['1000001']
+        >>> courses[0]["code"]
+        '1000001'
+        >>> courses[0]["name"]
         'Cálculo I'
     """
 
@@ -973,7 +1072,6 @@ class PySiaSession:
 
         Raises:
             SessionError: If session not initialized.
-            ValueError: If search_code is invalid.
             NetworkError: If connection fails.
             HttpStatusError: If server returns error status.
             SiaTimeoutError: If request times out.
@@ -1025,7 +1123,7 @@ class PySiaSession:
     def scrape_courses(
         self,
         indices: list[int],
-        mode: str,
+        mode: ErrorModeStr,
         retries: int | None = None,
         delay: int | None = None,
     ) -> Awaitable[ScrapeResult]:
@@ -1050,6 +1148,7 @@ class PySiaSession:
             ScrapeResult with successes and failures lists.
 
         Raises:
+            AbortError: If operation is aborted (when mode='abort').
             SessionError: If session not initialized or in Abort mode on first failure.
             ValueError: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.
@@ -1068,7 +1167,7 @@ class PySiaSession:
     def scrape_courses_parallel(
         self,
         indices: list[int],
-        mode: str,
+        mode: ErrorModeStr,
         max_concurrent: int | None = None,
         retries: int | None = None,
         delay: int | None = None,
@@ -1099,6 +1198,7 @@ class PySiaSession:
             ScrapeResult with successes and failures lists.
 
         Raises:
+            AbortError: If operation is aborted (when mode='abort').
             SessionError: If session not initialized or in Abort mode on first failure.
             ValueError: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.

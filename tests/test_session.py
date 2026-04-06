@@ -1,5 +1,6 @@
 """Unit tests for Rust-backed async session wrapper."""
 
+import warnings
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,9 +23,7 @@ def mock_rust_session():
         view_state: str | None,
     ) -> sia_scraper_rust.SessionStateModel:
         entries = [
-            sia_scraper_rust.CourseListEntryModel(
-                course_code=item["course_code"], course_name=item["course_name"]
-            )
+            sia_scraper_rust.CourseListEntryModel(code=item["code"], name=item["name"])
             for item in course_list
         ]
         return sia_scraper_rust.SessionStateModel(
@@ -58,9 +57,9 @@ def mock_rust_session():
             is_electives=electives or False,
             status="ON_CAREER_PAGE",
             course_list=[
-                {"course_code": "1000001", "course_name": "Calculo"},
-                {"course_code": "2016489", "course_name": "Estructuras de Datos"},
-                {"course_code": "3000003", "course_name": "Fisica"},
+                {"code": "1000001", "name": "Calculo"},
+                {"code": "2016489", "name": "Estructuras de Datos"},
+                {"code": "3000003", "name": "Fisica"},
             ],
             view_state="vs-2",
         )
@@ -81,9 +80,9 @@ def mock_rust_session():
                 "is_electives": False,
                 "status": "ON_CAREER_PAGE",
                 "course_list": [
-                    {"course_code": "1000001", "course_name": "Calculo"},
-                    {"course_code": "2016489", "course_name": "Estructuras de Datos"},
-                    {"course_code": "3000003", "course_name": "Fisica"},
+                    {"code": "1000001", "name": "Calculo"},
+                    {"code": "2016489", "name": "Estructuras de Datos"},
+                    {"code": "3000003", "name": "Fisica"},
                 ],
             },
         }
@@ -155,9 +154,9 @@ class TestSiaSessionCareerFlow:
             assert session.is_electives is True
             assert session.career_name == "Ingenieria de Sistemas"
             assert session.course_list == [
-                {"1000001": "Calculo"},
-                {"2016489": "Estructuras de Datos"},
-                {"3000003": "Fisica"},
+                {"code": "1000001", "name": "Calculo"},
+                {"code": "2016489", "name": "Estructuras de Datos"},
+                {"code": "3000003", "name": "Fisica"},
             ]
             mock_rust_session.set_career.assert_awaited_once_with("0-2-8-3", True)
         finally:
@@ -232,7 +231,7 @@ class TestSiaSessionLifecycle:
             assert data["state_dict"]["career_name"] == "Ingenieria de Sistemas"
             assert data["state_dict"]["is_electives"] is False
             assert data["state_dict"]["status"] == "ON_CAREER_PAGE"
-            assert [c["course_code"] for c in data["state_dict"]["course_list"]] == [
+            assert [c["code"] for c in data["state_dict"]["course_list"]] == [
                 "1000001",
                 "2016489",
                 "3000003",
@@ -254,3 +253,91 @@ class TestSiaSessionErrorPaths:
                 await session.scrape_course_info(999)
         finally:
             await session.close()
+
+
+class TestSessionStateSerialization:
+    """Test SessionStateModel serialization round-trip and backward compatibility."""
+
+    def test_course_entry_to_dict_returns_code_and_name(self):
+        """CourseListEntryModel.to_dict() produces {"code", "name"} keys."""
+        entry = sia_scraper_rust.CourseListEntryModel(code="1000001", name="Calculo")
+        entry_dict = entry.to_dict()
+
+        assert "code" in entry_dict
+        assert "name" in entry_dict
+        assert entry_dict["code"] == "1000001"
+        assert entry_dict["name"] == "Calculo"
+
+        # Legacy keys should NOT be present
+        assert "course_code" not in entry_dict
+        assert "course_name" not in entry_dict
+
+    def test_course_entry_from_dict_current_format(self):
+        """CourseListEntryModel.from_dict() handles current format."""
+        entry = sia_scraper_rust.CourseListEntryModel.from_dict(
+            {"code": "1000001", "name": "Calculo"}
+        )
+        assert entry.code == "1000001"
+        assert entry.name == "Calculo"
+
+    def test_course_entry_from_dict_legacy_named_keys(self):
+        """CourseListEntryModel.from_dict() handles legacy course_code/course_name."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            entry = sia_scraper_rust.CourseListEntryModel.from_dict(
+                {"course_code": "2016489", "course_name": "Estructuras de Datos"}
+            )
+
+            assert entry.code == "2016489"
+            assert entry.name == "Estructuras de Datos"
+
+            # Verify deprecation warning was emitted
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "course_code/course_name" in str(w[0].message)
+            assert "4.0.0" in str(w[0].message)
+
+    def test_course_entry_from_dict_legacy_single_key(self):
+        """CourseListEntryModel.from_dict() handles legacy single-key dict."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            entry = sia_scraper_rust.CourseListEntryModel.from_dict({"1000003-B": "Álgebra Lineal"})
+
+            assert entry.code == "1000003-B"
+            assert entry.name == "Álgebra Lineal"
+
+            # Verify deprecation warning was emitted
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "single-key dict" in str(w[0].message)
+            assert "4.0.0" in str(w[0].message)
+
+    def test_course_entry_from_dict_invalid_format(self):
+        """CourseListEntryModel.from_dict() raises on invalid format."""
+        with pytest.raises(KeyError) as exc_info:
+            sia_scraper_rust.CourseListEntryModel.from_dict({"invalid": "dict", "with": "two keys"})
+
+        error_msg = str(exc_info.value)
+        assert "'code'/'name'" in error_msg
+        assert "'course_code'/'course_name'" in error_msg
+        assert "single-entry dict" in error_msg
+
+    def test_session_state_pickle_legacy_course_list_single_key(self):
+        """CourseListEntryModel.from_dict() handles legacy format in session context."""
+        # Verify that from_dict works correctly for legacy single-key format
+        # This is the format that would be in a pickled SessionStateModel from before Issue #54
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            # Simulate legacy course_list items that would be in a pickle
+            course1 = sia_scraper_rust.CourseListEntryModel.from_dict({"1000001": "Calculo"})
+            course2 = sia_scraper_rust.CourseListEntryModel.from_dict({"2016489": "Estructuras"})
+
+            assert course1.code == "1000001"
+            assert course1.name == "Calculo"
+            assert course2.code == "2016489"
+            assert course2.name == "Estructuras"
+
+            # Verify deprecation warnings were emitted
+            assert len(w) == 2
+            assert all(issubclass(warning.category, DeprecationWarning) for warning in w)
