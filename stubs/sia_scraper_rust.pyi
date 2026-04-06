@@ -242,6 +242,7 @@ class GroupModel:
 
     def __init__(
         self,
+        *,
         group_name: str,
         teacher: str,
         faculty: str,
@@ -249,10 +250,12 @@ class GroupModel:
         schedules: list[ScheduleModel],
         duration: str,
         schedule_type: str,
-        spots: int | None,
-        code: str | None,
+        spots: int | None = None,
+        code: str | None = None,
     ) -> None:
         """Initialize a GroupModel instance.
+
+        All arguments must be passed as keyword arguments.
 
         Args:
             group_name: Name/identifier of the group (e.g., "Grupo 1").
@@ -267,8 +270,15 @@ class GroupModel:
 
         Example:
             >>> group = GroupModel(
-            ...     "Grupo 1", "Dr. Smith", "Ingeniería",
-            ...     "Cálculo", [], "16 semanas", "Diurna", 30, "100"
+            ...     group_name="Grupo 1",
+            ...     teacher="Dr. Smith",
+            ...     faculty="Ingeniería",
+            ...     course_name="Cálculo",
+            ...     schedules=[],
+            ...     duration="16 semanas",
+            ...     schedule_type="Diurna",
+            ...     spots=30,
+            ...     code="100"
             ... )
         """
 
@@ -309,15 +319,18 @@ class CourseInfoModel:
 
     def __init__(
         self,
+        *,
         course_name: str,
         credits: int,
         typology: str,
         available_spots: int,
         scrape_timestamp: str,
-        groups: list[GroupModel],
-        code: str | None,
+        groups: list[GroupModel] = [],
+        code: str | None = None,
     ) -> None:
         """Initialize a CourseInfoModel instance.
+
+        All arguments must be passed as keyword arguments.
 
         Args:
             course_name: Full course title.
@@ -329,8 +342,15 @@ class CourseInfoModel:
             code: Optional course code.
 
         Example:
-            >>> course = CourseInfoModel("Cálculo", 3, "Obligatoria", 30,
-            ...                          "2026-04-02 10:00:00", [], "1000001")
+            >>> course = CourseInfoModel(
+            ...     course_name="Cálculo",
+            ...     credits=3,
+            ...     typology="Obligatoria",
+            ...     available_spots=30,
+            ...     scrape_timestamp="2026-04-02 10:00:00",
+            ...     groups=[],
+            ...     code="1000001"
+            ... )
         """
 
 class ScrapeResult:
@@ -489,6 +509,7 @@ class SessionStateModel:
 
     def __init__(
         self,
+        *,
         session_headers: dict[str, str],
         session_cookies: dict[str, str],
         params: dict[str, str],
@@ -500,6 +521,8 @@ class SessionStateModel:
         javax_faces_view_state: str | None = None,
     ) -> None:
         """Initialize a SessionStateModel instance.
+
+        All arguments must be passed as keyword arguments.
 
         Args:
             session_headers: HTTP request headers.
@@ -514,9 +537,15 @@ class SessionStateModel:
 
         Example:
             >>> state = SessionStateModel(
-            ...     {"User-Agent": "python"}, {"JSESSIONID": "abc"},
-            ...     {"page": "1"}, "0-2-8-3", "Ingeniería",
-            ...     False, "ON_CAREER_PAGE", [], "viewstate"
+            ...     session_headers={"User-Agent": "python"},
+            ...     session_cookies={"JSESSIONID": "abc"},
+            ...     params={"page": "1"},
+            ...     career_code="0-2-8-3",
+            ...     career_name="Ingeniería",
+            ...     is_electives=False,
+            ...     status="ON_CAREER_PAGE",
+            ...     course_list=[],
+            ...     javax_faces_view_state="viewstate"
             ... )
         """
 
@@ -607,13 +636,16 @@ class PrereqConditionModel:
 
     def __init__(
         self,
+        *,
         condition: int,
         prereq_type: str,
         all_required: bool,
         number_of_courses: int,
-        prerequisites: list[PrerequisiteModel],
+        prerequisites: list[PrerequisiteModel] = [],
     ) -> None:
         """Initialize a PrereqConditionModel instance.
+
+        All arguments must be passed as keyword arguments.
 
         Args:
             condition: Condition number (1, 2, ...).
@@ -623,7 +655,13 @@ class PrereqConditionModel:
             prerequisites: List of required courses.
 
         Example:
-            >>> cond = PrereqConditionModel(1, "CURSOS", True, 1, [])
+            >>> cond = PrereqConditionModel(
+            ...     condition=1,
+            ...     prereq_type="CURSOS",
+            ...     all_required=True,
+            ...     number_of_courses=1,
+            ...     prerequisites=[]
+            ... )
         """
 
 class CoursePrereqsModel:
@@ -657,13 +695,16 @@ class CoursePrereqsModel:
 
     def __init__(
         self,
+        *,
         course_name: str,
         credits: int,
         typology: str,
-        conditions: list[PrereqConditionModel],
+        conditions: list[PrereqConditionModel] = [],
         code: str | None = None,
     ) -> None:
         """Initialize a CoursePrereqsModel instance.
+
+        All arguments must be passed as keyword arguments.
 
         Args:
             course_name: Name of the course.
@@ -673,7 +714,13 @@ class CoursePrereqsModel:
             code: Course code (optional).
 
         Example:
-            >>> model = CoursePrereqsModel("Álgebra", 4, "Obligatoria", [], "1000002")
+            >>> model = CoursePrereqsModel(
+            ...     course_name="Álgebra",
+            ...     credits=4,
+            ...     typology="Obligatoria",
+            ...     conditions=[],
+            ...     code="1000002"
+            ... )
         """
 
 def parse_course_info(xml: str) -> CourseInfoModel:

@@ -65,7 +65,13 @@ class TestPrerequisiteModelIntegration:
 
     def test_nested_prerequisite_traversal(self):
         prereq = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
-        cond = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq])
+        cond = sia_scraper_rust.PrereqConditionModel(
+            condition=1,
+            prereq_type="M",
+            all_required=True,
+            number_of_courses=1,
+            prerequisites=[prereq],
+        )
         course_prereqs = sia_scraper_rust.CoursePrereqsModel(
             course_name="PROGRAMACION I",
             code=None,
@@ -79,8 +85,20 @@ class TestPrerequisiteModelIntegration:
     def test_multiple_nested_levels(self):
         prereq1 = sia_scraper_rust.PrerequisiteModel("1000001", "CALCULO")
         prereq2 = sia_scraper_rust.PrerequisiteModel("1000002", "ALGEBRA")
-        cond1 = sia_scraper_rust.PrereqConditionModel(1, "M", True, 1, [prereq1])
-        cond2 = sia_scraper_rust.PrereqConditionModel(2, "O", False, 2, [prereq1, prereq2])
+        cond1 = sia_scraper_rust.PrereqConditionModel(
+            condition=1,
+            prereq_type="M",
+            all_required=True,
+            number_of_courses=1,
+            prerequisites=[prereq1],
+        )
+        cond2 = sia_scraper_rust.PrereqConditionModel(
+            condition=2,
+            prereq_type="O",
+            all_required=False,
+            number_of_courses=2,
+            prerequisites=[prereq1, prereq2],
+        )
         course_prereqs = sia_scraper_rust.CoursePrereqsModel(
             course_name="PROGRAMACION II",
             code=None,

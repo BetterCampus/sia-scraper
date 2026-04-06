@@ -2,15 +2,11 @@
 
 #![allow(non_local_definitions)]
 
-use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 
-fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
-    dict.get_item(key)?
-        .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
-}
+use super::helpers::require_field;
 
 type GroupModelPickleState = (
     String,
@@ -86,10 +82,10 @@ impl ScheduleModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.day = required_item(dict, "day")?.extract()?;
-        self.start_time = required_item(dict, "start_time")?.extract()?;
-        self.end_time = required_item(dict, "end_time")?.extract()?;
-        self.classroom = required_item(dict, "classroom")?.extract()?;
+        self.day = require_field(dict, "day")?;
+        self.start_time = require_field(dict, "start_time")?;
+        self.end_time = require_field(dict, "end_time")?;
+        self.classroom = require_field(dict, "classroom")?;
         Ok(())
     }
 }
@@ -121,6 +117,7 @@ pub struct GroupModel {
 #[pymethods]
 impl GroupModel {
     #[new]
+    #[pyo3(signature = (group_name, teacher, faculty, course_name, schedules, duration, schedule_type, spots=None, code=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         group_name: String,
@@ -194,20 +191,24 @@ impl GroupModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.group_name = required_item(dict, "group_name")?.extract()?;
-        self.teacher = required_item(dict, "teacher")?.extract()?;
-        self.faculty = required_item(dict, "faculty")?.extract()?;
-        self.course_name = required_item(dict, "course_name")?.extract()?;
-        self.duration = required_item(dict, "duration")?.extract()?;
-        self.schedule_type = required_item(dict, "schedule_type")?.extract()?;
-        self.spots = required_item(dict, "spots")?.extract()?;
-        self.code = required_item(dict, "code")?.extract()?;
+        self.group_name = require_field(dict, "group_name")?;
+        self.teacher = require_field(dict, "teacher")?;
+        self.faculty = require_field(dict, "faculty")?;
+        self.course_name = require_field(dict, "course_name")?;
+        self.duration = require_field(dict, "duration")?;
+        self.schedule_type = require_field(dict, "schedule_type")?;
+        self.spots = require_field(dict, "spots")?;
+        self.code = require_field(dict, "code")?;
 
-        let list = required_item(dict, "schedules")?.downcast::<PyList>()?;
+        let list = super::helpers::required_item(dict, "schedules")?.downcast::<PyList>()?;
         let mut schedules = Vec::with_capacity(list.len());
         for item in list.iter() {
-            let mut schedule =
-                ScheduleModel::new(String::new(), String::new(), String::new(), String::new());
+            let mut schedule = ScheduleModel {
+                day: String::new(),
+                start_time: String::new(),
+                end_time: String::new(),
+                classroom: String::new(),
+            };
             schedule.__setstate__(item)?;
             schedules.push(schedule);
         }
@@ -239,6 +240,7 @@ pub struct CourseInfoModel {
 #[pymethods]
 impl CourseInfoModel {
     #[new]
+    #[pyo3(signature = (course_name, credits, typology, available_spots, scrape_timestamp, groups=None, code=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         course_name: String,
@@ -246,7 +248,7 @@ impl CourseInfoModel {
         typology: String,
         available_spots: i64,
         scrape_timestamp: String,
-        groups: Vec<GroupModel>,
+        groups: Option<Vec<GroupModel>>,
         code: Option<String>,
     ) -> Self {
         Self {
@@ -255,7 +257,7 @@ impl CourseInfoModel {
             typology,
             available_spots,
             scrape_timestamp,
-            groups,
+            groups: groups.unwrap_or_default(),
             code,
         }
     }
@@ -304,27 +306,27 @@ impl CourseInfoModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.course_name = required_item(dict, "course_name")?.extract()?;
-        self.credits = required_item(dict, "credits")?.extract()?;
-        self.typology = required_item(dict, "typology")?.extract()?;
-        self.available_spots = required_item(dict, "available_spots")?.extract()?;
-        self.scrape_timestamp = required_item(dict, "scrape_timestamp")?.extract()?;
-        self.code = required_item(dict, "code")?.extract()?;
+        self.course_name = require_field(dict, "course_name")?;
+        self.credits = require_field(dict, "credits")?;
+        self.typology = require_field(dict, "typology")?;
+        self.available_spots = require_field(dict, "available_spots")?;
+        self.scrape_timestamp = require_field(dict, "scrape_timestamp")?;
+        self.code = require_field(dict, "code")?;
 
-        let list = required_item(dict, "groups")?.downcast::<PyList>()?;
+        let list = super::helpers::required_item(dict, "groups")?.downcast::<PyList>()?;
         let mut groups = Vec::with_capacity(list.len());
         for item in list.iter() {
-            let mut group = GroupModel::new(
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                Vec::new(),
-                String::new(),
-                String::new(),
-                None,
-                None,
-            );
+            let mut group = GroupModel {
+                group_name: String::new(),
+                teacher: String::new(),
+                faculty: String::new(),
+                course_name: String::new(),
+                schedules: Vec::new(),
+                duration: String::new(),
+                schedule_type: String::new(),
+                spots: None,
+                code: None,
+            };
             group.__setstate__(item)?;
             groups.push(group);
         }

@@ -344,17 +344,7 @@ impl Default for SessionStateModel {
 #[pymethods]
 impl SessionStateModel {
     #[new]
-    #[pyo3(signature = (
-        session_headers,
-        session_cookies,
-        params,
-        career_code,
-        career_name,
-        is_electives,
-        status,
-        course_list,
-        javax_faces_view_state=None
-    ))]
+    #[pyo3(signature = (session_headers, session_cookies, params, career_code, career_name, is_electives, status, course_list, javax_faces_view_state=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         session_headers: HashMap<String, String>,

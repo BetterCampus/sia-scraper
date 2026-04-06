@@ -7,6 +7,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 
+use super::helpers::require_field;
+
 fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
     dict.get_item(key)?
         .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
@@ -56,8 +58,8 @@ impl PrerequisiteModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.course_code = required_item(dict, "course_code")?.extract()?;
-        self.course_name = required_item(dict, "course_name")?.extract()?;
+        self.course_code = require_field(dict, "course_code")?;
+        self.course_name = require_field(dict, "course_name")?;
         Ok(())
     }
 }
@@ -81,19 +83,21 @@ pub struct PrereqConditionModel {
 #[pymethods]
 impl PrereqConditionModel {
     #[new]
+    #[pyo3(signature = (condition, prereq_type, all_required, number_of_courses, prerequisites=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         condition: i32,
         prereq_type: String,
         all_required: bool,
         number_of_courses: i32,
-        prerequisites: Vec<PrerequisiteModel>,
+        prerequisites: Option<Vec<PrerequisiteModel>>,
     ) -> Self {
         Self {
             condition,
             prereq_type,
             all_required,
             number_of_courses,
-            prerequisites,
+            prerequisites: prerequisites.unwrap_or_default(),
         }
     }
 
@@ -134,15 +138,18 @@ impl PrereqConditionModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.condition = required_item(dict, "condition")?.extract()?;
-        self.prereq_type = required_item(dict, "prereq_type")?.extract()?;
-        self.all_required = required_item(dict, "all_required")?.extract()?;
-        self.number_of_courses = required_item(dict, "number_of_courses")?.extract()?;
+        self.condition = require_field(dict, "condition")?;
+        self.prereq_type = require_field(dict, "prereq_type")?;
+        self.all_required = require_field(dict, "all_required")?;
+        self.number_of_courses = require_field(dict, "number_of_courses")?;
 
         let list = required_item(dict, "prerequisites")?.downcast::<PyList>()?;
         let mut prerequisites = Vec::with_capacity(list.len());
         for item in list.iter() {
-            let mut prereq = PrerequisiteModel::new(String::new(), String::new());
+            let mut prereq = PrerequisiteModel {
+                course_code: String::new(),
+                course_name: String::new(),
+            };
             prereq.__setstate__(item)?;
             prerequisites.push(prereq);
         }
@@ -170,20 +177,21 @@ pub struct CoursePrereqsModel {
 #[pymethods]
 impl CoursePrereqsModel {
     #[new]
-    #[pyo3(signature = (course_name, credits, typology, conditions, code=None))]
+    #[pyo3(signature = (course_name, credits, typology, conditions=None, code=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         course_name: String,
         credits: i32,
         typology: String,
-        conditions: Vec<PrereqConditionModel>,
+        conditions: Option<Vec<PrereqConditionModel>>,
         code: Option<String>,
     ) -> Self {
         Self {
             course_name,
-            code,
             credits,
             typology,
-            conditions,
+            conditions: conditions.unwrap_or_default(),
+            code,
         }
     }
 
@@ -234,15 +242,21 @@ impl CoursePrereqsModel {
 
     fn __setstate__(&mut self, state: &PyAny) -> PyResult<()> {
         let dict = state.downcast::<PyDict>()?;
-        self.course_name = required_item(dict, "course_name")?.extract()?;
-        self.code = required_item(dict, "code")?.extract()?;
-        self.credits = required_item(dict, "credits")?.extract()?;
-        self.typology = required_item(dict, "typology")?.extract()?;
+        self.course_name = require_field(dict, "course_name")?;
+        self.code = require_field(dict, "code")?;
+        self.credits = require_field(dict, "credits")?;
+        self.typology = require_field(dict, "typology")?;
 
         let list = required_item(dict, "conditions")?.downcast::<PyList>()?;
         let mut conditions = Vec::with_capacity(list.len());
         for item in list.iter() {
-            let mut condition = PrereqConditionModel::new(0, String::new(), false, 0, Vec::new());
+            let mut condition = PrereqConditionModel {
+                condition: 0,
+                prereq_type: String::new(),
+                all_required: false,
+                number_of_courses: 0,
+                prerequisites: Vec::new(),
+            };
             condition.__setstate__(item)?;
             conditions.push(condition);
         }
