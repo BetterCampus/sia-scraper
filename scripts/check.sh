@@ -7,6 +7,7 @@ echo "━━━ Full Check (stop on first failure) ━━━"
 ./scripts/lint-rust.sh
 echo "━━━ Type Check ━━━"
 pyright
+echo "━━━ Tests ━━━"
 ./scripts/test-python.sh
 ./scripts/test-rust.sh
 echo "━━━ All checks passed ━━━"
