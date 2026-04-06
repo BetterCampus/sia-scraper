@@ -16,7 +16,6 @@ help:
 ## setup - Install dependencies and build extension (checkout → ready)
 setup:
 	@echo "━━━ Setup ━━━"
-	pip install -e ".[dev]"
 	@if [ ! -f .cargo/config.toml ] && [ "$${CI:-false}" != "true" ]; then \
 		echo ""; \
 		echo "⚠️  No .cargo/config.toml found. Copying from example..."; \
@@ -28,6 +27,7 @@ setup:
 	else \
 		echo "✓ Running in CI mode, skipping .cargo/config.toml check"; \
 	fi
+	pip install -e ".[dev]"
 	maturin develop
 
 ## develop - Build and install Rust extension (incremental)
