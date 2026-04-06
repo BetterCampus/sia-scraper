@@ -338,6 +338,11 @@ impl PySiaSession {
     /// significant speedups (3x-5x) compared to sequential scraping for
     /// batches of 20+ courses.
     ///
+    /// Note: Unlike [`ScrapeCoursesMethod`][super::ScrapeCoursesMethod], this method
+    /// operates on a cloned, owned session and does NOT sync ViewState or other
+    /// mutations back to the shared parent session. This is intentional to avoid
+    /// conflicting concurrent writes to the session state.
+    ///
     /// Errors are handled according to the specified `mode`:
     ///
     /// - `"abort"`: Stop immediately on the first error.

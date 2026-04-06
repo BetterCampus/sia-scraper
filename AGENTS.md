@@ -40,17 +40,20 @@ all available targets.
 | `make clean` | Remove build artifacts |
 
 Argument pass-through for test targets:
+
 ```bash
 make test-python ARGS="-k test_format -v"
 make test-rust ARGS="-- helpers"
 ```
 
 ### Environment Setup
+
 ```bash
 make setup
 ```
 
 ### Local Verification (run before commit)
+
 ```bash
 make check
 ```
@@ -60,6 +63,7 @@ make check
 For fine-grained control, individual tools can be run directly:
 
 #### Running Tests
+
 ```bash
 # All tests
 pytest
@@ -84,6 +88,7 @@ pytest -k "test_format"
 ```
 
 #### Linting & Formatting
+
 ```bash
 # Check code with ruff
 ruff check .
@@ -99,6 +104,7 @@ ruff check --fix . && ruff format . && ruff check .
 ```
 
 #### Type Checking
+
 ```bash
 pyright
 ```
@@ -347,6 +353,7 @@ quote-style = "double"
 ### Build Commands
 
 #### Quick Reference
+
 ```bash
 make develop    # Build and install into current virtualenv (debug mode)
 make build      # Build release wheels
@@ -354,6 +361,7 @@ make check-rust # Lint + test
 ```
 
 #### Advanced: Raw Commands
+
 ```bash
 # Build in debug mode
 maturin build

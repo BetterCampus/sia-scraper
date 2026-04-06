@@ -66,7 +66,7 @@ test: test-python test-rust
 
 ## test-python - Run Python tests
 test-python:
-	./scripts/test-python.sh
+	./scripts/test-python.sh $(ARGS)
 
 ## test-python-cov - Run Python tests with coverage
 test-python-cov:
@@ -74,7 +74,7 @@ test-python-cov:
 
 ## test-rust - Run Rust tests
 test-rust:
-	./scripts/test-rust.sh
+	./scripts/test-rust.sh $(ARGS)
 
 ## check - Run full pre-commit check (stop on first failure)
 check:
@@ -99,4 +99,4 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	echo "✓ Clean complete"
+	@echo "✓ Clean complete"

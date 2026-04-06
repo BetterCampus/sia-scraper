@@ -284,6 +284,17 @@ class SiaScraper:
                 f"but courses_codes has {len(courses_codes)} items"
             )
 
+        if self._sia_session.status in (
+            status.SiaSessionStatus.ON_CAREER_PAGE,
+            status.SiaSessionStatus.ON_COURSE_PAGE,
+        ):
+            for idx, code in zip(courses_indices, courses_codes, strict=True):
+                if code and self.get_course_index(code) != idx:
+                    raise ValueError(
+                        f"Course index/code mismatch: index {idx} does not correspond to code {code!r} "
+                        f"(code {code!r} is at index {self.get_course_index(code)})"
+                    )
+
         seen: set[int] = set()
         for idx in courses_indices:
             if idx in seen:
