@@ -1482,7 +1482,11 @@ mod tests {
 
             // Capture deprecation warnings
             let warnings = py.import("warnings").unwrap();
-            let catch_warnings = warnings.call_method("catch_warnings", (), None).unwrap();
+            let kwargs = pyo3::types::PyDict::new(py);
+            kwargs.set_item("record", true).unwrap();
+            let catch_warnings = warnings
+                .call_method("catch_warnings", (), Some(kwargs))
+                .unwrap();
             let warning_list = catch_warnings.call_method0("__enter__").unwrap();
             warnings.call_method1("simplefilter", ("always",)).unwrap();
 
