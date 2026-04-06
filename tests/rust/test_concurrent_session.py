@@ -7,6 +7,19 @@ The generation counter should prevent stale updates when:
 1. scrape_courses() runs concurrently with set_career()
 2. Multiple scrape_courses() calls run concurrently
 3. get_state() runs concurrently with mutating operations
+
+Note on Integration Testing:
+The tests in this module verify the generation field exists and works
+at the SessionStateModel level. They are concept tests demonstrating the
+generation-based stale update detection mechanism.
+
+Full integration tests that verify PySiaSession methods (like set_career)
+actually increment the generation counter would require:
+- Mocking the network layer (HTTP responses)
+- Creating a test server or using recorded responses
+
+This is tracked as part of the architectural improvements needed for
+proper concurrent session handling. See GitHub issue for details.
 """
 
 import pickle
@@ -94,7 +107,13 @@ class TestConcurrentSessionState:
 
 
 class TestGenerationConcept:
-    """Tests demonstrating the generation concept for race condition prevention."""
+    """Tests demonstrating the generation concept for race condition prevention.
+
+    Note: These tests verify the generation field exists and works at the
+    SessionStateModel level. Full integration tests verifying that actual
+    PySiaSession mutations increment generation would require mocking the
+    network layer. See GitHub issue for architectural improvements needed.
+    """
 
     def test_stale_update_detection_concept(self):
         """Demonstrate how generation check prevents stale updates.
