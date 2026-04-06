@@ -349,8 +349,8 @@ class SiaScraper:
             None. The function mutates the CourseInfoModel objects in-place.
 
         Note:
-            This method does not intentionally raise exceptions. Any exceptions
-            would indicate a contract violation between Python and Rust models.
+            Raises ValueError if the success count doesn't match expected indices,
+            indicating a contract violation between Python and Rust.
 
         Example:
             >>> # Abort mode - use indices order
