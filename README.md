@@ -41,11 +41,14 @@ For local development:
 ```bash
 git clone https://github.com/BetterCampus/sia-scraper.git
 cd sia-scraper
-pip install -e ".[dev]"
-python scripts/sync_rust_extension.py --build --release --verify
+make setup
 ```
 
-If you update Rust code later, run the sync command again to refresh the local extension binary.
+After initial setup, rebuild the Rust extension after any code changes with:
+
+```bash
+make develop
+```
 
 ### Minimal Example
 
@@ -250,11 +253,33 @@ Configure via `scrape_courses(error_mode="retry")`.
 
 ## Testing and Quality Checks
 
+The project uses a Makefile to standardize development commands. Run `make help` to see
+all available targets.
+
+### Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `make lint` | Lint Python + Rust |
+| `make typecheck` | Run pyright |
+| `make test` | Run all tests |
+| `make test-python-cov` | Run Python tests with coverage (for CI) |
+| `make check` | Full pre-commit verification (stops on first failure) |
+| `make check-python` | All Python checks, reports all failures |
+| `make check-rust` | All Rust checks, reports all failures |
+
+See the full target list with `make help`.
+
+### Advanced: Raw Commands
+
+For fine-grained control, you can still run individual tools directly:
+
 ```bash
 pytest
+pytest --cov=src/sia_scraper
+pytest tests/utils/test_date_formatter.py
 ruff check .
 pyright
-cargo clippy --manifest-path Cargo.toml
 ```
 
 ### Rust Fuzzing (Optional)

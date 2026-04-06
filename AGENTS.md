@@ -15,12 +15,51 @@ A Python library for extracting academic information from the SIA (Sistema de In
 
 ## Build, Test, and Lint Commands
 
-### Environment Setup
+### Quick Reference (Recommended)
+
+The project uses a Makefile for all standard workflows. Run `make help` to see
+all available targets.
+
+| Command | Description |
+|---------|-------------|
+| `make setup` | Install deps + build extension (checkout → ready) |
+| `make develop` | Rebuild Rust extension after changes |
+| `make build` | Build release wheels |
+| `make lint` | Lint Python + Rust |
+| `make lint-python` | Python lint only |
+| `make lint-rust` | Rust lint only |
+| `make format` | Format Python code |
+| `make typecheck` | Run pyright |
+| `make test` | Run all tests |
+| `make test-python` | Python tests only |
+| `make test-python-cov` | Python tests with coverage |
+| `make test-rust` | Rust tests only |
+| `make check` | Full pre-commit (stops on first failure) |
+| `make check-python` | Python checks (reports all failures) |
+| `make check-rust` | Rust checks (reports all failures) |
+| `make clean` | Remove build artifacts |
+
+Argument pass-through for test targets:
 ```bash
-pip install -e ".[dev]"
+make test-python ARGS="-k test_format -v"
+make test-rust ARGS="-- helpers"
 ```
 
-### Running Tests
+### Environment Setup
+```bash
+make setup
+```
+
+### Local Verification (run before commit)
+```bash
+make check
+```
+
+### Advanced: Raw Commands
+
+For fine-grained control, individual tools can be run directly:
+
+#### Running Tests
 ```bash
 # All tests
 pytest
@@ -44,7 +83,7 @@ pytest tests/utils/test_date_formatter.py::TestDateFormatterBasicFunctionality::
 pytest -k "test_format"
 ```
 
-### Linting & Formatting
+#### Linting & Formatting
 ```bash
 # Check code with ruff
 ruff check .
@@ -59,20 +98,9 @@ ruff format .
 ruff check --fix . && ruff format . && ruff check .
 ```
 
-### Type Checking
+#### Type Checking
 ```bash
 pyright
-```
-
-### Local Verification (run before commit)
-```bash
-# Python: lint, format, type check
-ruff check --fix . && ruff format . && ruff check .
-pyright
-
-# Rust: clippy and check
-cargo clippy
-cargo check
 ```
 
 ---
@@ -318,7 +346,14 @@ quote-style = "double"
 
 ### Build Commands
 
-#### Building Rust Extensions
+#### Quick Reference
+```bash
+make develop    # Build and install into current virtualenv (debug mode)
+make build      # Build release wheels
+make check-rust # Lint + test
+```
+
+#### Advanced: Raw Commands
 ```bash
 # Build in debug mode
 maturin build
@@ -336,16 +371,16 @@ pip install target/wheels/sia_scraper-*.whl --force-reinstall
 #### Development Workflow
 ```bash
 # Check Rust code (fast, no build)
-cargo check --manifest-path Cargo.toml
+cargo check
 
 # Run clippy linter
-cargo clippy --manifest-path Cargo.toml
+cargo clippy --all-targets --all-features -- -D warnings
 
 # Auto-fix clippy warnings
-cargo clippy --manifest-path Cargo.toml --fix
+cargo clippy --fix
 
-# Build and run Rust tests
-cargo test --manifest-path Cargo.toml
+# Run Rust tests (requires --no-default-features)
+cargo test --no-default-features --lib
 
 # Build optimized release
 maturin build --release

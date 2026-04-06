@@ -12,37 +12,37 @@ Prerequisites:
 - Python 3.10+
 - Git
 
-Clone and install:
+Clone and set up:
 
 ```bash
 git clone https://github.com/BetterCampus/sia-scraper.git
 cd sia-scraper
-pip install -e ".[dev]"
-python scripts/sync_rust_extension.py --build --release --verify
+make setup
 ```
 
-### Rust Extension Workflow (Important)
+This installs Python dependencies, builds the Rust extension, and configures
+the `.cargo/config.toml` file if missing.
 
-Use the sync script whenever you change Rust code:
+### Rust Extension Workflow
+
+After modifying Rust code, rebuild the extension:
 
 ```bash
-python scripts/sync_rust_extension.py --build --release --verify
+make develop
+```
+
+Quick validation:
+
+```bash
+make check-rust    # lint + test
+make check         # full verification (Python + Rust)
 ```
 
 Why this is required:
 
 - The project uses `setuptools` for editable Python installs and `maturin` for Rust wheels.
 - `maturin develop` and `pip install -e .` can overwrite each other in local environments.
-- The sync script avoids that conflict by copying the compiled extension directly into
-  `src/sia_scraper_rust/` for stable local imports.
-
-Quick validation:
-
-```bash
-pytest
-ruff check .
-pyright
-```
+- The Makefile handles this correctly by using `maturin develop` under the hood.
 
 ## Code Standards
 
@@ -93,17 +93,17 @@ tests/
 Common commands:
 
 ```bash
-# Full suite
-pytest
+# All tests
+make test
 
-# Coverage
-pytest --cov=src/sia_scraper
+# With coverage (for CI)
+make test-python-cov
 
-# Specific file
-pytest tests/utils/test_date_formatter.py
+# Specific file (pass-through)
+make test-python ARGS="tests/utils/test_date_formatter.py"
 
 # Pattern
-pytest -k "format"
+make test-python ARGS="-k format"
 ```
 
 ### Fixture-based Regression Tests
@@ -134,15 +134,16 @@ Notes:
 
 ## Linting, Formatting, and Type Checking
 
-Use this local sequence before opening a PR:
+Use the Makefile for standard workflows:
 
 ```bash
-ruff check --fix .
-ruff format .
-ruff check .
-pyright
-pytest
+make lint       # Fix + format + check (Python) + clippy (Rust)
+make format     # Format Python code only
+make typecheck  # Run pyright
+make check      # Full pre-commit verification
 ```
+
+Before opening a PR, run `make check` to ensure everything passes.
 
 ## Pull Request Process
 
