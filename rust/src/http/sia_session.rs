@@ -902,18 +902,7 @@ impl SiaSession {
                             }
                         }
                     }
-                    #[cfg(debug_assertions)]
-                    unreachable!(
-                        "Retry loop must return: Ok on success or Err when attempt == effective_retries"
-                    );
-
-                    #[cfg(not(debug_assertions))]
-                    Err((
-                        pos,
-                        index,
-                        HttpError::SessionError("Retry loop completed unexpectedly".to_string()),
-                        Instant::now(),
-                    ))
+                    unreachable!("Retry loop always returns before this point");
                 }
             })
             .buffer_unordered(max_concurrent)

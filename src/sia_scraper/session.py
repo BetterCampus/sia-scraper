@@ -140,7 +140,11 @@ class SiaSession:
                 )
 
     def _raise_if_session_not_set(self, exc: Exception) -> None:
-        """Raise SessionNotSet when Rust reports an uninitialized session."""
+        """Raise SessionNotSet when Rust reports an uninitialized session.
+
+        Note: Depends on Rust error message containing 'not initialized'.
+        If Rust changes this message, update the check here.
+        """
         if "not initialized" in str(exc).lower():
             raise SessionNotSet from exc
 
