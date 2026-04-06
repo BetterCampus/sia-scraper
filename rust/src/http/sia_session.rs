@@ -868,6 +868,7 @@ impl SiaSession {
                 let session = SiaSession::with_owned_state(session_ref, owned_state.clone());
                 let abort = Arc::clone(&abort_flag);
                 async move {
+                    let mut last_error: Option<HttpError> = None;
                     for attempt in 0..=effective_retries {
                         if abort.load(Ordering::SeqCst) {
                             return Err((
@@ -888,23 +889,28 @@ impl SiaSession {
                                         Instant::now(),
                                     ));
                                 }
-                                if !should_retry(&e, &session.retry_config)
+                                last_error = Some(e);
+                                if !should_retry(&last_error.as_ref().unwrap(), &session.retry_config)
                                     || attempt == effective_retries
                                 {
                                     let error_time = Instant::now();
                                     if mode == ErrorMode::Abort {
                                         abort.store(true, Ordering::SeqCst);
                                     }
-                                    return Err((pos, index, e, error_time));
+                                    return Err((pos, index, last_error.unwrap(), error_time));
                                 }
                                 let delay = compute_backoff_ms(&session.retry_config, retry_delay_ms, attempt);
                                 sleep(Duration::from_millis(delay)).await;
                             }
                         }
                     }
-                    // The for loop runs 0..=effective_retries, always executes at least once
-                    // and every branch returns Ok or Err, so this point is unreachable.
-                    unreachable!("Retry loop always returns before this point");
+                    // Graceful fallback if loop exhausts (shouldn't happen with proper retry logic)
+                    Err((
+                        pos,
+                        index,
+                        last_error.unwrap_or_else(|| HttpError::NetworkError("Retry loop exhausted".into())),
+                        Instant::now(),
+                    ))
                 }
             })
             .buffer_unordered(max_concurrent)

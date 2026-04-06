@@ -629,6 +629,7 @@ impl SessionStateModel {
             if let Some(val) = dict.get_item("javax_faces_view_state")? {
                 val.extract()?
             } else if let Some(val) = dict.get_item("javax_faces_ViewState")? {
+                emit_legacy_warning(dict.py(), "javax_faces_ViewState key", 2)?;
                 val.extract()?
             } else {
                 None
