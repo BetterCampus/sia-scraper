@@ -381,7 +381,7 @@ class SiaScraper:
                 )
 
             for i, course in enumerate(successes):
-                if i < len(success_indices) and success_indices[i] in code_map:
+                if success_indices[i] in code_map:
                     course.code = code_map[success_indices[i]]
 
     async def get_course_info(
