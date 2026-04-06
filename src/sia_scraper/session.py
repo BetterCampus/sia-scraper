@@ -165,8 +165,10 @@ class SiaSession:
             on the Rust side (e.g., SiaSessionException::SessionNotSet) to
             avoid relying on message content.
         """
-        exc_type_name = type(exc).__name__
-        if exc_type_name == "SessionError" and _SESSION_NOT_INIT_MARKER in str(exc).lower():
+        if (
+            isinstance(exc, sia_scraper_rust.SessionError)
+            and _SESSION_NOT_INIT_MARKER in str(exc).lower()
+        ):
             raise SessionNotSet from exc
 
     async def init_session(self) -> None:
