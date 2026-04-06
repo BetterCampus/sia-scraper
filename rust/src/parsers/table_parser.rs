@@ -106,10 +106,12 @@ fn extract_course_list_from_raw_html(
 /// * `html_content` - Raw HTML string from SIA career page
 ///
 /// # Returns
-/// Vec of `CourseListEntryModel` with `code` and `name` fields
+/// `Result<Vec<CourseListEntryModel>, SiaScraperError>` containing the parsed
+/// course entries with `code` and `name` fields, or an error if parsing fails.
 ///
 /// # Errors
-/// Returns `SiaScraperError::MissingElement` if table structure invalid
+/// Returns `SiaScraperError` if HTML parsing fails, required selectors are not found,
+/// or table structure is invalid.
 ///
 /// # Examples
 /// ```rust,ignore
@@ -383,5 +385,13 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].code, "1000001");
         assert_eq!(result[0].name, "CALCULO");
+    }
+
+    #[test]
+    fn test_get_course_list_handles_empty_input() {
+        let html = "";
+        let result = get_course_list(html);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 }
