@@ -124,7 +124,7 @@ class SiaSession:
         """Validate course list format (defense-in-depth)."""
         for i, course in enumerate(self._course_list):
             if not isinstance(course, dict):
-                raise ValueError(
+                raise TypeError(
                     f"Invalid course list format at index {i}: {type(course).__name__}. "
                     "Expected dict with 'code' and 'name' string keys."
                 )
@@ -136,7 +136,7 @@ class SiaSession:
             code_val = course["code"]
             name_val = course["name"]
             if not isinstance(code_val, str) or not isinstance(name_val, str):
-                raise ValueError(
+                raise TypeError(
                     f"Invalid course list format at index {i}: code={code_val!r}, name={name_val!r}. "
                     "Expected 'code' and 'name' values to be strings."
                 )

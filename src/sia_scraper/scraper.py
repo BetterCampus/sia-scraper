@@ -322,10 +322,7 @@ class SiaScraper:
         elif isinstance(error_mode, str):
             mode = error_mode.lower()
         else:
-            raise ValueError(
-                f"Invalid error_mode: {error_mode!r}. Must be an ErrorMode or one of: "
-                f"{', '.join(sorted({'abort', 'skip', 'retry'}))}"
-            )
+            raise TypeError(f"error_mode must be ErrorMode or str, got {type(error_mode).__name__}")
         valid_modes = {"abort", "skip", "retry"}
         if mode not in valid_modes:
             raise ValueError(
