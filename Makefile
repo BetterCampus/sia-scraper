@@ -17,7 +17,7 @@ help:
 setup:
 	@echo "━━━ Setup ━━━"
 	pip install -e ".[dev]"
-	@if [ ! -f .cargo/config.toml ] && [ "${CI:-false}" != "true" ]; then \
+	@if [ ! -f .cargo/config.toml ] && [ "$${CI:-false}" != "true" ]; then \
 		echo ""; \
 		echo "⚠️  No .cargo/config.toml found. Copying from example..."; \
 		cp .cargo/config.toml.example .cargo/config.toml; \

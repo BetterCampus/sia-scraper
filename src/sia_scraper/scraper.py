@@ -241,7 +241,7 @@ class SiaScraper:
             courses_codes: List of course codes to scrape (resolved to indices).
 
         Returns:
-            Tuple of (paired list sorted by index, sorted indices list).
+            Tuple of (paired list preserving caller input order, indices list preserving caller input order).
 
         Raises:
             ValueError: If both courses_indices and courses_codes are None or empty.
@@ -348,8 +348,8 @@ class SiaScraper:
 
         Args:
             successes: List of scraped course models to update in-place.
-            paired: Sorted list of (index, code) tuples.
-            indices: Sorted list of course indices.
+            paired: List of (index, code) tuples preserving input order.
+            indices: List of course indices preserving input order.
             failed_indices: Set of failed indices (for skip/retry mode).
 
         Returns:

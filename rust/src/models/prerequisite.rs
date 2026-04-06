@@ -14,6 +14,23 @@ fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
         .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
 }
 
+type PrereqConditionModelPickleArgs = (i32, String, bool, i32, Vec<PrerequisiteModel>);
+type PrereqConditionModelPickleKwargs = ();
+type PrereqConditionModelPickleState = (
+    PrereqConditionModelPickleArgs,
+    PrereqConditionModelPickleKwargs,
+);
+
+type CoursePrereqsModelPickleArgs = (
+    String,
+    i32,
+    String,
+    Vec<PrereqConditionModel>,
+    Option<String>,
+);
+type CoursePrereqsModelPickleKwargs = ();
+type CoursePrereqsModelPickleState = (CoursePrereqsModelPickleArgs, CoursePrereqsModelPickleKwargs);
+
 /// One prerequisite course reference.
 #[pyclass(module = "sia_scraper_rust")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,8 +134,8 @@ impl PrereqConditionModel {
         )
     }
 
-    fn __getnewargs__(&self) -> (i32, String, bool, i32, Vec<PrerequisiteModel>) {
-        (0, String::new(), false, 0, Vec::new())
+    fn __getnewargs_ex__(&self) -> PrereqConditionModelPickleState {
+        ((0, String::new(), false, 0, Vec::new()), ())
     }
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
@@ -213,16 +230,8 @@ impl CoursePrereqsModel {
         )
     }
 
-    fn __getnewargs__(
-        &self,
-    ) -> (
-        String,
-        i32,
-        String,
-        Vec<PrereqConditionModel>,
-        Option<String>,
-    ) {
-        (String::new(), 0, String::new(), Vec::new(), None)
+    fn __getnewargs_ex__(&self) -> CoursePrereqsModelPickleState {
+        ((String::new(), 0, String::new(), Vec::new(), None), ())
     }
 
     fn __getstate__(&self, py: Python<'_>) -> PyResult<PyObject> {
