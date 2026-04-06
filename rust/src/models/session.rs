@@ -527,6 +527,8 @@ impl SessionStateModel {
         }
         dict.set_item("course_list", courses)?;
 
+        dict.set_item("generation", self.generation)?;
+
         Ok(dict.into_py(py))
     }
 
