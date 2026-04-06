@@ -2,17 +2,11 @@
 
 #![allow(non_local_definitions)]
 
-use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use serde::{Deserialize, Serialize};
 
-use super::helpers::require_field;
-
-fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
-    dict.get_item(key)?
-        .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
-}
+use super::helpers::{require_field, required_item};
 
 /// One prerequisite course reference.
 #[pyclass(module = "sia_scraper_rust")]
