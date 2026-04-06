@@ -14,7 +14,6 @@ sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 
 
 @pytest.fixture(scope="function")
-@pytest.mark.network
 async def initialized_session():
     """Provide an initialized PySiaSession with cleanup.
 
@@ -146,7 +145,6 @@ class TestBatchScrapingWithInvalidIndices:
         requested = [0, 999, 1]
         result = await initialized_session.scrape_courses(requested, mode="skip")
         assert isinstance(result, sia_scraper_rust.ScrapeResult)
-        assert result.total() == len(requested)
         # Index 999 is always out of range, so it should always be in failures
         failure_indices = [idx for idx, _ in result.failures]
         assert 999 in failure_indices

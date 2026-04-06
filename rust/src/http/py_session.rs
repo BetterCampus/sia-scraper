@@ -340,8 +340,8 @@ impl PySiaSession {
     ///
     /// # Arguments
     /// * `indices` - List of course indices to scrape
-    /// * `max_concurrent` - Maximum number of concurrent scraping operations (default: 5)
     /// * `mode` - Error handling mode: "abort", "skip", or "retry"
+    /// * `max_concurrent` - Maximum number of concurrent scraping operations (default: 5)
     /// * `retries` - Maximum retry attempts per course (default: 3, used only in retry mode)
     /// * `delay` - Base delay between retries in milliseconds (default: 800)
     ///

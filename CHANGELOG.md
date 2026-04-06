@@ -48,7 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `CourseListEntryModel.to_dict()` method serializes to `{"code": ..., "name": ...}`
     - `CourseListEntryModel.from_dict()` classmethod deserializes from dict (supports all formats)
     - `SessionStateModel` pickle support with automatic legacy format migration
-- **Async HTTP Client (Rust reqwest + tokio)**: Phase 4 complete - async HTTP transport layer
+
+  - **Async HTTP Client (Rust reqwest + tokio)**: Phase 4 complete - async HTTP transport layer
   - New async `SiaSession` class for session management
   - Connection pooling enabled by default
   - Automatic ViewState synchronization after each request
