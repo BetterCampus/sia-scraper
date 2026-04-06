@@ -1197,7 +1197,7 @@ class PySiaSession:
         Raises:
             AbortError: If operation is aborted (when mode='abort').
             SessionError: If session not initialized or in Abort mode on first failure.
-            ValueError: If mode is not one of "abort", "skip", "retry".
+            SiaScraperException: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.
             HttpStatusError: If server returns error status.
             SiaTimeoutError: If request times out.
@@ -1247,7 +1247,7 @@ class PySiaSession:
         Raises:
             AbortError: If operation is aborted (when mode='abort').
             SessionError: If session not initialized or in Abort mode on first failure.
-            ValueError: If mode is not one of "abort", "skip", "retry".
+            SiaScraperException: If mode is not one of "abort", "skip", "retry".
             NetworkError: If connection fails.
             HttpStatusError: If server returns error status.
             SiaTimeoutError: If request times out.

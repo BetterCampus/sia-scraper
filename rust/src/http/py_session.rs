@@ -307,20 +307,29 @@ impl PySiaSession {
         let retry_delay_ms = delay.unwrap_or(800);
 
         future_into_py(py, async move {
-            let session = {
+            let (cloned_session, result) = {
                 let session_guard = inner.read().await;
                 let original = session_guard
                     .as_ref()
                     .ok_or_else(|| SessionError::new_err(
                         "Session not initialized. Call init_session() first."
                     ))?;
-                original.clone_with_owned_state().await
+                let cloned = original.clone_with_owned_state().await;
+                let result = cloned
+                    .scrape_courses_batch(indices, error_mode, max_retries, retry_delay_ms)
+                    .await;
+                (cloned, result)
             };
 
-            session
-                .scrape_courses_batch(indices, error_mode, max_retries, retry_delay_ms)
-                .await
-                .map_err(pyo3::PyErr::from)
+            if result.is_ok() {
+                let mutated_state = cloned_session.get_state().await;
+                let mut session_guard = inner.write().await;
+                if let Some(ref mut session) = *session_guard {
+                    session.update_state(mutated_state).await;
+                }
+            }
+
+            result.map_err(pyo3::PyErr::from)
         })
     }
 
