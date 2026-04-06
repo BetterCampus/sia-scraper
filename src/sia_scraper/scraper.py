@@ -460,6 +460,8 @@ class SiaScraper:
             )
         if retry_delay < 0:
             raise ValueError(f"retry_delay must be non-negative, got {retry_delay}")
+        if max_retries < 0:
+            raise ValueError(f"max_retries must be non-negative, got {max_retries}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
         mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
@@ -557,6 +559,10 @@ class SiaScraper:
         """
         if retry_delay < 0:
             raise ValueError(f"retry_delay must be non-negative, got {retry_delay}")
+        if max_retries < 0:
+            raise ValueError(f"max_retries must be non-negative, got {max_retries}")
+        if max_concurrent < 0:
+            raise ValueError(f"max_concurrent must be non-negative, got {max_concurrent}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
         mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
 
