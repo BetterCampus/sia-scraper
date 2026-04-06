@@ -124,7 +124,7 @@ impl PrereqConditionModel {
             }
             kwargs.set_item("prerequisites", prereqs_list)?;
         }
-        let empty_tuple = PyTuple::new(py, std::iter::empty::<&PyAny>());
+        let empty_tuple = PyTuple::empty(py);
         Ok((empty_tuple.into_py(py), kwargs.into_py(py)))
     }
 
@@ -235,7 +235,7 @@ impl CoursePrereqsModel {
         if let Some(code) = &self.code {
             kwargs.set_item("code", code)?;
         }
-        let empty_tuple = PyTuple::new(py, std::iter::empty::<&PyAny>());
+        let empty_tuple = PyTuple::empty(py);
         Ok((empty_tuple.into_py(py), kwargs.into_py(py)))
     }
 
