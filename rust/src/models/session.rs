@@ -1504,8 +1504,7 @@ mod tests {
             );
             // Check that at least one warning mentions the legacy key or deprecation
             let mut found_warning = false;
-            for i in 0..len {
-                let warning = warning_list.get_item(i).unwrap().unwrap();
+            for warning in warning_list.iter().unwrap() {
                 let warning_str = warning.str().unwrap().to_string().unwrap();
                 if warning_str.contains("javax_faces_ViewState")
                     || warning_str.contains("deprecated")
