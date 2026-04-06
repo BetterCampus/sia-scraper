@@ -36,6 +36,7 @@ jobs:
       - name: Build wheel and install
         run: |
           pip install maturin
+          rm -f target/wheels/sia_scraper-*.whl
           maturin build --release --interpreter python${{ matrix.python-version }}
           pip install target/wheels/sia_scraper-*.whl
 
