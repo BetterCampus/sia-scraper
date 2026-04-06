@@ -33,8 +33,11 @@ jobs:
       - name: Cache Cargo build artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Setup dependencies and build
-        run: make setup
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Install dev dependencies and build
+        run: pip install -e ".[dev]" && maturin develop
 
       - name: Python lint
         run: make lint-python
