@@ -82,13 +82,15 @@ class InvalidSessionDataError(SiaSessionException):
             field: Optional name of the field that failed validation.
             index: Optional index in a list where validation failed.
         """
-        parts = ["Invalid session_data"]
+        msg = "Invalid session_data"
         if field:
-            parts.append(f"'{field}'")
-        if index is not None:
-            parts.append(f"[{index}]")
-        parts.append("validation failed")
-        super().__init__(": ".join(parts))
+            msg += f" '{field}'"
+            if index is not None:
+                msg += f"[{index}]"
+        elif index is not None:
+            msg += f" at index [{index}]"
+        msg += ": validation failed"
+        super().__init__(msg)
         self.field = field
         self.index = index
 
