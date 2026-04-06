@@ -20,12 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking change in batch progress callback behavior**:
-  - `SiaScraper.scrape_courses_batch(..., progress_callback=...)` now calls
-    `progress_callback` exactly once after the full batch completes.
+  - `SiaScraper.scrape_courses(...)` now calls `progress_callback` exactly once after the full batch completes.
   - Incremental per-course callback updates during scraping are no longer emitted.
   - **Migration**: If you rely on per-item progress logic, iterate through the
     returned `ScrapeResult.successes` and `ScrapeResult.failures` after the
-    batch call completes, or move progress tracking to the caller-side loop.
+    batch call completes in skip/retry modes. In abort mode, `scrape_courses(...)`
+    returns `list[CourseInfoModel]` directly.
 
 - **Session Serialization Breaking Change**: Standardized course list entry format (Issue #54)
   - **BREAKING**: `get_course_list()` now returns `[{"code": "1000001", "name": "Calculo"}]` instead of `[{"1000001": "Calculo"}]`

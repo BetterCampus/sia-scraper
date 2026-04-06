@@ -309,12 +309,12 @@ impl PySiaSession {
         future_into_py(py, async move {
             let session = {
                 let session_guard = inner.read().await;
-                session_guard
+                let original = session_guard
                     .as_ref()
                     .ok_or_else(|| SessionError::new_err(
                         "Session not initialized. Call init_session() first."
-                    ))?
-                    .clone()
+                    ))?;
+                original.clone_with_owned_state().await
             };
 
             session
@@ -381,12 +381,12 @@ impl PySiaSession {
         future_into_py(py, async move {
             let session = {
                 let session_guard = inner.read().await;
-                session_guard
+                let original = session_guard
                     .as_ref()
                     .ok_or_else(|| SessionError::new_err(
                         "Session not initialized. Call init_session() first."
-                    ))?
-                    .clone()
+                    ))?;
+                original.clone_with_owned_state().await
             };
 
             session

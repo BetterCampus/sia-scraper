@@ -902,6 +902,8 @@ impl SiaSession {
                             }
                         }
                     }
+                    // The for loop runs 0..=effective_retries, always executes at least once
+                    // and every branch returns Ok or Err, so this point is unreachable.
                     unreachable!("Retry loop always returns before this point");
                 }
             })
