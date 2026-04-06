@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      CI: true
 
     strategy:
       fail-fast: false
@@ -31,25 +33,17 @@ jobs:
       - name: Cache Cargo build artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          python -c "import sia_scraper; import sia_scraper_rust; print('Both packages importable')"
+      - name: Setup dependencies and build
+        run: make setup
 
-      - name: Run Ruff lint checks
-        run: ruff check .
+      - name: Python lint
+        run: make lint-python
 
-      - name: Run type checks
-        run: pyright
+      - name: Type check
+        run: make typecheck
 
       - name: Run tests with coverage
-        run: |
-          pytest -m "not integration and not network" \
-            --cov=src/sia_scraper \
-            --cov-report=term \
-            --cov-report=html \
-            --cov-report=xml
+        run: make test-python-cov
 
       - name: Upload coverage HTML report
         uses: actions/upload-artifact@v4

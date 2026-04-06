@@ -8,6 +8,8 @@ on:
 jobs:
   integration-live:
     runs-on: ubuntu-latest
+    env:
+      CI: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,20 +23,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: pip install -e ".[dev]"
 
       - name: Build and sync Rust extension
         run: python scripts/sync_rust_extension.py --build --release --verify
 
-      - name: Install ruff linter
-        # Explicitly install ruff to ensure it is available for lint checks.
-        # It is also pinned in dev dependencies for reproducible local installs.
-        run: pip install "ruff~=0.15.8"
-
-      - name: Run Ruff lint checks
-        run: ruff check .
+      - name: Python lint
+        run: make lint-python
 
       - name: Run live integration tests
         run: pytest -m "integration and network" -v
