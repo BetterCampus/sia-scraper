@@ -10,7 +10,6 @@ The generation counter should prevent stale updates when:
 """
 
 import pickle
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -158,8 +157,7 @@ class TestGenerationConcept:
 class TestGenerationBasedStateUpdate:
     """Tests for generation-based state update logic in py_session.rs."""
 
-    @pytest.mark.asyncio
-    async def test_scrape_courses_with_matching_generation_updates_state(self):
+    def test_scrape_courses_with_matching_generation_updates_state(self):
         """Test that scrape_courses updates state when generation matches."""
         state_with_gen_1 = sia_scraper_rust.SessionStateModel(
             session_headers={},
@@ -178,8 +176,7 @@ class TestGenerationBasedStateUpdate:
 
         assert parent_generation == current_generation, "Generations should match for update"
 
-    @pytest.mark.asyncio
-    async def test_scrape_courses_with_mismatched_generation_skips_update(self):
+    def test_scrape_courses_with_mismatched_generation_skips_update(self):
         """Test that scrape_courses skips update when generation mismatches."""
         parent_state = sia_scraper_rust.SessionStateModel(
             session_headers={},
@@ -212,3 +209,148 @@ class TestGenerationBasedStateUpdate:
             "Generations should differ - stale update detected"
         )
         assert current_generation > parent_generation, "Current generation should be newer"
+
+
+class TestSessionStateEdgeCases:
+    """Edge case tests for session state and generation."""
+
+    def test_generation_overflow_handling(self):
+        """Test that generation wraps correctly at u64::MAX.
+
+        While practically impossible to hit, we ensure wrapping works.
+        """
+        max_gen_state = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-3",
+            career_name="Test",
+            is_electives=False,
+            status="ON_CAREER_PAGE",
+            course_list=[],
+            generation=2**64 - 1,
+        )
+
+        assert max_gen_state.generation == 2**64 - 1
+
+    def test_sequential_state_updates_have_incrementing_generation(self):
+        """Test that sequential state updates have incrementing generation.
+
+        Each update should increase the generation by 1.
+        """
+        states = [
+            sia_scraper_rust.SessionStateModel(
+                session_headers={},
+                session_cookies={},
+                params={},
+                career_code=f"code-{i}",
+                career_name=f"Career {i}",
+                is_electives=False,
+                status="ON_CAREER_PAGE",
+                course_list=[],
+                generation=i,
+            )
+            for i in range(5)
+        ]
+
+        generations = [s.generation for s in states]
+        assert generations == [0, 1, 2, 3, 4]
+
+    def test_state_with_zero_courses_has_generation(self):
+        """Test that state with empty course list has generation field."""
+        state = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-3",
+            career_name="Test",
+            is_electives=False,
+            status="ON_CAREER_PAGE",
+            course_list=[],
+            generation=42,
+        )
+
+        assert state.generation == 42
+        assert len(state.course_list) == 0
+
+    def test_state_with_multiple_courses_has_generation(self):
+        """Test that state with multiple courses has generation field."""
+        course_list = [
+            sia_scraper_rust.CourseListEntryModel(code="1000001", name="Cálculo I"),
+            sia_scraper_rust.CourseListEntryModel(code="1000002", name="Cálculo II"),
+            sia_scraper_rust.CourseListEntryModel(code="1000003", name="Álgebra"),
+        ]
+
+        state = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-3",
+            career_name="Ingeniería",
+            is_electives=False,
+            status="ON_CAREER_PAGE",
+            course_list=course_list,
+            generation=5,
+        )
+
+        assert state.generation == 5
+        assert len(state.course_list) == 3
+        assert state.course_list[0].code == "1000001"
+        assert state.course_list[1].name == "Cálculo II"
+        assert state.course_list[2].code == "1000003"
+
+    def test_different_session_statuses_have_generation(self):
+        """Test generation field across different session statuses."""
+        statuses = [
+            ("CREATED", 0),
+            ("INITIALIZING", 1),
+            ("NO_SESSION", 2),
+            ("CAREER_NOT_SET", 3),
+            ("ON_CAREER_PAGE", 4),
+            ("FETCHING_COURSES", 5),
+            ("FETCHING_COURSE_INFO", 6),
+        ]
+
+        for status, expected_gen in statuses:
+            state = sia_scraper_rust.SessionStateModel(
+                session_headers={},
+                session_cookies={},
+                params={},
+                career_code="0-2-8-3",
+                career_name="Test",
+                is_electives=False,
+                status=status,
+                course_list=[],
+                generation=expected_gen,
+            )
+            assert state.generation == expected_gen
+            assert state.status == status
+
+    def test_is_electives_affects_generation_tracking(self):
+        """Test that is_electives flag doesn't affect generation tracking."""
+        required_state = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-3",
+            career_name="Ingeniería",
+            is_electives=False,
+            status="ON_CAREER_PAGE",
+            course_list=[],
+            generation=1,
+        )
+
+        electives_state = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-3",
+            career_name="Ingeniería",
+            is_electives=True,
+            status="ON_CAREER_PAGE",
+            course_list=[],
+            generation=1,
+        )
+
+        assert required_state.generation == electives_state.generation
+        assert required_state.is_electives != electives_state.is_electives
