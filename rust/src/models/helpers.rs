@@ -7,6 +7,17 @@ use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+/// Extract a required item from a PyDict, returning PyKeyError if missing.
+///
+/// # Arguments
+/// * `dict` - The PyDict to extract from
+/// * `key` - The key to look up
+///
+/// # Returns
+/// The extracted value wrapped in PyResult
+///
+/// # Errors
+/// Returns PyKeyError with message "Missing key: {key}" when key is absent
 pub(crate) fn required_item<'py>(dict: &'py PyDict, key: &str) -> PyResult<&'py PyAny> {
     dict.get_item(key)?
         .ok_or_else(|| PyKeyError::new_err(format!("Missing key: {key}")))
