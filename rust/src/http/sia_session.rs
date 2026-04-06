@@ -687,7 +687,11 @@ impl SiaSession {
     }
 
     pub async fn update_state(&self, state: SessionState) {
-        *self.state.write().await = state;
+        let mut guard = self.state.write().await;
+        let new_generation = guard.generation.wrapping_add(1);
+        let mut state = state;
+        state.generation = new_generation;
+        *guard = state;
     }
 
     pub fn base_url(&self) -> &str {

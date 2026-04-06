@@ -507,6 +507,7 @@ class SessionStateModel:
     is_electives: bool
     status: str
     course_list: list[CourseListEntryModel]
+    generation: int
 
     def __init__(
         self,

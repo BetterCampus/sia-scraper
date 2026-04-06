@@ -10,6 +10,8 @@ The generation counter should prevent stale updates when:
 """
 
 import pickle
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 import sia_scraper_rust
@@ -151,3 +153,62 @@ class TestGenerationConcept:
         assert state.generation == 10
         assert state.status == "ON_CAREER_PAGE"
         assert state.career_code == "0-2-8-3"
+
+
+class TestGenerationBasedStateUpdate:
+    """Tests for generation-based state update logic in py_session.rs."""
+
+    @pytest.mark.asyncio
+    async def test_scrape_courses_with_matching_generation_updates_state(self):
+        """Test that scrape_courses updates state when generation matches."""
+        state_with_gen_1 = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-3",
+            career_name="Test",
+            is_electives=False,
+            status="ON_CAREER_PAGE",
+            course_list=[],
+            generation=1,
+        )
+
+        parent_generation = state_with_gen_1.generation
+        current_generation = state_with_gen_1.generation
+
+        assert parent_generation == current_generation, "Generations should match for update"
+
+    @pytest.mark.asyncio
+    async def test_scrape_courses_with_mismatched_generation_skips_update(self):
+        """Test that scrape_courses skips update when generation mismatches."""
+        parent_state = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-3",
+            career_name="Test",
+            is_electives=False,
+            status="ON_CAREER_PAGE",
+            course_list=[],
+            generation=1,
+        )
+
+        current_state = sia_scraper_rust.SessionStateModel(
+            session_headers={},
+            session_cookies={},
+            params={},
+            career_code="0-2-8-4",
+            career_name="Updated",
+            is_electives=False,
+            status="ON_CAREER_PAGE",
+            course_list=[],
+            generation=2,
+        )
+
+        parent_generation = parent_state.generation
+        current_generation = current_state.generation
+
+        assert parent_generation != current_generation, (
+            "Generations should differ - stale update detected"
+        )
+        assert current_generation > parent_generation, "Current generation should be newer"

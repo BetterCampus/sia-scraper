@@ -307,24 +307,35 @@ impl PySiaSession {
         let retry_delay_ms = delay.unwrap_or(800);
 
         future_into_py(py, async move {
-            let (cloned_session, result) = {
+            let (cloned_session, result, parent_generation) = {
                 let session_guard = inner.read().await;
                 let original = session_guard
                     .as_ref()
                     .ok_or_else(|| SessionError::new_err(
                         "Session not initialized. Call init_session() first."
                     ))?;
+                let parent_generation = original.get_state().await.generation();
                 let cloned = original.clone_with_owned_state().await;
                 let result = cloned
                     .scrape_courses_batch(indices, error_mode, max_retries, retry_delay_ms)
                     .await;
-                (cloned, result)
+                (cloned, result, parent_generation)
             };
 
             let mutated_state = cloned_session.get_state().await;
             let mut session_guard = inner.write().await;
             if let Some(ref mut session) = *session_guard {
-                session.update_state(mutated_state).await;
+                let current_generation = session.get_state().await.generation();
+                if current_generation == parent_generation {
+                    session.update_state(mutated_state).await;
+                } else {
+                    log::debug!(
+                        "Skipping state update in scrape_courses: generation mismatch \
+                         (expected {}, got {}). Another concurrent operation modified the session.",
+                        parent_generation,
+                        current_generation
+                    );
+                }
             }
 
             result.map_err(pyo3::PyErr::from)
