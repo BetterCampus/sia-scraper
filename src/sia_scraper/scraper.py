@@ -367,7 +367,8 @@ class SiaScraper:
             >>> successes[0].code  # index 0 succeeded
             'CODE1'
         """
-        # If duplicate indices exist in paired, the last non-empty code wins.
+        # Build mapping from index to code, filtering out empty codes.
+        # Note: Duplicates are rejected by _prepare_scrape_indices before this point.
         code_map = {idx: code for idx, code in paired if code}
         if code_map:
             # Determine which indices correspond to successes
