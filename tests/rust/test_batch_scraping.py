@@ -13,7 +13,7 @@ import pytest
 sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 async def initialized_session():
     """Provide an initialized PySiaSession with cleanup.
 
