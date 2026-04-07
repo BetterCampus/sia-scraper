@@ -1252,6 +1252,7 @@ class PySiaSession:
         Raises:
             SessionError: If session is not initialized.
             SiaScraperException: If mode is not one of "abort", "skip", "retry".
+            AbortError: If an in-runtime abort occurs (abort-mode failures are rewrapped).
             NetworkError: If connection fails.
             HttpStatusError: If server returns error status.
             SiaTimeoutError: If request times out.
