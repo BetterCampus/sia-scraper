@@ -19,7 +19,7 @@ setup:
 	@if [ ! -f .cargo/config.toml ] && [ "$${CI:-false}" != "true" ]; then \
 		echo ""; \
 		echo "⚠️  No .cargo/config.toml found. Copying from example..."; \
-		cp .cargo/config.toml.example .cargo/config.toml; \
+		cp .cargo/config.toml_example .cargo/config.toml; \
 		echo "⚠️  Please update .cargo/config.toml with your Python paths."; \
 		echo ""; \
 		echo "Run 'make develop' after configuring."; \
@@ -28,8 +28,8 @@ setup:
 		echo "✓ .cargo/config.toml already exists"; \
 	else \
 		echo "✓ Running in CI mode, skipping .cargo/config.toml check"; \
-	fi
-	pip install -e ".[dev]"
+	fi && \
+	pip install -e ".[dev]" && \
 	maturin develop
 
 ## develop - Build and install Rust extension (incremental)
