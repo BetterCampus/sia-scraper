@@ -6,7 +6,7 @@ This directory contains development and maintenance scripts for the project.
 
 | Script | Description |
 |--------|-------------|
-| `lint-python.sh` | Run ruff check --fix, format, and verify |
+| `lint-python.sh` | Run ruff lint/format (auto-fix locally, check-only in CI) |
 | `lint-rust.sh` | Run cargo clippy with all features and warnings as errors |
 | `test-python.sh` | Run Python tests (excludes integration/network) |
 | `test-python-cov.sh` | Run Python tests with coverage reports |
