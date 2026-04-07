@@ -10,5 +10,5 @@ if [[ "${1:-}" == "--check" ]] || [[ "${CI:-}" == "true" ]]; then
     ruff format --check . || exit_code=1
     exit $exit_code
 else
-    ruff check --fix . && ruff format .
+    ruff check --fix . && ruff format . && ruff check .
 fi

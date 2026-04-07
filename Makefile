@@ -71,15 +71,15 @@ test: test-python test-rust
 
 ## test-python - Run Python tests
 test-python:
-	./scripts/test-python.sh "$(ARGS)"
+	./scripts/test-python.sh $(ARGS)
 
 ## test-python-cov - Run Python tests with coverage
 test-python-cov:
-	./scripts/test-python-cov.sh "$(ARGS)"
+	./scripts/test-python-cov.sh $(ARGS)
 
 ## test-rust - Run Rust tests
 test-rust:
-	./scripts/test-rust.sh "$(ARGS)"
+	./scripts/test-rust.sh $(ARGS)
 
 ## check - Run full pre-commit check (stop on first failure)
 check:

@@ -158,11 +158,10 @@ class TestBatchScrapingWithInvalidIndices:
         Note: This test assumes career "0-2-8-3" has at least 2 courses (indices 0 and 1).
         If the career's course list changes, this test may need updating.
         """
+        await initialized_session.set_career("0-2-8-3")
         state = await initialized_session.get_state()
         if len(state.course_list) < 2:
             pytest.skip(f"Career has only {len(state.course_list)} courses, need at least 2")
-
-        await initialized_session.set_career("0-2-8-3")
 
         requested = [0, 999, 1]
         result = await initialized_session.scrape_courses(requested, mode="skip")
