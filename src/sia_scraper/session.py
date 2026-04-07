@@ -262,6 +262,7 @@ class SiaSession:
             sia_scraper_rust.HttpStatusError: If server returns error status.
             sia_scraper_rust.SiaTimeoutError: If request times out.
             sia_scraper_rust.ParseError: If response cannot be parsed.
+            sia_scraper_rust.OverflowError: If indices contain values outside i32 range.
 
         Example:
             >>> result = await session.scrape_courses([0, 1, 2], mode="skip")
@@ -304,6 +305,7 @@ class SiaSession:
             sia_scraper_rust.HttpStatusError: If server returns error status.
             sia_scraper_rust.SiaTimeoutError: If request times out.
             sia_scraper_rust.ParseError: If response cannot be parsed.
+            sia_scraper_rust.OverflowError: If indices contain values outside i32 range.
 
         Example:
             >>> result = await session.scrape_courses_parallel([0, 1, 2], mode="skip", max_concurrent=5)

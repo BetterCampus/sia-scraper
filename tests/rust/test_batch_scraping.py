@@ -162,6 +162,11 @@ class TestBatchScrapingWithInvalidIndices:
         # Verify at least one failure was recorded (999 is definitely invalid)
         assert len(result.failures) >= 1
 
+        # Verify valid indices succeeded
+        success_indices = [idx for idx, _ in result.successes]
+        assert 0 in success_indices
+        assert 1 in success_indices
+
     @pytest.mark.asyncio
     @pytest.mark.network
     async def test_scrape_courses_abort_mode_raises_on_failure(self, initialized_session):
