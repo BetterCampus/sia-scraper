@@ -135,13 +135,28 @@ class SiaScraper:
                     )
 
                 # Extract code from current or legacy key
-                code_val = item.get("code")
-                if code_val is None:
-                    code_val = item.get("course_code")
-                # Extract name from current or legacy key
-                name_val = item.get("name")
-                if name_val is None:
-                    name_val = item.get("course_name")
+                current_code = item.get("code")
+                legacy_code = item.get("course_code")
+                current_name = item.get("name")
+                legacy_name = item.get("course_name")
+
+                # Detect conflicting keys with different values
+                if (
+                    current_code is not None
+                    and legacy_code is not None
+                    and current_code != legacy_code
+                ) or (
+                    current_name is not None
+                    and legacy_name is not None
+                    and current_name != legacy_name
+                ):
+                    raise SiaSessionException.InvalidSessionDataError(
+                        field="course_list", index=index
+                    )
+
+                # Use current key if present, otherwise fallback to legacy
+                code_val = current_code if current_code is not None else legacy_code
+                name_val = current_name if current_name is not None else legacy_name
                 # Check if any legacy keys were used
                 used_legacy = "course_code" in item or "course_name" in item
 
@@ -311,7 +326,7 @@ class SiaScraper:
         indices = [idx for idx, _ in paired]
         return paired, indices
 
-    def _resolve_error_mode(self, error_mode: ErrorMode | ErrorModeStr) -> ErrorModeStr:
+    def _resolve_error_mode(self, error_mode: ErrorMode | str) -> ErrorModeStr:
         """Resolve and validate error_mode to a normalized string.
 
         Args:
@@ -427,7 +442,7 @@ class SiaScraper:
         self,
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
-        error_mode: ErrorMode | ErrorModeStr = ErrorMode.ABORT,
+        error_mode: ErrorMode | str = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
         progress_callback: Callable[[int, int, int, int], None] | None = None,
@@ -528,7 +543,7 @@ class SiaScraper:
         courses_indices: list[int] | None = None,
         courses_codes: list[str] | None = None,
         max_concurrent: int = 5,
-        error_mode: ErrorMode | ErrorModeStr = ErrorMode.ABORT,
+        error_mode: ErrorMode | str = ErrorMode.ABORT,
         max_retries: int = 3,
         retry_delay: float = 1.0,
     ) -> ScrapeResult | list[sia_scraper_rust.CourseInfoModel]:

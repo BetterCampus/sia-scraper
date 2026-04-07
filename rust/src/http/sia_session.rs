@@ -764,6 +764,16 @@ impl SiaSession {
         &self.retry_config
     }
 
+    fn ensure_unique_indices(indices: &[i32]) -> Result<(), HttpError> {
+        let mut seen = std::collections::HashSet::with_capacity(indices.len());
+        if let Some(&duplicate) = indices.iter().find(|&&idx| !seen.insert(idx)) {
+            return Err(HttpError::InvalidInput(format!(
+                "duplicate course index {duplicate} is not allowed"
+            )));
+        }
+        Ok(())
+    }
+
     /// Scrape multiple courses sequentially with configurable error handling.
     ///
     /// Iterates over the provided course indices and attempts to scrape each one.
@@ -808,6 +818,7 @@ impl SiaSession {
         max_retries: u32,
         retry_delay_ms: u64,
     ) -> Result<ScrapeResult, HttpError> {
+        Self::ensure_unique_indices(&indices)?;
         let mut result = ScrapeResult::new();
         let total = indices.len();
 
@@ -915,6 +926,8 @@ impl SiaSession {
                 "max_concurrent must be greater than 0".to_string(),
             ));
         }
+
+        Self::ensure_unique_indices(&indices)?;
 
         use futures::stream::{self, StreamExt};
 

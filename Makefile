@@ -56,10 +56,13 @@ lint-python:
 lint-rust:
 	./scripts/lint-rust.sh
 
-## format - Format Python code
+## format - Format Python and Rust code
 format:
 	@echo "━━━ Format ━━━"
+	@echo "━━━ Python ━━━"
 	ruff format .
+	@echo "━━━ Rust ━━━"
+	cargo fmt --all
 
 ## typecheck - Run type checker
 typecheck:

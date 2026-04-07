@@ -1175,7 +1175,7 @@ class PySiaSession:
     def scrape_courses(
         self,
         indices: list[int],
-        mode: ErrorModeStr,
+        mode: str,
         retries: int | None = None,
         delay: int | None = None,
     ) -> Awaitable[ScrapeResult]:
@@ -1220,7 +1220,7 @@ class PySiaSession:
     def scrape_courses_parallel(
         self,
         indices: list[int],
-        mode: ErrorModeStr,
+        mode: str,
         max_concurrent: int | None = None,
         retries: int | None = None,
         delay: int | None = None,
