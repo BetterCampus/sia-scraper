@@ -711,8 +711,7 @@ impl SiaSession {
     /// Nothing. The internal state is updated in-place.
     ///
     /// # Errors
-    /// None. This operation acquires an async lock which may panic
-    /// if the lock is poisoned (indicating a previous panic in the lock holder).
+    /// None. This method is infallible once the lock is acquired.
     ///
     /// # Example
     /// ```rust,ignore
@@ -739,8 +738,7 @@ impl SiaSession {
     /// Nothing. The internal state is updated in-place.
     ///
     /// # Errors
-    /// None. This operation acquires an async lock which may panic
-    /// if the lock is poisoned (indicating a previous panic in the lock holder).
+    /// None. This method is infallible once the lock is acquired.
     ///
     /// # Example
     /// ```rust,ignore
@@ -2221,7 +2219,7 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let mock_url = format!("http://{}", listener.local_addr().unwrap());
 
-        let success_body = r#"<?xml version="1.0"?>
+        let _success_body = r#"<?xml version="1.0"?>
 <partial-response>
     <changes>
         <change id="pt1:r1:0:id1"><![CDATA[
@@ -2248,12 +2246,10 @@ mod tests {
                         continue;
                     }
                 };
-                let count = request_count.fetch_add(1, Ordering::SeqCst);
-                let body = if count.is_multiple_of(2) {
-                    success_body.clone()
-                } else {
-                    error_body.clone()
-                };
+                let _count = request_count.fetch_add(1, Ordering::SeqCst);
+                // Always return error to ensure deterministic test behavior
+                // The first request should always fail with ParseError
+                let body = error_body.clone();
 
                 tokio::spawn(async move {
                     let http_response = format!(

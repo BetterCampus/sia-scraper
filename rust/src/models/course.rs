@@ -277,13 +277,13 @@ impl CourseInfoModel {
 
     fn __getnewargs__(&self) -> CourseInfoModelPickleState {
         (
-            String::new(),
-            0,
-            String::new(),
-            0,
-            String::new(),
-            Vec::new(),
-            None,
+            self.course_name.clone(),
+            self.credits,
+            self.typology.clone(),
+            self.available_spots,
+            self.scrape_timestamp.clone(),
+            self.groups.clone(),
+            self.code.clone(),
         )
     }
 

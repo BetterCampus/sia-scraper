@@ -25,7 +25,7 @@ sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 
 
 @pytest.fixture
-async def initialized_session():
+async def initialized_session(request: pytest.FixtureRequest):
     """Provide an initialized PySiaSession with cleanup.
 
     Warning: This fixture makes live network requests to SIA via
@@ -37,6 +37,9 @@ async def initialized_session():
     This is intentionally kept as an integration test fixture rather than mocked
     to test the full stack from Python through Rust to network.
     """
+    if not request.node.get_closest_marker("network"):
+        pytest.skip("This test requires @pytest.mark.network for live network access")
+
     session = sia_scraper_rust.PySiaSession()
     await session.init_session()
     yield session

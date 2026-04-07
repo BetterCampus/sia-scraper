@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use pyo3::exceptions::PyKeyError;
+use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyType};
 use serde::{Deserialize, Serialize};
@@ -241,17 +241,17 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
 
     // Specific error messages for missing fields
     // Note: (Some(_), Some(_)) case is handled earlier via early return
-    match (code_result, name_result) {
-        (None, None) => Err(PyKeyError::new_err(
+    match (code_result.is_some(), name_result.is_some()) {
+        (false, false) => Err(PyKeyError::new_err(
             "Dict must contain 'code'/'name' keys (current), \
              'course_code'/'course_name' keys (legacy named), \
              or be a single-entry dict (legacy single-key)",
         )),
-        (None, Some(_)) => Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'")),
-        (Some(_), None) => Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'")),
-        (Some(_), Some(_)) => {
-            unreachable!("Both code and name found - should have returned earlier")
-        }
+        (false, true) => Err(PyKeyError::new_err("Missing key: 'code' or 'course_code'")),
+        (true, false) => Err(PyKeyError::new_err("Missing key: 'name' or 'course_name'")),
+        (true, true) => Err(PyRuntimeError::new_err(
+            "Internal error: both code and name found but not handled",
+        )),
     }
 }
 

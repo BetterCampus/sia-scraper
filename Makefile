@@ -25,7 +25,7 @@ setup:
 		cp .cargo/config.toml_example .cargo/config.toml; \
 		echo "⚠️  Please update .cargo/config.toml with your Python paths."; \
 		echo ""; \
-		echo "Run 'make setup' after configuring."; \
+		echo "After editing .cargo/config.toml, run 'make setup' again to complete installation."; \
 		exit 1; \
 	elif [ -f .cargo/config.toml ]; then \
 		echo "✓ .cargo/config.toml already exists"; \
@@ -71,15 +71,15 @@ test: test-python test-rust
 
 ## test-python - Run Python tests
 test-python:
-	./scripts/test-python.sh $(ARGS)
+	./scripts/test-python.sh "$(ARGS)"
 
 ## test-python-cov - Run Python tests with coverage
 test-python-cov:
-	./scripts/test-python-cov.sh $(ARGS)
+	./scripts/test-python-cov.sh "$(ARGS)"
 
 ## test-rust - Run Rust tests
 test-rust:
-	./scripts/test-rust.sh $(ARGS)
+	./scripts/test-rust.sh "$(ARGS)"
 
 ## check - Run full pre-commit check (stop on first failure)
 check:
