@@ -262,10 +262,12 @@ class SiaScraper:
             Traceback (most recent call last):
             ValueError: Duplicate course index: 0
         """
-        courses_indices = courses_indices or []
-        courses_codes = courses_codes or []
+        indices_missing = courses_indices is None
+        codes_missing = courses_codes is None
+        courses_indices = [] if courses_indices is None else courses_indices
+        courses_codes = [] if courses_codes is None else courses_codes
 
-        if not courses_indices and not courses_codes:
+        if indices_missing and codes_missing:
             raise ValueError("At least one of courses_indices or courses_codes must be provided")
 
         if not courses_indices:
