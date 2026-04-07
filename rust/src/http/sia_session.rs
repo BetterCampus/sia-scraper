@@ -233,7 +233,7 @@ impl SiaSession {
             other => other,
         })?;
 
-        let mut state = self.state.write().await;
+        let mut state = self.get_state().await;
 
         if let Ok(view_state) = crate::parsers::adf::extract_view_state(&resp.body) {
             state.update_view_state(view_state);
@@ -249,6 +249,8 @@ impl SiaSession {
 
         state.update_params("Adf-Page-Id", "0".to_string());
         state.set_status("SESSION_SET");
+
+        self.update_state(state).await;
 
         Ok(())
     }
