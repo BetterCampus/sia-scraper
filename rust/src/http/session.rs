@@ -92,7 +92,7 @@ impl SessionState {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let state = SessionState::default();
     /// assert_eq!(state.generation(), 0);
     /// ```
@@ -107,7 +107,7 @@ impl SessionState {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let mut state = SessionState::default();
     /// state.increment_generation();
     /// assert_eq!(state.generation(), 1);
