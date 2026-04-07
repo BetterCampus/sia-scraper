@@ -26,7 +26,7 @@ import pickle
 
 import pytest
 
-import sia_scraper_rust
+sia_scraper_rust = pytest.importorskip("sia_scraper_rust")
 
 
 class TestConcurrentSessionState:
