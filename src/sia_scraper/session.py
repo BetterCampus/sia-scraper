@@ -10,6 +10,7 @@ from .constants.defaults import DEFAULT_CAREER_NAME
 from .core.exceptions import (
     CareerNotSet,
     ConcurrentAccessError,
+    InvalidSessionDataError,
     SessionNotSet,
     SiaSessionException,
 )
@@ -125,22 +126,13 @@ class SiaSession:
         """Validate course list format (defense-in-depth)."""
         for i, course in enumerate(self._course_list):
             if not isinstance(course, dict):
-                raise TypeError(
-                    f"Invalid course list format at index {i}: {type(course).__name__}. "
-                    "Expected dict with 'code' and 'name' string keys."
-                )
+                raise InvalidSessionDataError(field="course_list", index=i)
             if "code" not in course or "name" not in course:
-                raise ValueError(
-                    f"Invalid course list format at index {i}: {course}. "
-                    "Expected dict with 'code' and 'name' keys."
-                )
+                raise InvalidSessionDataError(field="course_list", index=i)
             code_val = course["code"]
             name_val = course["name"]
             if not isinstance(code_val, str) or not isinstance(name_val, str):
-                raise TypeError(
-                    f"Invalid course list format at index {i}: code={code_val!r}, name={name_val!r}. "
-                    "Expected 'code' and 'name' values to be strings."
-                )
+                raise InvalidSessionDataError(field="course_list", index=i)
 
     def _raise_if_session_not_set(self, exc: Exception) -> None:
         """Raise SessionNotSet when Rust reports an uninitialized session.
