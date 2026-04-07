@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." 
 echo "━━━ Full Check (stop on first failure) ━━━"
-./scripts/lint-python.sh
+./scripts/lint-python.sh --check
 ./scripts/lint-rust.sh
 echo "━━━ Type Check ━━━"
 pyright

@@ -33,7 +33,7 @@ run_check() {
 echo "━━━ Python Checks ━━━"
 echo
 
-run_check "Python lint" ./scripts/lint-python.sh
+run_check "Python lint" ./scripts/lint-python.sh --check
 run_check "Type check" pyright
 run_check "Python tests" ./scripts/test-python.sh
 
