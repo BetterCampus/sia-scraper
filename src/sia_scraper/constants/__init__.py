@@ -74,6 +74,7 @@ from .business import (
     TIPOLOGY_VALUE_INDEX,
 )
 from .data_map import DATA_MAP, DROPDOWNS
+from .errors import SESSION_NOT_INIT_MARKER
 from .http import ADF_ADS_PAGE_ID, DEFAULT_TIMEOUT, SIA_BASE_URL, SIA_HEADERS, VIEW_STATE_REGEX
 from .status import SiaSessionStatus
 
@@ -121,6 +122,8 @@ __all__ = [
     # Data Map
     "DATA_MAP",
     "DROPDOWNS",
+    # Errors
+    "SESSION_NOT_INIT_MARKER",
     # Business
     "COURSE_CODE_COL",
     "COURSE_NAME_COL",

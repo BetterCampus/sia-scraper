@@ -1,11 +1,10 @@
 """Thin Python wrapper around Rust PySiaSession."""
 
 from contextlib import asynccontextmanager
-from typing import Literal
 
 import sia_scraper_rust
 
-from .constants import status
+from .constants import SESSION_NOT_INIT_MARKER, status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core.exceptions import (
     CareerNotSet,
@@ -17,7 +16,7 @@ from .core.exceptions import (
 from .parsers.models import ErrorModeStr
 
 # TODO(v4.0.0): Replace with structured error type from Rust side
-_SESSION_NOT_INIT_MARKER = "not initialized"
+# SESSION_NOT_INIT_MARKER is imported from constants.errors
 
 
 class SiaSession:
@@ -140,7 +139,7 @@ class SiaSession:
         This method provides a fallback mechanism for detecting uninitialized
         session errors from the Rust layer. It uses structured exception type
         checking when available, with string-based fallback to the
-        _SESSION_NOT_INIT_MARKER for compatibility.
+        SESSION_NOT_INIT_MARKER constant for compatibility.
 
         Note:
             This string-based detection is fragile if the Rust error message
@@ -163,7 +162,7 @@ class SiaSession:
         """
         if (
             isinstance(exc, sia_scraper_rust.SessionError)
-            and _SESSION_NOT_INIT_MARKER in str(exc).lower()
+            and SESSION_NOT_INIT_MARKER in str(exc).lower()
         ):
             raise SessionNotSet from exc
 

@@ -162,10 +162,8 @@ class TestBatchScrapingWithInvalidIndices:
         # Verify at least one failure was recorded (999 is definitely invalid)
         assert len(result.failures) >= 1
 
-        # Verify valid indices succeeded
-        success_indices = [idx for idx, _ in result.successes]
-        assert 0 in success_indices
-        assert 1 in success_indices
+        # Verify valid indices succeeded (successes contains CourseInfoModel, not tuples)
+        assert len(result.successes) == 2
 
     @pytest.mark.asyncio
     @pytest.mark.network

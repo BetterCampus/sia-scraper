@@ -3,7 +3,7 @@
 import asyncio
 import warnings
 from collections.abc import Callable
-from typing import Literal, cast
+from typing import cast
 
 import sia_scraper_rust
 
