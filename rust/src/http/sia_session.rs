@@ -418,11 +418,12 @@ impl SiaSession {
         let course_list =
             get_course_list(&last_xml).map_err(|e| HttpError::ParseError(e.to_string()))?;
         let course_len = course_list.len();
-        let mut current = self.state.write().await;
-        current.status = "ON_CAREER_PAGE".to_string();
-        current.course_list = course_list;
-        current.update_params("course_list_len", course_len.to_string());
-        Ok(current.clone())
+        self.mutate_state(|state| {
+            state.status = "ON_CAREER_PAGE".to_string();
+            state.course_list = course_list;
+            state.update_params("course_list_len", course_len.to_string());
+        }).await;
+        Ok(self.state.read().await.clone())
     }
 
     pub(crate) async fn get_course_xml_internal(
@@ -547,8 +548,9 @@ impl SiaSession {
             .map_err(|e| HttpError::InvalidInput(e.to_string()))?;
         let _ = self.post_request(&back_encoded).await?;
 
-        let mut state = self.state.write().await;
-        state.status = "ON_CAREER_PAGE".to_string();
+        self.mutate_state(|state| {
+            state.status = "ON_CAREER_PAGE".to_string();
+        }).await;
 
         Ok(xml)
     }
@@ -692,6 +694,16 @@ impl SiaSession {
         let mut state = state;
         state.generation = new_generation;
         *guard = state;
+    }
+
+    pub async fn mutate_state<F>(&self, f: F)
+    where
+        F: FnOnce(&mut SessionState),
+    {
+        let mut guard = self.state.write().await;
+        let new_generation = guard.generation.wrapping_add(1);
+        f(&mut guard);
+        guard.generation = new_generation;
     }
 
     pub fn base_url(&self) -> &str {
