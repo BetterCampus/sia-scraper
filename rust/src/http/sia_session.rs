@@ -874,7 +874,7 @@ impl SiaSession {
                 async move {
                     let mut last_error: Option<HttpError> = None;
                     for attempt in 0..=effective_retries {
-                        if abort.load(Ordering::Relaxed) {
+                        if abort.load(Ordering::Acquire) {
                             return Err((
                                 pos,
                                 index,
@@ -885,7 +885,7 @@ impl SiaSession {
                         match session.scrape_course_info(index).await {
                             Ok(info) => return Ok((pos, index, info, Instant::now())),
                             Err(e) => {
-                                if abort.load(Ordering::Relaxed) {
+                                if abort.load(Ordering::Acquire) {
                                     return Err((
                                         pos,
                                         index,
@@ -898,7 +898,7 @@ impl SiaSession {
                                 {
                                     let error_time = Instant::now();
                                     if mode == ErrorMode::Abort {
-                                        abort.store(true, Ordering::Relaxed);
+                                        abort.store(true, Ordering::Release);
                                     }
                                     return Err((pos, index, e, error_time));
                                 }
