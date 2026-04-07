@@ -2295,7 +2295,7 @@ mod tests {
             .with_status(200)
             .with_body_from_request(move |_req| {
                 let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
-                if count % 3 == 0 {
+                if count.is_multiple_of(3) {
                     success_body.clone().into_bytes()
                 } else {
                     noop_body.clone().into_bytes()
