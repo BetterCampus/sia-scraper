@@ -3,8 +3,8 @@
 # Usage: ./check-python.sh
 set -uo pipefail
 
-IS_CI="${CI:-false}"
-if [ "$IS_CI" = "true" ]; then
+# Enable colors unless NO_COLOR is set or terminal doesn't support it
+if [ -n "${NO_COLOR:-}" ] || [ ! -t 1 ]; then
     RESET=""
     GREEN=""
     RED=""
@@ -19,14 +19,12 @@ total=0
 
 run_check() {
     local name="$1"; shift
-    local output
     ((total++))
     echo -e "${RESET}━━━ $name ━━━"
-    if output=$("$@" 2>&1); then
+    if "$@"; then
         echo -e "${GREEN}✓ $name passed${RESET}"
     else
         echo -e "${RED}✗ $name failed${RESET}"
-        echo "$output"
         ((failures++))
     fi
     echo
