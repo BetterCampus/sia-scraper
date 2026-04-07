@@ -19,6 +19,7 @@ help:
 ## setup - Install dependencies and build extension (checkout → ready)
 setup:
 	@echo "━━━ Setup ━━━"
+	# Case 1: Missing config in local dev → bootstrap from example, exit for user to edit
 	@if [ ! -f .cargo/config.toml ] && [ "$${CI:-false}" != "true" ]; then \
 		echo ""; \
 		echo "⚠️  No .cargo/config.toml found. Copying from example..."; \
@@ -27,8 +28,10 @@ setup:
 		echo ""; \
 		echo "After editing .cargo/config.toml, run 'make setup' again to complete installation."; \
 		exit 1; \
+	# Case 2: Config exists → proceed with setup
 	elif [ -f .cargo/config.toml ]; then \
 		echo "✓ .cargo/config.toml already exists"; \
+	# Case 3: CI mode → skip config check entirely
 	else \
 		echo "✓ Running in CI mode, skipping .cargo/config.toml check"; \
 	fi && \

@@ -2,7 +2,7 @@
 # Full pre-commit check: stop on first failure
 # Usage: ./check.sh
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || { echo "Error: Failed to change to repository root" >&2; exit 1; }
 echo "━━━ Full Check (stop on first failure) ━━━"
 echo "━━━ Lint ━━━"
 ./scripts/lint-python.sh --check

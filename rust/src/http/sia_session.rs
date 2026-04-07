@@ -75,6 +75,23 @@ define_regex!(ADF_WINDOW_ID_RE, r#"(?is)<input[^>]*name\s*=\s*["']Adf-Window-Id[
 ///
 /// The `position` field is the item's index in the original input batch,
 /// useful for restoring deterministic ordering after concurrent execution.
+///
+/// # Fields
+///
+/// * `position` - The item's index in the original input batch (0-based).
+/// * `index` - The course index that was scraped.
+/// * `CourseInfoModel` / `HttpError` - The result or error from scraping.
+/// * `timestamp` - When the result was produced (for abort-mode ordering).
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let outcome: ConcurrentScrapeOutcome = Ok((0, 5, course_info, Instant::now()));
+/// match outcome {
+///     Ok((pos, idx, info, _)) => println!("Position {} (index {}): {}", pos, idx, info.course_name),
+///     Err((pos, idx, err, _)) => println!("Position {} (index {}) failed: {}", pos, idx, err),
+/// }
+/// ```
 pub type ConcurrentScrapeOutcome = Result<(usize, i32, CourseInfoModel, Instant), (usize, i32, HttpError, Instant)>;
 
 #[derive(Clone)]
