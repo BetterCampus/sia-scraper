@@ -2205,7 +2205,7 @@ mod tests {
                     }
                 };
                 let count = request_count.fetch_add(1, Ordering::SeqCst);
-                let body = if count % 2 == 0 {
+                let body = if count.is_multiple_of(2) {
                     success_body.clone()
                 } else {
                     error_body.clone()
