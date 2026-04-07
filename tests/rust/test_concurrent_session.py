@@ -151,8 +151,8 @@ class TestGenerationConcept:
 class TestGenerationBasedStateUpdate:
     """Tests for generation-based state update logic in py_session.rs."""
 
-    def test_scrape_courses_with_matching_generation_updates_state(self):
-        """Test that scrape_courses updates state when generation matches."""
+    def test_generation_comparison_concept_matching(self):
+        """Test that generation comparison works for matching generations."""
         state_with_gen_1 = sia_scraper_rust.SessionStateModel(
             session_headers={},
             session_cookies={},
@@ -170,8 +170,8 @@ class TestGenerationBasedStateUpdate:
 
         assert parent_generation == current_generation, "Generations should match for update"
 
-    def test_scrape_courses_with_mismatched_generation_skips_update(self):
-        """Test that scrape_courses skips update when generation mismatches."""
+    def test_generation_comparison_concept_mismatched(self):
+        """Test that generation comparison works for mismatched generations."""
         parent_state = sia_scraper_rust.SessionStateModel(
             session_headers={},
             session_cookies={},

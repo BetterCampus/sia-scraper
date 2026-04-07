@@ -72,7 +72,7 @@ test-python:
 
 ## test-python-cov - Run Python tests with coverage
 test-python-cov:
-	./scripts/test-python-cov.sh
+	./scripts/test-python-cov.sh $(ARGS)
 
 ## test-rust - Run Rust tests
 test-rust:

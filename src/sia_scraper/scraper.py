@@ -178,7 +178,7 @@ class SiaScraper:
                         )
                     warnings.warn(
                         f"session_data 'course_list[{index}]' uses deprecated single-key dict format. "
-                        "Use {{'code': ..., 'name': ...}} instead. "
+                        f"Use {{'code': ..., 'name': ...}} instead. "
                         "Legacy format support will be removed in version 4.0.0.",
                         DeprecationWarning,
                         stacklevel=2,

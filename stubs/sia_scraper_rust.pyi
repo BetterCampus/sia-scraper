@@ -394,6 +394,12 @@ class ScrapeResult:
         """Return human-readable summary."""
         ...
 
+class CourseListEntry(TypedDict):
+    """A single course entry with code and name."""
+
+    code: str
+    name: str
+
 class CourseListEntryModel:
     """Represents a single course entry in the course list.
 
@@ -845,12 +851,6 @@ def parse_prereqs_json(xml: str) -> str:
     Returns:
         JSON string with prerequisite data.
     """
-
-class CourseListEntry(TypedDict):
-    """A single course entry with code and name."""
-
-    code: str
-    name: str
 
 def get_course_list(html: str | bytes) -> list[CourseListEntry]:
     """Extract course list from Oracle ADF table HTML.
