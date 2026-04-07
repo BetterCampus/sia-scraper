@@ -120,6 +120,7 @@ class SiaSession:
         self._course_list = [
             {"code": entry.code, "name": entry.name} for entry in state.course_list
         ]
+        # Defense-in-depth: validate in case Rust model has unexpected types
         self._validate_course_list()
 
     def _validate_course_list(self) -> None:

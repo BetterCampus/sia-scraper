@@ -164,6 +164,11 @@ class SiaScraper:
                         )
                     # Always create fresh dict to drop any extra keys
                     course_list_raw.append({"code": code_val, "name": name_val})
+                elif code_val is not None or name_val is not None:
+                    # Partial current-format key - missing required field
+                    raise SiaSessionException.InvalidSessionDataError(
+                        field="course_list", index=index
+                    )
                 elif len(item) == 1:
                     # Single-key legacy format
                     k, v = next(iter(item.items()))
@@ -290,11 +295,13 @@ class SiaScraper:
             status.SiaSessionStatus.ON_COURSE_PAGE,
         ):
             for idx, code in zip(courses_indices, courses_codes, strict=True):
-                if code and self.get_course_index(code) != idx:
-                    raise ValueError(
-                        f"Course index/code mismatch: index {idx} does not correspond to code {code!r} "
-                        f"(code {code!r} is at index {self.get_course_index(code)})"
-                    )
+                if code:
+                    expected_idx = self.get_course_index(code)
+                    if expected_idx != idx:
+                        raise ValueError(
+                            f"Course index/code mismatch: index {idx} does not correspond to code {code!r} "
+                            f"(code {code!r} is at index {expected_idx})"
+                        )
 
         seen: set[int] = set()
         for idx in courses_indices:
@@ -542,6 +549,9 @@ class SiaScraper:
             ValueError: If both courses_indices and courses_codes are provided
                 but their lengths differ.
             ValueError: If error_mode is not a valid mode.
+            ValueError: If max_concurrent is less than 1.
+            ValueError: If retry_delay is negative.
+            ValueError: If max_retries is negative.
 
         Example:
             >>> # Abort mode - returns list of CourseInfoModel

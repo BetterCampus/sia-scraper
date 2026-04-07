@@ -2,7 +2,7 @@
 # Full pre-commit check: stop on first failure
 # Usage: ./check.sh
 set -euo pipefail
-cd "$(dirname "$0")/.." 
+cd "$(dirname "$0")/.."
 echo "━━━ Full Check (stop on first failure) ━━━"
 ./scripts/lint-python.sh --check
 ./scripts/lint-rust.sh
