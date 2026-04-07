@@ -91,7 +91,7 @@ class TestCoursePrereqsModel:
             condition=1,
             prereq_type="M",
             all_required=True,
-            number_of_courses=1,
+            number_of_courses=0,
             prerequisites=[],
         )
         course_prereqs = sia_scraper_rust.CoursePrereqsModel(
@@ -110,7 +110,7 @@ class TestCoursePrereqsModel:
             condition=1,
             prereq_type="M",
             all_required=True,
-            number_of_courses=1,
+            number_of_courses=0,
             prerequisites=[],
         )
         course_prereqs = sia_scraper_rust.CoursePrereqsModel(
