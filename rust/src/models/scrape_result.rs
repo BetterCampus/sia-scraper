@@ -56,6 +56,7 @@ pub struct ScrapeResult {
     /// Successfully scraped courses.
     pub successes: Vec<CourseInfoModel>,
     /// Failed course indices with their error messages.
+    /// Uses i32 for Python interop since Python lacks unsigned integers.
     pub failures: Vec<(i32, String)>,
 }
 
