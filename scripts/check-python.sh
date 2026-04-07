@@ -4,7 +4,7 @@
 set -uo pipefail
 
 # Enable colors unless NO_COLOR is set or terminal doesn't support it
-if [ -n "${NO_COLOR:-}" ] || [ ! -t 1 ]; then
+if [ "${NO_COLOR+set}" = "set" ] || [ ! -t 1 ]; then
     RESET=""
     GREEN=""
     RED=""
