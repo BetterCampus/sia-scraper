@@ -1,7 +1,10 @@
-.PHONY: help setup develop build lint lint-python lint-rust format typecheck test test-python test-python-cov test-rust check check-python check-rust clean
+.PHONY: all help setup develop build lint lint-python lint-rust format typecheck test test-python test-python-cov test-rust check check-python check-rust clean
 
 # Default target
 .DEFAULT_GOAL := help
+
+## all - Run the default verification suite
+all: check
 
 ## help - List all targets with descriptions
 help:

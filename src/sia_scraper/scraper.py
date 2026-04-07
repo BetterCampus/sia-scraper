@@ -10,10 +10,8 @@ import sia_scraper_rust
 from .constants import http, status
 from .constants.defaults import DEFAULT_CAREER_NAME
 from .core import SiaSessionException
-from .parsers.models import ErrorMode, ScrapeResult
+from .parsers.models import ErrorMode, ErrorModeStr, ScrapeResult
 from .session import SiaSession
-
-ErrorModeStr = Literal["abort", "skip", "retry"]
 
 
 class SiaScraper:
@@ -313,7 +311,7 @@ class SiaScraper:
         indices = [idx for idx, _ in paired]
         return paired, indices
 
-    def _resolve_error_mode(self, error_mode: ErrorMode | ErrorModeStr) -> str:
+    def _resolve_error_mode(self, error_mode: ErrorMode | ErrorModeStr) -> ErrorModeStr:
         """Resolve and validate error_mode to a normalized string.
 
         Args:
@@ -326,12 +324,12 @@ class SiaScraper:
             ValueError: If error_mode is not a valid mode.
         """
         if isinstance(error_mode, ErrorMode):
-            mode = error_mode.value.lower()
+            mode: ErrorModeStr = cast(ErrorModeStr, error_mode.value.lower())
         elif isinstance(error_mode, str):
-            mode = error_mode.lower()
+            mode = cast(ErrorModeStr, error_mode.lower())
         else:
             raise TypeError(f"error_mode must be ErrorMode or str, got {type(error_mode).__name__}")
-        valid_modes = {"abort", "skip", "retry"}
+        valid_modes: set[ErrorModeStr] = {"abort", "skip", "retry"}
         if mode not in valid_modes:
             raise ValueError(
                 f"Invalid error_mode: {error_mode!r}. Must be one of: {', '.join(sorted(valid_modes))}"
@@ -475,9 +473,14 @@ class SiaScraper:
         if max_retries < 0:
             raise ValueError(f"max_retries must be non-negative, got {max_retries}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
+        mode = self._resolve_error_mode(error_mode)
 
         if mode == "abort":
+            if max_retries != 3 or retry_delay != 1.0:
+                warnings.warn(
+                    "max_retries and retry_delay are ignored in abort mode",
+                    stacklevel=2,
+                )
             result = await self._sia_session.scrape_courses(
                 indices,
                 mode="abort",
@@ -579,9 +582,14 @@ class SiaScraper:
         if max_concurrent < 1:
             raise ValueError(f"max_concurrent must be greater than 0, got {max_concurrent}")
         paired, indices = self._prepare_scrape_indices(courses_indices, courses_codes)
-        mode = cast(ErrorModeStr, self._resolve_error_mode(error_mode))
+        mode = self._resolve_error_mode(error_mode)
 
         if mode == "abort":
+            if max_retries != 3 or retry_delay != 1.0:
+                warnings.warn(
+                    "max_retries and retry_delay are ignored in abort mode",
+                    stacklevel=2,
+                )
             result = await self._sia_session.scrape_courses_parallel(
                 indices,
                 mode="abort",

@@ -14,11 +14,10 @@ from .core.exceptions import (
     SessionNotSet,
     SiaSessionException,
 )
+from .parsers.models import ErrorModeStr
 
 # TODO(v4.0.0): Replace with structured error type from Rust side
 _SESSION_NOT_INIT_MARKER = "not initialized"
-
-ErrorModeStr = Literal["abort", "skip", "retry"]
 
 
 class SiaSession:
@@ -153,6 +152,9 @@ class SiaSession:
 
         Raises:
             SessionNotSet: If the exception indicates an uninitialized session.
+
+        Returns:
+            None if the exception does not indicate an uninitialized session.
 
         Todo:
             Replace string matching with a dedicated error type or constant

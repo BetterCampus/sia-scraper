@@ -75,6 +75,9 @@ class InvalidSessionDataError(SiaSessionException):
         index: Optional index in a list (e.g., course_list[index]).
     """
 
+    field: str | None
+    index: int | None
+
     def __init__(
         self,
         field: str | None = None,
@@ -113,6 +116,8 @@ class MissingSessionFieldError(SiaSessionException):
     Attributes:
         field: Name of the missing required field.
     """
+
+    field: str
 
     def __init__(self, field: str) -> None:
         """Initialize with missing field name.

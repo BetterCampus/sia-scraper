@@ -8,7 +8,7 @@ type-safe Pydantic models for runtime validation.
 # ruff: noqa: E402
 import re
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from warnings import catch_warnings
 
 from pydantic import BaseModel, Field, field_validator
@@ -439,3 +439,6 @@ class ErrorMode(str, Enum):
     SKIP = "skip"
     RETRY = "retry"
     ABORT = "abort"
+
+
+ErrorModeStr = Literal["abort", "skip", "retry"]

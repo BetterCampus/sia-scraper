@@ -703,6 +703,22 @@ impl SiaSession {
     ///
     /// Increments generation to reflect the new state after mutation.
     /// Uses wrapping_add to prevent overflow issues.
+    ///
+    /// # Arguments
+    /// * `state` - The new session state to replace the existing state.
+    ///
+    /// # Returns
+    /// Nothing. The internal state is updated in-place.
+    ///
+    /// # Errors
+    /// None. This operation acquires an async lock which may panic
+    /// if the lock is poisoned (indicating a previous panic in the lock holder).
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let new_state = SessionState { ... };
+    /// session.update_state(new_state).await;
+    /// ```
     pub async fn update_state(&self, state: SessionState) {
         let mut guard = self.state.write().await;
         let new_generation = guard.generation.wrapping_add(1);
@@ -715,6 +731,23 @@ impl SiaSession {
     ///
     /// Runs the closure to mutate state, then increments generation.
     /// Uses wrapping_add to prevent overflow issues.
+    ///
+    /// # Arguments
+    /// * `f` - A closure that receives mutable access to the current session state.
+    ///
+    /// # Returns
+    /// Nothing. The internal state is updated in-place.
+    ///
+    /// # Errors
+    /// None. This operation acquires an async lock which may panic
+    /// if the lock is poisoned (indicating a previous panic in the lock holder).
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// session.mutate_state(|state| {
+    ///     state.course_list = new_course_list;
+    /// }).await;
+    /// ```
     pub async fn mutate_state<F>(&self, f: F)
     where
         F: FnOnce(&mut SessionState),

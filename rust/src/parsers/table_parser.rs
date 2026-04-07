@@ -391,7 +391,6 @@ mod tests {
     fn test_get_course_list_handles_empty_input() {
         let html = "";
         let result = get_course_list(html);
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        assert!(matches!(result, Ok(ref courses) if courses.is_empty()));
     }
 }

@@ -158,15 +158,15 @@ impl GroupModel {
 
     fn __getnewargs__(&self) -> GroupModelPickleState {
         (
-            String::new(),
-            String::new(),
-            String::new(),
-            String::new(),
-            Vec::new(),
-            String::new(),
-            String::new(),
-            None,
-            None,
+            self.group_name.clone(),
+            self.teacher.clone(),
+            self.faculty.clone(),
+            self.course_name.clone(),
+            self.schedules.clone(),
+            self.duration.clone(),
+            self.schedule_type.clone(),
+            self.spots,
+            self.code.clone(),
         )
     }
 

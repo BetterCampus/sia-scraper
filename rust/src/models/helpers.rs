@@ -64,6 +64,10 @@ pub fn require_field<'py, T: FromPyObject<'py>>(dict: &'py PyDict, key: &str) ->
 /// `Ok(None)` if the key is missing or value is None,
 /// or `Err` if extraction fails for non-None values
 ///
+/// # Errors
+/// Returns a Python TypeError (or conversion-related PyErr) when
+/// a present, non-None value cannot be extracted as T.
+///
 /// # Examples
 /// ```rust,ignore
 /// use pyo3::types::PyDict;
@@ -100,80 +104,88 @@ mod tests {
     use pyo3::Python;
 
     #[test]
-    fn test_require_field_happy_path() {
+    fn test_require_field_happy_path() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
-            dict.set_item("key", "value").unwrap();
-            let result: String = require_field(dict, "key").unwrap();
+            dict.set_item("key", "value")?;
+            let result: String = require_field(dict, "key")?;
             assert_eq!(result, "value");
-        });
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_require_field_missing_key_returns_error() {
+    fn test_require_field_missing_key_returns_error() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
             let result: PyResult<String> = require_field(dict, "missing");
             assert!(result.is_err());
-        });
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_require_field_wrong_type_returns_error() {
+    fn test_require_field_wrong_type_returns_error() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
-            dict.set_item("key", 42).unwrap();
+            dict.set_item("key", 42)?;
             let result: PyResult<String> = require_field(dict, "key");
             assert!(result.is_err());
-        });
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_require_field_none_value_returns_error() {
+    fn test_require_field_none_value_returns_error() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
-            dict.set_item("key", py.None()).unwrap();
+            dict.set_item("key", py.None())?;
             let result: PyResult<String> = require_field(dict, "key");
             assert!(result.is_err());
-        });
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_optional_field_happy_path() {
+    fn test_optional_field_happy_path() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
-            dict.set_item("key", "value").unwrap();
-            let result: Option<String> = optional_field(dict, "key").unwrap();
+            dict.set_item("key", "value")?;
+            let result: Option<String> = optional_field(dict, "key")?;
             assert_eq!(result, Some("value".to_string()));
-        });
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_optional_field_missing_key_returns_none() {
+    fn test_optional_field_missing_key_returns_none() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
-            let result: Option<String> = optional_field(dict, "missing").unwrap();
+            let result: Option<String> = optional_field(dict, "missing")?;
             assert!(result.is_none());
-        });
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_optional_field_explicit_none_returns_none() {
+    fn test_optional_field_explicit_none_returns_none() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
-            dict.set_item("key", py.None()).unwrap();
-            let result: Option<String> = optional_field(dict, "key").unwrap();
+            dict.set_item("key", py.None())?;
+            let result: Option<String> = optional_field(dict, "key")?;
             assert!(result.is_none());
-        });
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_optional_field_wrong_type_returns_error() {
+    fn test_optional_field_wrong_type_returns_error() -> PyResult<()> {
         Python::with_gil(|py| {
             let dict = PyDict::new(py);
-            dict.set_item("key", 42).unwrap();
+            dict.set_item("key", 42)?;
             let result: PyResult<Option<String>> = optional_field(dict, "key");
             assert!(result.is_err());
-        });
+            Ok(())
+        })
     }
 }

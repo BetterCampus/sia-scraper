@@ -296,13 +296,10 @@ class TestSessionStateEdgeCases:
     def test_different_session_statuses_have_generation(self):
         """Test generation field across different session statuses."""
         statuses = [
-            ("CREATED", 0),
-            ("INITIALIZING", 1),
-            ("NO_SESSION", 2),
-            ("CAREER_NOT_SET", 3),
-            ("ON_CAREER_PAGE", 4),
-            ("FETCHING_COURSES", 5),
-            ("FETCHING_COURSE_INFO", 6),
+            ("NO_SESSION", 0),
+            ("CAREER_NOT_SET", 1),
+            ("ON_CAREER_PAGE", 2),
+            ("ON_COURSE_PAGE", 3),
         ]
 
         for status, expected_gen in statuses:
