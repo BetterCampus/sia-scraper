@@ -2185,7 +2185,7 @@ mod tests {
                     }
                 };
                 let count = request_count.fetch_add(1, Ordering::SeqCst);
-                let body = if count.is_multiple_of(2) {
+                let body = if count % 2 == 0 {
                     success_body.clone()
                 } else {
                     error_body.clone()
@@ -2275,7 +2275,7 @@ mod tests {
             .with_status(200)
             .with_body_from_request(move |_req| {
                 let count = request_count_clone.fetch_add(1, Ordering::SeqCst);
-                if count.is_multiple_of(3) {
+                if count % 3 == 0 {
                     success_body.clone().into_bytes()
                 } else {
                     noop_body.clone().into_bytes()
