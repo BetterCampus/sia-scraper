@@ -184,7 +184,6 @@ pub struct CoursePrereqsModel {
 impl CoursePrereqsModel {
     #[new]
     #[pyo3(signature = (*, course_name, credits, typology, conditions=None, code=None))]
-    #[allow(clippy::too_many_arguments)]
     fn new(
         course_name: String,
         credits: i32,
