@@ -1,5 +1,7 @@
 //! Types for batch scraping operations.
 
+#![allow(non_local_definitions)]
+
 use pyo3::prelude::*;
 use std::str::FromStr;
 
