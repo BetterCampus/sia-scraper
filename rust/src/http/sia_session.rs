@@ -687,8 +687,9 @@ impl SiaSession {
         let resp = self.client.post(&url, body).await?;
 
         if let Ok(view_state) = crate::parsers::adf::extract_view_state(&resp.body) {
-            let mut state = self.state.write().await;
-            state.update_view_state(view_state);
+            self.mutate_state(|state| {
+                state.update_view_state(view_state);
+            }).await;
         }
 
         Ok(resp)
