@@ -331,21 +331,19 @@ impl PySiaSession {
                 (cloned, result, parent_generation)
             };
 
-            if result.is_ok() {
-                let mutated_state = cloned_session.get_state().await;
-                let mut session_guard = inner.write().await;
-                if let Some(ref mut session) = *session_guard {
-                    let current_generation = session.get_state().await.generation();
-                    if current_generation == parent_generation {
-                        session.update_state(mutated_state).await;
-                    } else {
-                        log::debug!(
-                            "Skipping state update in scrape_courses: generation mismatch \
-                             (expected {}, got {}). Another concurrent operation modified the session.",
-                            parent_generation,
-                            current_generation
-                        );
-                    }
+            let mutated_state = cloned_session.get_state().await;
+            let mut session_guard = inner.write().await;
+            if let Some(ref mut session) = *session_guard {
+                let current_generation = session.get_state().await.generation();
+                if current_generation == parent_generation {
+                    session.update_state(mutated_state).await;
+                } else {
+                    log::debug!(
+                        "Skipping state update in scrape_courses: generation mismatch \
+                         (expected {}, got {}). Another concurrent operation modified the session.",
+                        parent_generation,
+                        current_generation
+                    );
                 }
             }
 
