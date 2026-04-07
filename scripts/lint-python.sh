@@ -5,7 +5,10 @@ set -euo pipefail
 echo "━━━ Python Lint ━━━"
 
 if [[ "${1:-}" == "--check" ]] || [[ "${CI:-}" == "true" ]]; then
-    ruff check --diff . && ruff format --check .
+    exit_code=0
+    ruff check --diff . || exit_code=1
+    ruff format --check . || exit_code=1
+    exit $exit_code
 else
     ruff check --fix . && ruff format .
 fi
