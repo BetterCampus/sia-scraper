@@ -153,7 +153,11 @@ class TestBatchScrapingWithInvalidIndices:
     @pytest.mark.asyncio
     @pytest.mark.network
     async def test_scrape_courses_skip_mode_records_failures(self, initialized_session):
-        """scrape_courses in skip mode should record failures, not raise."""
+        """scrape_courses in skip mode should record failures, not raise.
+
+        Note: This test assumes career "0-2-8-3" has at least 2 courses (indices 0 and 1).
+        If the career's course list changes, this test may need updating.
+        """
         await initialized_session.set_career("0-2-8-3")
 
         requested = [0, 999, 1]
