@@ -20,13 +20,13 @@ total=0
 
 run_check() {
     local name="$1"; shift
-    ((total++))
+    ((++total))
     echo -e "${RESET}━━━ $name ━━━"
     if "$@"; then
         echo -e "${GREEN}✓ $name passed${RESET}"
     else
         echo -e "${RED}✗ $name failed${RESET}"
-        ((failures++))
+        ((++failures))
     fi
     echo
 }

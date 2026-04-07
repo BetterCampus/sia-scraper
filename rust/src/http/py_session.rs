@@ -316,7 +316,7 @@ impl PySiaSession {
         let retry_delay_ms = delay.unwrap_or(800);
 
         future_into_py(py, async move {
-            let (cloned_session, result, parent_generation) = {
+            let (cloned_session, parent_generation) = {
                 let session_guard = inner.read().await;
                 let original = session_guard
                     .as_ref()
@@ -325,11 +325,12 @@ impl PySiaSession {
                     ))?;
                 let parent_generation = original.get_state().await.generation();
                 let cloned = original.clone_with_owned_state().await;
-                let result = cloned
-                    .scrape_courses_batch(indices, error_mode, max_retries, retry_delay_ms)
-                    .await;
-                (cloned, result, parent_generation)
+                (cloned, parent_generation)
             };
+
+            let result = cloned_session
+                .scrape_courses_batch(indices, error_mode, max_retries, retry_delay_ms)
+                .await;
 
             let mutated_state = cloned_session.get_state().await;
             let mut session_guard = inner.write().await;
