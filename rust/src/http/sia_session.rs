@@ -688,6 +688,10 @@ impl SiaSession {
         self.state.read().await.clone()
     }
 
+    /// Update the session state with a new state object.
+    ///
+    /// Increments generation to reflect the new state after mutation.
+    /// Uses wrapping_add to prevent overflow issues.
     pub async fn update_state(&self, state: SessionState) {
         let mut guard = self.state.write().await;
         let new_generation = guard.generation.wrapping_add(1);
@@ -696,6 +700,10 @@ impl SiaSession {
         *guard = state;
     }
 
+    /// Mutate session state via a closure.
+    ///
+    /// Runs the closure to mutate state, then increments generation.
+    /// Uses wrapping_add to prevent overflow issues.
     pub async fn mutate_state<F>(&self, f: F)
     where
         F: FnOnce(&mut SessionState),
