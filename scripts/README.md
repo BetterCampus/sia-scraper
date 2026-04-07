@@ -15,7 +15,10 @@ This directory contains development and maintenance scripts for the project.
 | `check-python.sh` | Run all Python checks, report all failures |
 | `check-rust.sh` | Run all Rust checks, report all failures |
 
-Most scripts accept additional arguments via `$@` for flexibility.
+Some scripts accept additional arguments via `$@` for flexibility:
+- `test-python-cov.sh` - passes args to pytest
+- `lint-python.sh` - accepts `--check` flag for CI mode
+- `check-python.sh`, `check-rust.sh` - currently don't accept args
 
 ## Makefile Integration
 

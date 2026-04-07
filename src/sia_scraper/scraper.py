@@ -240,7 +240,7 @@ class SiaScraper:
             Tuple of (paired list preserving caller input order, indices list preserving caller input order).
 
         Raises:
-            ValueError: If both courses_indices and courses_codes are None or empty.
+            ValueError: If both courses_indices and courses_codes are None.
             ValueError: If both provided but lengths differ.
             ValueError: If any provided course code is not found in the course list.
             ValueError: If courses_indices contains duplicate values.

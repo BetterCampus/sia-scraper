@@ -2,6 +2,7 @@
 # Run all Rust checks, collect failures, report summary
 # Usage: ./check-rust.sh
 set -uo pipefail
+cd "$(dirname "$0")/.."
 
 # Enable colors unless NO_COLOR is set or terminal doesn't support it
 if [ "${NO_COLOR+set}" = "set" ] || [ ! -t 1 ]; then

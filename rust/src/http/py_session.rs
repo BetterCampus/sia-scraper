@@ -417,6 +417,10 @@ impl PySiaSession {
         let retry_delay_ms = delay.unwrap_or(800);
 
         future_into_py(py, async move {
+            // NOTE: Intentionally not syncing state back after concurrent scraping.
+            // Parallel execution makes state updates non-trivial (race conditions,
+            // ordering issues, potential mutations during execution). The caller
+            // should re-fetch state via get_state() if needed after completion.
             let session = {
                 let session_guard = inner.read().await;
                 let original = session_guard

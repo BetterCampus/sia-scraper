@@ -1195,6 +1195,7 @@ class PySiaSession:
             retries: Maximum retry attempts per course (default: 3).
                 Used only in "retry" mode.
             delay: Base delay between retries in milliseconds (default: 800).
+                Used only in "retry" mode.
 
         Returns:
             ScrapeResult with successes and failures lists.
@@ -1245,6 +1246,7 @@ class PySiaSession:
             retries: Maximum retry attempts per course (default: 3).
                 Used only in "retry" mode.
             delay: Base delay between retries in milliseconds (default: 800).
+                Used only in "retry" mode.
 
         Returns:
             ScrapeResult with successes and failures lists.

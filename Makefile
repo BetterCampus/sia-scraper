@@ -22,7 +22,7 @@ setup:
 		cp .cargo/config.toml_example .cargo/config.toml; \
 		echo "⚠️  Please update .cargo/config.toml with your Python paths."; \
 		echo ""; \
-		echo "Run 'make develop' after configuring."; \
+		echo "Run 'make setup' after configuring."; \
 		exit 1; \
 	elif [ -f .cargo/config.toml ]; then \
 		echo "✓ .cargo/config.toml already exists"; \
