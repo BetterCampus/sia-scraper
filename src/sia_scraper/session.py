@@ -14,6 +14,7 @@ from .core.exceptions import (
     SiaSessionException,
 )
 
+# TODO(v4.0.0): Replace with structured error type from Rust side
 _SESSION_NOT_INIT_MARKER = "not initialized"
 
 ErrorModeStr = Literal["abort", "skip", "retry"]
