@@ -407,7 +407,7 @@ impl SiaSession {
                 state.career_name = Self::extract_career_name(&last_xml, career_index);
             }
 
-            let mut current = self.state.write().await;
+            let mut current = self.get_state().await;
             if let Ok(view_state) = crate::parsers::adf::extract_view_state(&last_xml) {
                 current.javax_faces_ViewState = Some(view_state);
             }
@@ -415,6 +415,14 @@ impl SiaSession {
             current.career_name = state.career_name.clone();
             current.is_electives = state.is_electives;
             state = current.clone();
+            self.mutate_state(|s| {
+                if let Ok(view_state) = crate::parsers::adf::extract_view_state(&last_xml) {
+                    s.javax_faces_ViewState = Some(view_state);
+                }
+                s.career_code = state.career_code.clone();
+                s.career_name = state.career_name.clone();
+                s.is_electives = state.is_electives;
+            }).await;
         }
 
         let course_list =
