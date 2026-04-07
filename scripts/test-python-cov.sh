@@ -3,7 +3,6 @@
 # Usage: ./test-python-cov.sh [pytest args...]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-echo "━━━ Python Tests with Coverage ━━━"
 pytest -m "not integration and not network" \
     --cov=src/sia_scraper \
     --cov-report=term \
