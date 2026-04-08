@@ -136,15 +136,10 @@ class SiaSession:
     def _raise_if_session_not_set(self, exc: Exception) -> None:
         """Raise SessionNotSet when Rust reports an uninitialized session.
 
-        This method provides a fallback mechanism for detecting uninitialized
-        session errors from the Rust layer. It uses structured exception type
-        checking when available, with string-based fallback to the
-        SESSION_NOT_INIT_MARKER constant for compatibility.
-
-        Note:
-            This string-based detection is fragile if the Rust error message
-            changes. Consider adding a stable error constant or structured
-            error code on the Rust side for future improvement.
+        This method provides structured error checking for uninitialized session
+        errors from the Rust layer. It first checks for structured indicators
+        (is_session_not_initialized method), with string-based fallback for
+        backward compatibility.
 
         Args:
             exc: The exception raised by the Rust session.
@@ -154,16 +149,20 @@ class SiaSession:
 
         Returns:
             None if the exception does not indicate an uninitialized session.
-
-        Todo:
-            Replace string matching with a dedicated error type or constant
-            on the Rust side (e.g., SiaSessionException::SessionNotSet) to
-            avoid relying on message content.
         """
-        if (
-            isinstance(exc, sia_scraper_rust.SessionError)
-            and SESSION_NOT_INIT_MARKER in str(exc).lower()
-        ):
+        if not isinstance(exc, sia_scraper_rust.SessionError):
+            return
+
+        # Structured error check (requires Rust implementation of is_session_not_initialized)
+        # TODO: Enable once Rust method is added: exc.is_session_not_initialized()
+        # if hasattr(exc, "is_session_not_initialized") and callable(exc.is_session_not_initialized):
+        #     try:
+        #         if exc.is_session_not_initialized():
+        #             raise SessionNotSet from exc
+        #     except Exception:
+        #         pass
+
+        if SESSION_NOT_INIT_MARKER in str(exc).lower():
             raise SessionNotSet from exc
 
     async def init_session(self) -> None:

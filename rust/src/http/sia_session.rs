@@ -192,20 +192,15 @@ impl SiaSession {
         }
     }
 
-    fn with_fresh_client(&self, state: SessionState) -> Self {
+    fn with_fresh_client(&self, state: SessionState) -> Result<Self, HttpError> {
         let config = HttpClientConfig::sia_default().with_timeout(self.client.timeout());
-        let client = match AsyncHttpClient::with_config(config) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Failed to create HTTP client for worker: {}", e);
-            }
-        };
-        Self {
+        let client = AsyncHttpClient::with_config(config)?;
+        Ok(Self {
             client,
             state: Arc::new(RwLock::new(state)),
             base_url: self.base_url.clone(),
             retry_config: self.retry_config.clone(),
-        }
+        })
     }
 
     pub fn with_retry_config(
@@ -977,9 +972,15 @@ impl SiaSession {
 
         let results: Vec<ConcurrentScrapeOutcome> = stream::iter(indices.into_iter().enumerate())
             .map(|(pos, index)| {
-                let session = SiaSession::with_fresh_client(session_ref, owned_state.clone());
                 let abort = Arc::clone(&abort_flag);
+                let state_for_worker = owned_state.clone();
                 async move {
+                    let session = match SiaSession::with_fresh_client(session_ref, state_for_worker) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            return Err((pos, index, e, Instant::now()));
+                        }
+                    };
                     let mut last_error: Option<HttpError> = None;
                     for attempt in 0..=effective_retries {
                         if abort.load(Ordering::Acquire) {
