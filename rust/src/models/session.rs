@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use pyo3::exceptions::{PyKeyError, PyRuntimeError};
+use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyType};
 use serde::{Deserialize, Serialize};
@@ -194,6 +194,24 @@ fn parse_course_dict(dict: &PyDict) -> PyResult<CourseListEntryModel> {
 /// });
 /// ```
 fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEntryModel> {
+    // Check for conflicting aliases - if both current and legacy key exist, that's an error
+    let has_code = dict.get_item("code")?.is_some();
+    let has_legacy_code = dict.get_item("course_code")?.is_some();
+    let has_name = dict.get_item("name")?.is_some();
+    let has_legacy_name = dict.get_item("course_name")?.is_some();
+
+    // Error on conflicting aliases
+    if has_code && has_legacy_code {
+        return Err(PyValueError::new_err(
+            "Conflicting keys: both 'code' and 'course_code' present",
+        ));
+    }
+    if has_name && has_legacy_name {
+        return Err(PyValueError::new_err(
+            "Conflicting keys: both 'name' and 'course_name' present",
+        ));
+    }
+
     // Try to get code from current or legacy key
     let code_result: Option<(&PyAny, bool)> = if let Some(val) = dict.get_item("code")? {
         Some((val, false))
@@ -212,13 +230,13 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
         None
     };
 
-    // If both found, emit warning if either is legacy
-    if let (Some((code_val, code_is_legacy)), Some((name_val, name_is_legacy))) =
-        (code_result, name_result)
-    {
-        if code_is_legacy || name_is_legacy {
-            emit_legacy_warning(py, "course_code/course_name", 3)?;
-        }
+    // Emit legacy warning if any legacy key present
+    if has_legacy_code || has_legacy_name {
+        emit_legacy_warning(py, "course_code/course_name", 3)?;
+    }
+
+    // If both found (current keys only, no conflict), return the result
+    if let (Some((code_val, _)), Some((name_val, _))) = (code_result, name_result) {
         return Ok(CourseListEntryModel {
             code: code_val.extract()?,
             name: name_val.extract()?,
@@ -240,7 +258,6 @@ fn normalize_course_dict(dict: &PyDict, py: Python<'_>) -> PyResult<CourseListEn
     }
 
     // Specific error messages for missing fields
-    // Note: (Some(_), Some(_)) case is handled earlier via early return
     match (code_result.is_some(), name_result.is_some()) {
         (false, false) => Err(PyKeyError::new_err(
             "Dict must contain 'code'/'name' keys (current), \

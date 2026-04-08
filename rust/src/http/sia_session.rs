@@ -184,6 +184,15 @@ impl SiaSession {
     }
 
     fn with_owned_state(&self, state: SessionState) -> Self {
+        Self {
+            client: self.client.clone(),
+            state: Arc::new(RwLock::new(state)),
+            base_url: self.base_url.clone(),
+            retry_config: self.retry_config.clone(),
+        }
+    }
+
+    fn with_fresh_client(&self, state: SessionState) -> Self {
         let config = HttpClientConfig::sia_default().with_timeout(self.client.timeout());
         let client = match AsyncHttpClient::with_config(config) {
             Ok(c) => c,
@@ -968,7 +977,7 @@ impl SiaSession {
 
         let results: Vec<ConcurrentScrapeOutcome> = stream::iter(indices.into_iter().enumerate())
             .map(|(pos, index)| {
-                let session = SiaSession::with_owned_state(session_ref, owned_state.clone());
+                let session = SiaSession::with_fresh_client(session_ref, owned_state.clone());
                 let abort = Arc::clone(&abort_flag);
                 async move {
                     let mut last_error: Option<HttpError> = None;
