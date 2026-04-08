@@ -134,13 +134,25 @@ class SiaScraper:
                         field="course_list", index=index
                     )
 
-                # Extract code from current or legacy key
-                current_code = item.get("code")
-                legacy_code = item.get("course_code")
-                current_name = item.get("name")
-                legacy_name = item.get("course_name")
+                has_code = "code" in item
+                has_legacy_code = "course_code" in item
+                has_name = "name" in item
+                has_legacy_name = "course_name" in item
 
-                # Detect conflicting keys with different values
+                current_code = item["code"] if has_code else None
+                legacy_code = item["course_code"] if has_legacy_code else None
+                current_name = item["name"] if has_name else None
+                legacy_name = item["course_name"] if has_legacy_name else None
+
+                if has_code and (current_code is None or not isinstance(current_code, str)):
+                    raise SiaSessionException.InvalidSessionDataError(
+                        field="course_list", index=index
+                    )
+                if has_name and (current_name is None or not isinstance(current_name, str)):
+                    raise SiaSessionException.InvalidSessionDataError(
+                        field="course_list", index=index
+                    )
+
                 if (
                     current_code is not None
                     and legacy_code is not None
@@ -154,9 +166,8 @@ class SiaScraper:
                         field="course_list", index=index
                     )
 
-                # Use current key if present, otherwise fallback to legacy
-                code_val = current_code if current_code is not None else legacy_code
-                name_val = current_name if current_name is not None else legacy_name
+                code_val = current_code if has_code else legacy_code
+                name_val = current_name if has_name else legacy_name
                 # Check if any legacy keys were used
                 used_legacy = "course_code" in item or "course_name" in item
 

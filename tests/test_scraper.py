@@ -319,9 +319,7 @@ class TestSiaScraperSessionState:
         assert scraper.sia_session._is_electives is True
         assert scraper.sia_session._status == SiaSessionStatus.ON_CAREER_PAGE
 
-    def test_load_session_with_single_key_dict_emits_deprecation_warning(
-        self, mock_async_session_class
-    ):
+    def test_load_session_with_single_key_dict_emits_deprecation_warning(self):
         scraper = SiaScraper(init_session=False)
         data = {
             "session_headers": {},

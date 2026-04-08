@@ -12,7 +12,6 @@ use crate::http::{config::HttpClientConfig, errors::HttpError, types::HttpRespon
 #[derive(Clone)]
 pub struct AsyncHttpClient {
     client: reqwest::Client,
-    #[cfg(test)]
     timeout_secs: u64,
 }
 
@@ -37,7 +36,6 @@ impl AsyncHttpClient {
 
         Ok(Self {
             client,
-            #[cfg(test)]
             timeout_secs: config.timeout_secs,
         })
     }
@@ -70,7 +68,6 @@ impl AsyncHttpClient {
         HttpResponse::from_reqwest(resp).await
     }
 
-    #[cfg(test)]
     pub fn timeout(&self) -> u64 {
         self.timeout_secs
     }

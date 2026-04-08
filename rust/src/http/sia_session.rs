@@ -184,8 +184,15 @@ impl SiaSession {
     }
 
     fn with_owned_state(&self, state: SessionState) -> Self {
+        let config = HttpClientConfig::sia_default().with_timeout(self.client.timeout());
+        let client = match AsyncHttpClient::with_config(config) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Failed to create HTTP client for worker: {}", e);
+            }
+        };
         Self {
-            client: self.client.clone(),
+            client,
             state: Arc::new(RwLock::new(state)),
             base_url: self.base_url.clone(),
             retry_config: self.retry_config.clone(),
@@ -737,9 +744,9 @@ impl SiaSession {
     /// ```
     pub async fn update_state(&self, state: SessionState) {
         let mut guard = self.state.write().await;
-        let new_generation = guard.generation.wrapping_add(1);
+        let next_generation = guard.generation.wrapping_add(1);
         let mut state = state;
-        state.generation = new_generation;
+        state.generation = state.generation.max(next_generation);
         *guard = state;
     }
 
@@ -1308,6 +1315,40 @@ mod tests {
         let state = session.get_state().await;
         assert_eq!(state.career_code, "9-9-9-9");
         assert_eq!(state.status, "CUSTOM");
+    }
+
+    #[tokio::test]
+    async fn test_update_state_preserves_higher_generation() {
+        let session = SiaSession::new(15, "https://example.com".to_string()).unwrap();
+
+        let state_v5 = SessionState {
+            career_code: "1-0-0-1".to_string(),
+            generation: 5,
+            ..Default::default()
+        };
+        session.update_state(state_v5).await;
+
+        let higher_state = SessionState {
+            career_code: "9-9-9-9".to_string(),
+            generation: 8,
+            ..Default::default()
+        };
+        session.update_state(higher_state).await;
+
+        let final_state = session.get_state().await;
+        assert_eq!(final_state.generation, 8);
+        assert_eq!(final_state.career_code, "9-9-9-9");
+
+        let lower_state = SessionState {
+            career_code: "0-0-0-0".to_string(),
+            generation: 7,
+            ..Default::default()
+        };
+        session.update_state(lower_state).await;
+
+        let final_state2 = session.get_state().await;
+        assert_eq!(final_state2.generation, 9);
+        assert_eq!(final_state2.career_code, "0-0-0-0");
     }
 
     #[test]

@@ -733,7 +733,10 @@ fn denormalize_status(status: &str) -> String {
 mod tests {
     use super::{parse_course_dict, CourseListEntryModel, SessionStateModel};
     use crate::http::session::SessionState;
-    use pyo3::{types::PyList, PyAny, Python};
+    use pyo3::{
+        types::{PyDict, PyList},
+        PyAny, Python,
+    };
     use std::collections::HashMap;
 
     #[test]
@@ -924,6 +927,7 @@ mod tests {
         assert_eq!(state.career_name, "Ingenieria de Sistemas");
         assert!(state.is_electives);
         assert_eq!(state.status, "SESSION_SET");
+        assert_eq!(state.generation, 42);
     }
 
     #[test]
@@ -1342,6 +1346,51 @@ mod tests {
             assert_eq!(restored.course_list, original.course_list);
             assert_eq!(restored.career_code, original.career_code);
             assert_eq!(restored.status, original.status);
+            assert_eq!(restored.generation, 0);
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_generation_preserved() {
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            dict.set_item("javax_faces_view_state", py.None()).unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+            dict.set_item("generation", 42i64).unwrap();
+            dict.set_item("course_list", PyList::empty(py)).unwrap();
+
+            let model = SessionStateModel::from_dict(dict).unwrap();
+            assert_eq!(model.generation, 42);
+
+            let state = model.into_session_state();
+            assert_eq!(state.generation, 42);
+        });
+    }
+
+    #[test]
+    fn test_session_model_from_dict_missing_generation_defaults_to_zero() {
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+
+            dict.set_item("session_headers", PyDict::new(py)).unwrap();
+            dict.set_item("session_cookies", PyDict::new(py)).unwrap();
+            dict.set_item("params", PyDict::new(py)).unwrap();
+            dict.set_item("javax_faces_view_state", py.None()).unwrap();
+            dict.set_item("career_code", "0-2-8-3").unwrap();
+            dict.set_item("career_name", "Ingenieria").unwrap();
+            dict.set_item("is_electives", false).unwrap();
+            dict.set_item("status", "ON_CAREER_PAGE").unwrap();
+            dict.set_item("course_list", PyList::empty(py)).unwrap();
+
+            let model = SessionStateModel::from_dict(dict).unwrap();
+            assert_eq!(model.generation, 0);
         });
     }
 

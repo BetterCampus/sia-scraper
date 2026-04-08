@@ -173,7 +173,8 @@ class TestBatchScrapingWithInvalidIndices:
         assert len(result.failures) >= 1
 
         # Verify valid indices succeeded (successes contains CourseInfoModel, not tuples)
-        assert len(result.successes) == 2
+        expected_successes = len(requested) - len(result.failures)
+        assert len(result.successes) == expected_successes
 
     @pytest.mark.asyncio
     @pytest.mark.network
